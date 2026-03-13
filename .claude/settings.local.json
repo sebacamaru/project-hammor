@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vite build)",
+      "Bash(timeout 5 npx vite)",
+      "Bash(git remote add origin https://github.com/sebacamaru/project-hammor.git)",
+      "Bash(git add .gitignore CLAUDE.md assets/ bun.lock docs/ index.html package.json public/ src/)",
+      "Bash(git commit:*)",
+      "Bash(git branch -M main)",
+      "Bash(git push -u origin main)",
+      "Bash(git config user.name)",
+      "Bash(git config user.email)",
+      "Bash(gh auth status)",
+      "Bash(gh repo view sebacamaru/project-hammor)",
+      "Bash(gh repo create sebacamaru/project-hammor --public --source=. --push)",
+      "Bash(gh repo view sebacamaru/project-hammor --json name,owner,url)",
+      "Bash(git config user.name \"sebacamaru\")",
+      "Bash(git config user.email \"sebastiancamara@gmail.com\")",
+      "Bash(git add CLAUDE.md docs/architecture.md docs/memory.md .claude/)",
+      "Bash(git push --force-with-lease origin main)",
+      "Bash(rm -rf .git)",
+      "Bash(git init)",
+      "Bash(git add -A)"
+    ]
+  }
+}
