@@ -1,7 +1,7 @@
 # MINIMMO — Project Context
 
 ## What is this
-2D MMORPG client called **MINIMMO** (codename: project-hammor). Written in vanilla JavaScript with PixiJS v8 and Vite.
+2D MMORPG called **MINIMMO** (codename: project-hammor). Modular architecture with client, editor, server, and shared modules. Written in vanilla JavaScript with PixiJS v8 and Vite.
 
 ## Tech stack
 - **PixiJS v8** (v8.17+) — NOT v7. API differences matter (no BaseTexture, no SCALE_MODES enum, use TextureSource, string scale modes).
@@ -20,45 +20,69 @@
 
 ## Architecture overview
 
+### Module structure
+```
+src/
+├── shared/    Reusable by client, editor, and server
+├── client/    Game runtime (PixiJS + gameplay)
+├── editor/    Map editor (PixiJS + editing tools)
+└── server/    Headless server (no PixiJS)
+```
+
+### Dependency rules
+- `shared/` → only `shared/` and npm packages
+- `client/` → `shared/` and npm packages
+- `editor/` → `shared/` and npm packages
+- `server/` → `shared/core/` and `shared/data/` ONLY (never `shared/render/` or `shared/assets/`)
+
 ### Core loop
 - **Fixed timestep** simulation at 20 ticks/sec (`TICK_RATE` in Config.js)
 - Variable render rate (requestAnimationFrame)
-- `Engine.update(dt)` → simulation logic
-- `Engine.render(alpha)` → interpolated rendering
+- `ClientApp.update(dt)` → simulation logic
+- `ClientApp.render(alpha)` → interpolated rendering
 - Alpha = fractional tick progress for smooth visuals between sim ticks
 
 ### Subsystem ownership
 ```
-Engine (orchestrator)
-├── Renderer        — PixiJS Application, dynamic viewport, canvas scaling
+ClientApp (orchestrator) — src/client/ClientApp.js
+├── Renderer        — shared/render/ — PixiJS Application, dynamic viewport
 │   ├── ViewportState   — plain data: scale, tiles, dimensions, offsets
 │   └── ResolutionManager — pure function to compute viewport from screen size
-├── Input           — polling-based keyboard state
-├── SceneManager    — scene stack (goto/push/pop)
-├── GameLoop        — fixed timestep + RAF
-└── DebugOverlay    — FPS/stats (Escape to toggle, starts hidden)
+├── Input           — client/input/ — polling-based keyboard state
+├── SceneManager    — shared/scene/ — scene stack (goto/push/pop)
+├── GameLoop        — shared/core/ — fixed timestep + RAF
+└── DebugOverlay    — shared/render/ — FPS/stats (Escape to toggle)
 ```
 
 ### Scene lifecycle
 Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit()` → `destroy()`
 
 ### Entity system
-- `Entity` = pure data (id, x, y, prevX, prevY, direction, speed). NO Pixi imports.
-- `EntityManager` = collection with add/remove/get by ID.
-- `EntityRenderer` = syncs entity data → Pixi sprites with interpolation.
-- `Player extends Entity` — reads input in update(), no Pixi dependency.
-- `PlayerView` = owns AnimatedSprite, reads Player state, updates sprite position with `Math.floor`.
+- `Entity` = pure data in `shared/data/models/`. NO Pixi imports.
+- `EntityManager` = collection in `shared/data/models/`.
+- `EntityRenderer` = syncs entity data → Pixi sprites in `shared/render/`.
+- `Player extends Entity` — in `client/game/`, reads input in update().
+- `PlayerView` = in `client/game/`, owns AnimatedSprite.
+- `PlayerAnimations` = animation metadata in `shared/data/models/`.
+- `EntityData` = serializable snapshot in `shared/data/models/`.
+
+### Data model (shared/data/)
+- `MapData` = pure map data (width, height, named layers).
+- `LayerData` = single tile layer (Uint16Array + get/set).
+- `GameMap extends MapData` = adds test data generation.
+- `MapLoader` = fetch JSON maps from URLs.
+- `MapSerializer` = MapData ↔ JSON conversion.
+- `MapValidator` = validate map integrity.
 
 ### Tilemap
-- `GameMap` = tile data in typed arrays (`Uint16Array`), supports named layers.
-- `TilemapRenderer` = pre-allocated graphics pool (MAX_TILES + 2 margin), viewport culling per frame. Receives viewport reference.
+- `GameMap` = tile data via MapData/LayerData in `shared/data/models/`.
+- `TilemapRenderer` = pre-allocated graphics pool in `shared/render/`.
 
 ### Viewport system
 - `ViewportState` = plain data class (scale, tilesX/Y, widthPx/heightPx, cssWidth/Height, offsetX/Y)
-- `ResolutionManager.computeViewport()` = pure function, picks highest integer scale, ceil-based tile count (overscan), clamps to allowed ranges
-- `Renderer` owns the ViewportState, recomputes on resize, exposes `renderer.viewport`
-- `Camera` and `TilemapRenderer` hold a reference to the same ViewportState — no events needed
-- Config.js defines: `TILE_SIZE`, `BASE_TILES_X/Y`, `MIN/MAX_SCALE`, `MIN/MAX_TILES_X/Y`
+- `ResolutionManager.computeViewport()` = pure function, picks highest integer scale
+- `Renderer` owns the ViewportState, recomputes on resize
+- `Camera` and `TilemapRenderer` hold a reference to the same ViewportState
 
 ### Pixel-perfect rendering pipeline
 - Game logic uses float positions (Entity.x/y)
@@ -67,35 +91,85 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `roundPixels: true` in PixiJS provides GPU-level safety net
 
 ### Key patterns
-- **Service locator**: Engine passes `this` to subsystems. No DI framework.
+- **Service locator**: ClientApp passes `this` to subsystems. No DI framework.
 - **Data/visual separation**: Entity logic has zero Pixi imports. EntityRenderer handles all visuals.
 - **Polling input**: Input state is read synchronously during update(), not via event callbacks.
 - **Interpolation**: Entities store `prevX/prevY`. Render uses `prev + (curr - prev) * alpha`.
-- **Shared viewport reference**: Camera and TilemapRenderer hold a reference to Renderer's ViewportState. Values update in-place on resize.
+- **Shared viewport reference**: Camera and TilemapRenderer hold a reference to Renderer's ViewportState.
 
 ## File structure
 ```
 src/
-├── core/        Engine.js, GameLoop.js, Config.js
-├── render/      Renderer.js, Camera.js, ResolutionManager.js, ViewportState.js
-├── scene/       SceneManager.js, Scene.js, SceneMap.js
-├── world/       GameMap.js, TilemapRenderer.js
-├── entity/      Entity.js, Player.js, PlayerView.js, PlayerAnimations.js, EntityManager.js, EntityRenderer.js
-├── input/       Input.js
-├── assets/      AssetsManager.js, AssetManifest.js
-├── utils/       SpriteSheetSlicer.js
-├── debug/       DebugOverlay.js
-└── main.js
+├── client/
+│   ├── main.js              Entry point
+│   ├── ClientApp.js          Orchestrator (was Engine.js)
+│   ├── input/Input.js        Keyboard polling
+│   ├── game/
+│   │   ├── Player.js         Player entity (extends shared Entity)
+│   │   └── PlayerView.js     Player sprite (AnimatedSprite)
+│   └── scenes/
+│       └── SceneMap.js       Main gameplay scene
+├── editor/
+│   ├── EditorApp.js          Editor shell (Renderer + SceneManager)
+│   ├── EditorState.js        Tool/selection state
+│   ├── EditorMapService.js   Load/save maps
+│   └── tools/
+│       ├── BrushTool.js      Paint tiles
+│       └── EraserTool.js     Erase tiles
+├── server/
+│   ├── ServerApp.js          Headless tick loop (no PixiJS)
+│   ├── world/WorldMap.js     Server map wrapper
+│   └── loaders/ServerMapLoader.js  Load maps from fs
+└── shared/
+    ├── core/
+    │   ├── Config.js         All constants
+    │   └── GameLoop.js       Fixed timestep loop
+    ├── render/
+    │   ├── Renderer.js       PixiJS Application wrapper
+    │   ├── Camera.js         Viewport follow/clamp
+    │   ├── ViewportState.js  Viewport data
+    │   ├── ResolutionManager.js  Viewport computation
+    │   ├── TilemapRenderer.js    Tile rendering (Graphics pool)
+    │   ├── EntityRenderer.js     Entity→sprite sync
+    │   └── DebugOverlay.js       FPS/stats overlay
+    ├── scene/
+    │   ├── Scene.js          Base class
+    │   └── SceneManager.js   Scene stack
+    ├── assets/
+    │   ├── AssetsManager.js  PixiJS Assets wrapper
+    │   ├── AssetManifest.js  Bundle definitions
+    │   └── SpriteSheetSlicer.js  Texture slicing
+    └── data/
+        ├── models/
+        │   ├── Entity.js          Base entity data
+        │   ├── EntityManager.js   Entity registry
+        │   ├── EntityData.js      Serializable snapshot
+        │   ├── PlayerAnimations.js  Animation metadata
+        │   ├── MapData.js         Pure map data
+        │   ├── LayerData.js       Single tile layer
+        │   └── GameMap.js         MapData + test generation
+        ├── loaders/MapLoader.js        Fetch JSON maps
+        ├── serializers/MapSerializer.js  MapData ↔ JSON
+        └── validators/MapValidator.js    Map validation
+
+content/
+├── maps/       Map JSON files
+├── tilesets/    Tileset images
+├── sprites/    Character/entity sprites
+├── prefabs/    Prefab definitions
+└── dialogues/  Dialogue data
 ```
 
 ## Conventions
-- Keep entities engine-agnostic (no pixi imports in entity/).
-- Keep world/ for data structures only, rendering goes in render/ or paired Renderer classes.
+- Keep entities engine-agnostic (no pixi imports in shared/data/).
+- Data models live in `shared/data/`, rendering in `shared/render/`.
+- Client-specific gameplay goes in `client/game/`.
 - Scene classes should clean up all Pixi objects in destroy().
 - Config.js holds all magic numbers as named exports.
 - Spanish comments are OK (original dev language).
 - Asset bundles are organized by scene/area, not by type.
 - Use `Math.floor` for all render-time position rounding (sprites AND camera). Never `Math.round`.
+- Server code must NEVER import from `shared/render/` or `shared/assets/`.
 
 ## Important PixiJS v8 notes
 - `Application.init()` is async — must await before using stage/canvas.
@@ -106,18 +180,15 @@ src/
 - `app.renderer.resize(w, h)` to change internal resolution dynamically.
 
 ## Future systems (not yet implemented)
-- **Networking**: `net/Connection.js` (WebSocket), `net/Protocol.js` (binary messages). Client-side prediction + server reconciliation.
-- **MapLoader**: Load JSON maps from `/data/maps/`.
+- **Networking**: WebSocket connection, binary protocol. Client-side prediction + server reconciliation.
 - **Tileset slicing**: Load tileset PNGs as spritesheets, slice into per-tile textures.
-- **Collision**: Tile-based collision layer in GameMap.
+- **Collision**: Tile-based collision layer in MapData.
 - **Multiple tile layers**: ground, decoration, fringe (above entities).
 - **NPC/Monster entities**: Same entity system, different update logic.
+- **Editor UI**: Panels, canvas interaction, mouse input, tool palette.
+- **Server networking**: Real WebSocket server with Colyseus or custom.
 
 ## Debug
 - `Escape` toggles debug overlay (starts hidden). Shows: FPS, camera pos, player pos, entity count, viewport info, canvas size, container size.
 - `window.__engine` available in dev mode (Vite DEV).
 - `__engine.renderer.viewport` to inspect current viewport state from console.
-
-## Documentation
-- `docs/memory.md` — project summary, key decisions, status, PixiJS gotchas.
-- `docs/architecture.md` — init sequence, data flow per frame, entity/scene/tilemap design, networking plan.

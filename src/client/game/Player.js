@@ -1,4 +1,4 @@
-import { Entity } from "./Entity.js";
+import { Entity } from "../../shared/data/models/Entity.js";
 
 export class Player extends Entity {
   constructor(x, y) {

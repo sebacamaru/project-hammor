@@ -1,12 +1,12 @@
-import { Renderer } from "../render/Renderer.js";
-import { GameLoop } from "./GameLoop.js";
-import { AssetManager } from "../assets/AssetsManager.js";
-import { Input } from "../input/Input.js";
-import { SceneManager } from "../scene/SceneManager.js";
-import { SceneMap } from "../scene/SceneMap.js";
-import { DebugOverlay } from "../debug/DebugOverlay.js";
+import { Renderer } from "../shared/render/Renderer.js";
+import { GameLoop } from "../shared/core/GameLoop.js";
+import { AssetManager } from "../shared/assets/AssetsManager.js";
+import { Input } from "./input/Input.js";
+import { SceneManager } from "../shared/scene/SceneManager.js";
+import { SceneMap } from "./scenes/SceneMap.js";
+import { DebugOverlay } from "../shared/render/DebugOverlay.js";
 
-export class Engine {
+export class ClientApp {
   async start() {
     // Init renderer first (creates Pixi app + canvas)
     this.renderer = new Renderer(document.getElementById("game"));
@@ -30,7 +30,7 @@ export class Engine {
     this.scenes.goto(new SceneMap());
     this.loop.start();
 
-    // Debug: expose engine in dev mode
+    // Debug: expose app in dev mode
     if (import.meta.env.DEV) {
       window.__engine = this;
     }

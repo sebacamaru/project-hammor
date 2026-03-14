@@ -1,7 +1,7 @@
 import { AnimatedSprite } from "pixi.js";
-import { sliceSpriteSheet } from "../utils/SpriteSheetSlicer.js";
-import { PLAYER_ANIMATIONS, DIRECTION_NAMES } from "./PlayerAnimations.js";
-import { AssetManager } from "../assets/AssetsManager.js";
+import { sliceSpriteSheet } from "../../shared/assets/SpriteSheetSlicer.js";
+import { PLAYER_ANIMATIONS, DIRECTION_NAMES } from "../../shared/data/models/PlayerAnimations.js";
+import { AssetManager } from "../../shared/assets/AssetsManager.js";
 
 export class PlayerView {
   constructor(parentContainer) {

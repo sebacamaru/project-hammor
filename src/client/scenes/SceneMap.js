@@ -1,12 +1,12 @@
 import { Container } from "pixi.js";
-import { Scene } from "./Scene.js";
-import { Camera } from "../render/Camera.js";
-import { GameMap } from "../world/GameMap.js";
-import { TilemapRenderer } from "../world/TilemapRenderer.js";
-import { EntityManager } from "../entity/EntityManager.js";
-import { EntityRenderer } from "../entity/EntityRenderer.js";
-import { Player } from "../entity/Player.js";
-import { PlayerView } from "../entity/PlayerView.js";
+import { Scene } from "../../shared/scene/Scene.js";
+import { Camera } from "../../shared/render/Camera.js";
+import { GameMap } from "../../shared/data/models/GameMap.js";
+import { TilemapRenderer } from "../../shared/render/TilemapRenderer.js";
+import { EntityManager } from "../../shared/data/models/EntityManager.js";
+import { EntityRenderer } from "../../shared/render/EntityRenderer.js";
+import { Player } from "../game/Player.js";
+import { PlayerView } from "../game/PlayerView.js";
 
 export class SceneMap extends Scene {
   enter(engine) {

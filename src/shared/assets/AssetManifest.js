@@ -5,9 +5,9 @@ export const manifest = {
       assets: [
         {
           alias: "player_test",
-          src: "/assets/characters/player_test.png",
+          src: "/content/sprites/characters/player_test.png",
         },
       ],
     },
-],
+  ],
 };

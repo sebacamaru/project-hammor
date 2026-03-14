@@ -1,13 +1,28 @@
 # Architecture Details
 
-## Init sequence (Engine.start)
+## Module structure
+```
+src/
+├── shared/    Reusable core: render pipeline, scene system, data models, assets
+├── client/    Game runtime: ClientApp, Input, Player, gameplay scenes
+├── editor/    Map editor: EditorApp, tools, state (skeleton)
+└── server/    Headless server: ServerApp, world management (skeleton)
+```
+
+### Dependency rules
+- `shared/` → only `shared/` and npm packages
+- `client/` → `shared/` and npm packages
+- `editor/` → `shared/` and npm packages
+- `server/` → `shared/core/` and `shared/data/` ONLY (never `shared/render/` or `shared/assets/`)
+
+## Init sequence (ClientApp.start)
 1. Renderer.init() — compute viewport, create Pixi app at dynamic resolution, append canvas, setup resize
 2. AssetManager.init() — register manifest
 3. AssetManager.loadBundle('core') — load textures
 4. new Input() — bind keyboard listeners
 5. new SceneManager() — empty stack
 6. new DebugOverlay() — attach to stage (starts hidden)
-7. new GameLoop(engine) — ready but not running
+7. new GameLoop(clientApp) — ready but not running
 8. SceneManager.goto(SceneMap) — enter first scene
 9. GameLoop.start() — begin RAF
 
@@ -24,7 +39,7 @@ RAF tick
 │   │       └── Camera debug mode check
 │   └── accumulator -= TICK_MS
 ├── alpha = accumulator / TICK_MS
-└── Engine.render(alpha)
+└── ClientApp.render(alpha)
     ├── SceneManager.render(alpha)
     │   └── SceneMap.render(alpha)
     │       ├── Camera.renderUpdate(player, alpha) — interpolate + recalc bounds
@@ -55,12 +70,13 @@ window resize → Renderer.resize()
   TilemapRenderer reads viewport.tilesX/tilesY (same reference)
 ```
 
-### Config constants (Config.js)
+### Config constants (shared/core/Config.js)
 - TILE_SIZE = 16
 - BASE_TILES_X = 40, BASE_TILES_Y = 22
 - MIN_SCALE = 2, MAX_SCALE = 6
 - MIN_TILES_X = 38, MAX_TILES_X = 46
 - MIN_TILES_Y = 20, MAX_TILES_Y = 26
+- TICK_RATE = 20, TICK_MS = 50
 
 ## Scene lifecycle
 - enter(engine) — create containers, load map, setup entities, pass viewport to Camera/TilemapRenderer, add to stage
@@ -70,11 +86,32 @@ window resize → Renderer.resize()
 - destroy() — destroy all Pixi objects, clear references
 
 ## Entity system design
-- Entity: pure data object (id, x, y, prevX, prevY, direction, speed, type)
-- Player extends Entity: adds input-driven movement in update(dt, input)
-- PlayerView: owns AnimatedSprite, animation map from spritesheet, updates from Player state
-- EntityManager: Map<id, Entity>, add/remove/get/getAll/updateAll
-- EntityRenderer: Map<id, Sprite>, creates sprites on first sync, interpolates position with Math.floor
+
+### Data layer (shared/data/models/)
+- **Entity**: pure data object (id, x, y, prevX, prevY, direction, speed, type). Auto-increment ID.
+- **EntityManager**: Map<id, Entity>, add/remove/get/getAll/updateAll
+- **EntityData**: serializable snapshot for network/persistence, with fromEntity()/toPlain()/fromPlain()
+- **PlayerAnimations**: animation name → { row, speed } mapping + DIRECTION_NAMES array
+
+### Client gameplay (client/game/)
+- **Player extends Entity**: adds input-driven movement in update(dt, input), normalized diagonal
+- **PlayerView**: owns AnimatedSprite, animation map from spritesheet, updates from Player state
+
+### Render layer (shared/render/)
+- **EntityRenderer**: Map<id, Sprite>, creates sprites on first sync, interpolates with Math.floor
+- **TilemapRenderer**: pre-allocated Graphics pool, viewport culling per frame
+
+## Data model (shared/data/)
+
+### Map data
+- **MapData**: pure data — width, height, Map<string, LayerData>. getTile/setTile/addLayer/getLayer.
+- **LayerData**: single layer — name, width, height, Uint16Array data. get(x,y)/set(x,y,val)/fill(val).
+- **GameMap extends MapData**: convenience subclass that auto-creates "ground" layer and generateTest().
+
+### Serialization pipeline
+- **MapSerializer**: serialize(mapData) → JSON object, deserialize(json) → MapData
+- **MapLoader**: fetch(url) → MapSerializer.deserialize() → MapData (browser context)
+- **MapValidator**: validate(mapData) → { valid, errors[] }
 
 ## Pixel-perfect rendering rules
 - All render-time positions use `Math.floor` (sprites AND camera)
@@ -89,8 +126,20 @@ window resize → Renderer.resize()
 - Currently uses Graphics.rect + fill (placeholder)
 - TODO: migrate to Sprites with tileset textures for batching
 
+## Editor architecture (skeleton)
+- **EditorApp**: composes shared Renderer + SceneManager + GameLoop. No Input (will use mouse).
+- **EditorState**: currentTool, selectedTileId, brushSize, activeLayer
+- **BrushTool/EraserTool**: pure logic, apply(mapData, x, y, ...) → modify tiles
+- **EditorMapService**: uses shared MapLoader + MapSerializer for load/save
+
+## Server architecture (skeleton)
+- **ServerApp**: setInterval-based tick loop (no RAF). Imports only shared/core/ and shared/data/.
+- **WorldMap**: wraps MapData, provides server-specific queries (isWalkable stub)
+- **ServerMapLoader**: reads JSON from filesystem via Node.js fs → MapSerializer.deserialize()
+
 ## Future networking plan
 - Fixed 20Hz tick matches planned server tick rate
 - Entity IDs already assigned (auto-increment, will switch to server-assigned)
 - prevX/prevY interpolation works for both local prediction and server state
 - Plan: send input intents to server, apply client-side prediction, reconcile with server state
+- EntityData provides the serializable snapshot format for network messages
