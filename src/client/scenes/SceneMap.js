@@ -2,7 +2,7 @@ import { Container } from "pixi.js";
 import { Scene } from "../../shared/scene/Scene.js";
 import { Camera } from "../../shared/render/Camera.js";
 import { GameMap } from "../../shared/data/models/GameMap.js";
-import { TilemapRenderer } from "../../shared/render/TilemapRenderer.js";
+import { MapChunkRenderer } from "../../shared/render/MapChunkRenderer.js";
 import { TILE_SIZE } from "../../shared/core/Config.js";
 import { EntityManager } from "../../shared/data/models/EntityManager.js";
 import { EntityRenderer } from "../../shared/render/EntityRenderer.js";
@@ -27,12 +27,10 @@ export class SceneMap extends Scene {
     this.camera = new Camera(viewport);
     this.camera.setBounds(this.map.width, this.map.height);
 
-    // Tilemap rendering — z-order: ground, ground_detail, entities/player, fringe, debug
-    this.groundRenderer = new TilemapRenderer(this.map, viewport, "ground");
-    this.root.addChild(this.groundRenderer.container);
-
-    this.groundDetailRenderer = new TilemapRenderer(this.map, viewport, "ground_detail");
-    this.root.addChild(this.groundDetailRenderer.container);
+    // Chunk-based tilemap rendering
+    this.chunkRenderer = new MapChunkRenderer(this.map, viewport, ["ground", "ground_detail", "fringe"]);
+    this.root.addChild(this.chunkRenderer.getLayerContainer("ground"));
+    this.root.addChild(this.chunkRenderer.getLayerContainer("ground_detail"));
 
     // Entities
     this.entityManager = new EntityManager();
@@ -44,8 +42,7 @@ export class SceneMap extends Scene {
     this.camera.follow(this.player);
 
     // Fringe layer — renders above entities/player
-    this.fringeRenderer = new TilemapRenderer(this.map, viewport, "fringe");
-    this.root.addChild(this.fringeRenderer.container);
+    this.root.addChild(this.chunkRenderer.getLayerContainer("fringe"));
 
     // Debug overlays (sync with debug mode)
     this.collisionDebug = new TileLayerDebugOverlay(this.map, viewport, "collision", 0xff0000);
@@ -100,9 +97,7 @@ export class SceneMap extends Scene {
     this.root.x = -this.camera.x;
     this.root.y = -this.camera.y;
 
-    this.groundRenderer.render(this.camera);
-    this.groundDetailRenderer.render(this.camera);
-    this.fringeRenderer.render(this.camera);
+    this.chunkRenderer.update(this.camera);
     this.collisionDebug.render(this.camera);
     this.chunkDebug.render(this.camera);
     this.entityRenderer.sync(this.entityManager.getAll(), alpha);
@@ -118,9 +113,7 @@ export class SceneMap extends Scene {
     this.collisionDebug.destroy();
     this.hitboxDebug.destroy();
     this.chunkDebug.destroy();
-    this.groundRenderer.destroy();
-    this.groundDetailRenderer.destroy();
-    this.fringeRenderer.destroy();
+    this.chunkRenderer.destroy();
     this.entityRenderer.destroy();
     this.playerView.destroy();
     this.root.destroy({ children: true });
