@@ -8,18 +8,18 @@ export class SceneManager {
     return this.stack[this.stack.length - 1] ?? null;
   }
 
-  goto(scene) {
+  async goto(scene) {
     this.current?.exit();
     this.current?.destroy();
     this.stack.length = 0;
     this.stack.push(scene);
-    scene.enter(this.engine);
+    await scene.enter(this.engine);
   }
 
-  push(scene) {
+  async push(scene) {
     this.current?.pause?.();
     this.stack.push(scene);
-    scene.enter(this.engine);
+    await scene.enter(this.engine);
   }
 
   pop() {

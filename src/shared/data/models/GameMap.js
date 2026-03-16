@@ -1,23 +1,7 @@
-import { MapData } from "./MapData.js";
+import { MapLoader } from "../loaders/MapLoader.js";
 
-/**
- * GameMap extends MapData with convenience methods for development/testing.
- * In production, maps will be loaded via MapLoader into MapData directly.
- */
-export class GameMap extends MapData {
-  constructor(width, height) {
-    super(width, height);
-    this.addLayer("ground");
-    this.generateTest();
+export class GameMap {
+  static async load(mapUrl) {
+    return MapLoader.load(mapUrl);
   }
-
-  generateTest() {
-    const ground = this.getLayer("ground");
-    for (let i = 0; i < ground.data.length; i++) {
-      ground.data[i] = Math.random() > 0.8 ? 1 : 0;
-    }
-  }
-
-  // Backward-compatible: TilemapRenderer calls map.getTile("ground", x, y)
-  // This is inherited from MapData now.
 }

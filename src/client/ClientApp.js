@@ -27,12 +27,19 @@ export class ClientApp {
 
     // Start game loop
     this.loop = new GameLoop(this);
-    this.scenes.goto(new SceneMap());
+    await this.scenes.goto(new SceneMap());
     this.loop.start();
 
     // Debug: expose app in dev mode
     if (import.meta.env.DEV) {
       window.__engine = this;
+      window.toggleChunkDebug = () => {
+        const overlay = this.scenes.current?.chunkDebug;
+        if (overlay) {
+          overlay.enabled = !overlay.enabled;
+          console.log(`Chunk debug: ${overlay.enabled ? "on" : "off"}`);
+        }
+      };
     }
   }
 

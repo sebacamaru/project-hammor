@@ -1,0 +1,7 @@
+{
+  "id": "world",
+  "image": "/content/atlas/atlas_world.webp",
+  "tileSize": 16,
+  "columns": 128,
+  "rows": 128
+}

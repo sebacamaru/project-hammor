@@ -1,26 +1,57 @@
-import { Container, Graphics } from "pixi.js";
+import { Assets, Container, Sprite, Texture, Rectangle } from "pixi.js";
 import { TILE_SIZE, MAX_TILES_X, MAX_TILES_Y } from "../core/Config.js";
 
 export class TilemapRenderer {
   /**
-   * @param {import('../world/GameMap.js').GameMap} map
-   * @param {import('../render/ViewportState.js').ViewportState} viewport
+   * @param {import('../data/models/MapData.js').MapData} map
+   * @param {import('./ViewportState.js').ViewportState} viewport
    */
-  constructor(map, viewport) {
+  constructor(map, viewport, layerName) {
     this.map = map;
     this.viewport = viewport;
+    this.layerName = layerName;
     this.container = new Container();
     this.pool = [];
 
-    // Pre-allocate for the maximum possible viewport + 2 tile margin
+    // Tileset info
+    const tileset = map.tileset;
+    this.columns = tileset.columns;
+    this.tileSize = tileset.tileSize;
+    this.baseTexture = Assets.get(tileset.image);
+    this.tileTextures = new Map();
+
+    // Pre-allocate sprite pool for maximum viewport + 2 tile margin
     const cols = MAX_TILES_X + 2;
     const rows = MAX_TILES_Y + 2;
 
     for (let i = 0; i < cols * rows; i++) {
-      const g = new Graphics();
-      this.container.addChild(g);
-      this.pool.push(g);
+      const sprite = new Sprite();
+      sprite.visible = false;
+      this.container.addChild(sprite);
+      this.pool.push(sprite);
     }
+  }
+
+  _getTileTexture(tileId) {
+    let tex = this.tileTextures.get(tileId);
+    if (tex) return tex;
+
+    const atlasIndex = tileId - 1;
+    const tileX = atlasIndex % this.columns;
+    const tileY = Math.floor(atlasIndex / this.columns);
+
+    tex = new Texture({
+      source: this.baseTexture.source,
+      frame: new Rectangle(
+        tileX * this.tileSize,
+        tileY * this.tileSize,
+        this.tileSize,
+        this.tileSize
+      ),
+    });
+
+    this.tileTextures.set(tileId, tex);
+    return tex;
   }
 
   render(camera) {
@@ -34,21 +65,19 @@ export class TilemapRenderer {
       for (let dx = 0; dx < cols; dx++) {
         const tx = startX + dx;
         const ty = startY + dy;
-        const g = this.pool[idx++];
+        const sprite = this.pool[idx++];
 
-        const tileId = this.map.getTile("ground", tx, ty);
+        const tileId = this.map.getTile(this.layerName, tx, ty);
 
-        if (tileId < 0) {
-          g.visible = false;
+        if (tileId <= 0) {
+          sprite.visible = false;
           continue;
         }
 
-        g.visible = true;
-        g.clear();
-        g.rect(0, 0, TILE_SIZE, TILE_SIZE);
-        g.fill(tileId === 1 ? 0x228b22 : 0x3a3a3a);
-        g.x = tx * TILE_SIZE;
-        g.y = ty * TILE_SIZE;
+        sprite.visible = true;
+        sprite.texture = this._getTileTexture(tileId);
+        sprite.x = tx * TILE_SIZE;
+        sprite.y = ty * TILE_SIZE;
       }
     }
 
