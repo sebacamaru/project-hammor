@@ -1,7 +1,7 @@
 import { Renderer } from "../shared/render/Renderer.js";
 import { GameLoop } from "../shared/core/GameLoop.js";
 import { AssetManager } from "../shared/assets/AssetsManager.js";
-import { Input } from "./input/Input.js";
+import { Input } from "../shared/input/Input.js";
 import { SceneManager } from "../shared/scene/SceneManager.js";
 import { SceneMap } from "./scenes/SceneMap.js";
 import { DebugOverlay } from "../shared/render/DebugOverlay.js";

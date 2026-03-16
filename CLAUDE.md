@@ -1,5 +1,7 @@
 # MINIMMO — Project Context
 
+> See also: [docs/architecture.md](docs/architecture.md) (detailed subsystem docs) · [docs/memory.md](docs/memory.md) (key files index & status)
+
 ## What is this
 2D MMORPG called **MINIMMO** (codename: project-hammor). Modular architecture with client, editor, server, and shared modules. Written in vanilla JavaScript with PixiJS v8 and Vite.
 
@@ -61,28 +63,32 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `Entity` = pure data in `shared/data/models/`. NO Pixi imports.
 - `EntityManager` = collection in `shared/data/models/`.
 - `EntityRenderer` = syncs entity data → Pixi sprites in `shared/render/`.
-- `Player extends Entity` — in `client/game/`, reads input in update().
+- `Player extends Entity` — in `client/game/`, reads input + tile collision in update().
+- `Player.hitbox` = `{ offsetX, offsetY, width, height }` for AABB collision.
 - `PlayerView` = in `client/game/`, owns AnimatedSprite.
 - `PlayerAnimations` = animation metadata in `shared/data/models/`.
 - `EntityData` = serializable snapshot in `shared/data/models/`.
 
 ### Data model (shared/data/)
-- `MapData` = pure map data (width, height, named layers).
-- `LayerData` = single tile layer (Uint16Array + get/set).
-- `GameMap extends MapData` = adds test data generation.
-- `MapLoader` = fetch JSON maps from URLs.
+- `MapData` = chunk-based map data (width, height, tileSize, chunkSize, layerNames, chunks Map).
+- `ChunkData` = single chunk tile data (cx, cy, chunkSize, layers Map of Uint16Array).
+- `GameMap` = static loader facade (`GameMap.load(url)` → calls MapLoader).
+- `MapLoader` = fetch JSON map + tileset metadata, build MapData with chunks.
+- `TileCollision` = static AABB vs tile-layer collision check.
 - `MapSerializer` = MapData ↔ JSON conversion.
 - `MapValidator` = validate map integrity.
 
-### Tilemap
-- `GameMap` = tile data via MapData/LayerData in `shared/data/models/`.
-- `TilemapRenderer` = pre-allocated graphics pool in `shared/render/`.
+### Tilemap rendering
+- `MapChunkRenderer` = chunk-based renderer, creates/hides ChunkLayerViews per visible chunk+layer. Lazy tile texture cache from atlas.
+- `ChunkLayerView` = Pixi Container of Sprites for one chunk's one layer. Positioned at chunk world coords.
+- Layers rendered in z-order: ground → ground_detail → (entities) → fringe.
+- Uses Sprites with sliced Textures from atlas (NOT Graphics objects).
 
 ### Viewport system
 - `ViewportState` = plain data class (scale, tilesX/Y, widthPx/heightPx, cssWidth/Height, offsetX/Y)
 - `ResolutionManager.computeViewport()` = pure function, picks highest integer scale
 - `Renderer` owns the ViewportState, recomputes on resize
-- `Camera` and `TilemapRenderer` hold a reference to the same ViewportState
+- `Camera` and `MapChunkRenderer` hold a reference to the same ViewportState
 
 ### Pixel-perfect rendering pipeline
 - Game logic uses float positions (Entity.x/y)
@@ -95,7 +101,7 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - **Data/visual separation**: Entity logic has zero Pixi imports. EntityRenderer handles all visuals.
 - **Polling input**: Input state is read synchronously during update(), not via event callbacks.
 - **Interpolation**: Entities store `prevX/prevY`. Render uses `prev + (curr - prev) * alpha`.
-- **Shared viewport reference**: Camera and TilemapRenderer hold a reference to Renderer's ViewportState.
+- **Shared viewport reference**: Camera and MapChunkRenderer hold a reference to Renderer's ViewportState.
 
 ## File structure
 ```
@@ -105,8 +111,12 @@ src/
 │   ├── ClientApp.js          Orchestrator (was Engine.js)
 │   ├── input/Input.js        Keyboard polling
 │   ├── game/
-│   │   ├── Player.js         Player entity (extends shared Entity)
+│   │   ├── Player.js         Player entity (extends Entity, has hitbox + collision)
 │   │   └── PlayerView.js     Player sprite (AnimatedSprite)
+│   ├── render/
+│   │   ├── ChunkDebugOverlay.js    Tile grid + chunk boundary debug lines
+│   │   ├── HitboxDebugOverlay.js   Entity hitbox debug rectangles
+│   │   └── TileLayerDebugOverlay.js  Collision layer debug highlight
 │   └── scenes/
 │       └── SceneMap.js       Main gameplay scene
 ├── editor/
@@ -126,10 +136,12 @@ src/
     │   └── GameLoop.js       Fixed timestep loop
     ├── render/
     │   ├── Renderer.js       PixiJS Application wrapper
-    │   ├── Camera.js         Viewport follow/clamp
+    │   ├── Camera.js         Viewport follow/clamp + debug free mode
     │   ├── ViewportState.js  Viewport data
     │   ├── ResolutionManager.js  Viewport computation
-    │   ├── TilemapRenderer.js    Tile rendering (Graphics pool)
+    │   ├── MapChunkRenderer.js   Chunk-based tile rendering (Sprites)
+    │   ├── ChunkLayerView.js     Single chunk+layer Sprite container
+    │   ├── TilemapRenderer.js    Legacy tile rendering (Graphics pool)
     │   ├── EntityRenderer.js     Entity→sprite sync
     │   └── DebugOverlay.js       FPS/stats overlay
     ├── scene/
@@ -140,24 +152,34 @@ src/
     │   ├── AssetManifest.js  Bundle definitions
     │   └── SpriteSheetSlicer.js  Texture slicing
     └── data/
+        ├── TileCollision.js       AABB vs tile-layer collision
         ├── models/
         │   ├── Entity.js          Base entity data
         │   ├── EntityManager.js   Entity registry
         │   ├── EntityData.js      Serializable snapshot
         │   ├── PlayerAnimations.js  Animation metadata
-        │   ├── MapData.js         Pure map data
-        │   ├── LayerData.js       Single tile layer
-        │   └── GameMap.js         MapData + test generation
-        ├── loaders/MapLoader.js        Fetch JSON maps
+        │   ├── MapData.js         Chunk-based map data
+        │   ├── ChunkData.js       Single chunk tile data
+        │   ├── LayerData.js       Single tile layer (legacy)
+        │   └── GameMap.js         Static loader facade
+        ├── loaders/MapLoader.js        Fetch JSON maps + tileset
         ├── serializers/MapSerializer.js  MapData ↔ JSON
         └── validators/MapValidator.js    Map validation
 
 content/
-├── maps/       Map JSON files
-├── tilesets/    Tileset images
-├── sprites/    Character/entity sprites
-├── prefabs/    Prefab definitions
-└── dialogues/  Dialogue data
+├── atlas/          Tileset atlas images (webp)
+├── maps/           Map JSON files
+├── tilesets/        Tileset metadata JSON
+├── sprites/
+│   ├── characters/  Player/NPC sprites
+│   ├── effects/     Effect sprites
+│   └── monsters/    Monster sprites
+├── dialogue/        Dialogue data
+├── interactions/    Interaction definitions
+├── items/           Item definitions
+├── npcs/            NPC definitions
+├── objects/         World object definitions
+└── skills/          Skill definitions
 ```
 
 ## Conventions
@@ -181,14 +203,13 @@ content/
 
 ## Future systems (not yet implemented)
 - **Networking**: WebSocket connection, binary protocol. Client-side prediction + server reconciliation.
-- **Tileset slicing**: Load tileset PNGs as spritesheets, slice into per-tile textures.
-- **Collision**: Tile-based collision layer in MapData.
-- **Multiple tile layers**: ground, decoration, fringe (above entities).
 - **NPC/Monster entities**: Same entity system, different update logic.
 - **Editor UI**: Panels, canvas interaction, mouse input, tool palette.
 - **Server networking**: Real WebSocket server with Colyseus or custom.
 
 ## Debug
-- `Escape` toggles debug overlay (starts hidden). Shows: FPS, camera pos, player pos, entity count, viewport info, canvas size, container size.
+- `Escape` toggles debug overlay (starts hidden). Shows: FPS, camera pos, player pos, chunk pos, entity count, viewport info, canvas size, container size.
+- Debug overlays (all toggle with Escape): collision layer highlight (red), entity hitbox (cyan), tile grid (blue) + chunk boundaries (red).
+- Camera debug: IJKL enters free camera mode, WASD returns to player follow.
 - `window.__engine` available in dev mode (Vite DEV).
 - `__engine.renderer.viewport` to inspect current viewport state from console.

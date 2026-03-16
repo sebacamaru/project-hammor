@@ -34,9 +34,10 @@ RAF tick
 │   ├── Input.poll()
 │   ├── SceneManager.update(dt)
 │   │   └── SceneMap.update(dt)
-│   │       ├── Player.update(dt, input) — movement
+│   │       ├── Player.update(dt, input, map) — movement + tile collision
 │   │       ├── EntityManager.updateAll(dt, input)
-│   │       └── Camera debug mode check
+│   │       ├── Camera debug mode check (IJKL → free, WASD → follow)
+│   │       └── Debug info update (cam, player, chunk, entities, viewport)
 │   └── accumulator -= TICK_MS
 ├── alpha = accumulator / TICK_MS
 └── ClientApp.render(alpha)
@@ -44,7 +45,8 @@ RAF tick
     │   └── SceneMap.render(alpha)
     │       ├── Camera.renderUpdate(player, alpha) — interpolate + recalc bounds
     │       ├── root.x/y = -camera (already floor-snapped)
-    │       ├── TilemapRenderer.render(camera) — viewport culling
+    │       ├── MapChunkRenderer.update(camera) — show/hide chunk views
+    │       ├── Debug overlays: collision, chunk grid, hitbox
     │       ├── EntityRenderer.sync(entities, alpha) — floor-snapped interpolation
     │       └── PlayerView.updateFromEntity(player, alpha) — floor-snapped interpolation
     └── DebugOverlay.update(lastFrameTime)
@@ -67,7 +69,7 @@ window resize → Renderer.resize()
   → applyViewport()                                     // CSS size + centering
   ↓
   Camera reads viewport.widthPx/heightPx (same reference)
-  TilemapRenderer reads viewport.tilesX/tilesY (same reference)
+  MapChunkRenderer reads viewport.tilesX/tilesY (same reference)
 ```
 
 ### Config constants (shared/core/Config.js)
@@ -79,9 +81,9 @@ window resize → Renderer.resize()
 - TICK_RATE = 20, TICK_MS = 50
 
 ## Scene lifecycle
-- enter(engine) — create containers, load map, setup entities, pass viewport to Camera/TilemapRenderer, add to stage
+- enter(engine) — create containers, load map, setup entities, pass viewport to Camera/MapChunkRenderer, add to stage
 - update(dt) — game logic, entity updates, camera debug mode
-- render(alpha) — camera interpolation, visual sync, tilemap render, entity interpolation
+- render(alpha) — camera interpolation, visual sync, chunk rendering, entity interpolation
 - exit() — remove containers from stage
 - destroy() — destroy all Pixi objects, clear references
 
@@ -94,37 +96,77 @@ window resize → Renderer.resize()
 - **PlayerAnimations**: animation name → { row, speed } mapping + DIRECTION_NAMES array
 
 ### Client gameplay (client/game/)
-- **Player extends Entity**: adds input-driven movement in update(dt, input), normalized diagonal
+- **Player extends Entity**: adds input-driven movement, normalized diagonal, hitbox-based tile collision (per-axis resolve)
+- **Player.hitbox**: `{ offsetX: 4, offsetY: 12, width: 8, height: 4 }` — AABB relative to entity position
 - **PlayerView**: owns AnimatedSprite, animation map from spritesheet, updates from Player state
 
 ### Render layer (shared/render/)
 - **EntityRenderer**: Map<id, Sprite>, creates sprites on first sync, interpolates with Math.floor
-- **TilemapRenderer**: pre-allocated Graphics pool, viewport culling per frame
+- **MapChunkRenderer**: chunk-based tilemap rendering (see Tilemap section)
 
 ## Data model (shared/data/)
 
-### Map data
-- **MapData**: pure data — width, height, Map<string, LayerData>. getTile/setTile/addLayer/getLayer.
-- **LayerData**: single layer — name, width, height, Uint16Array data. get(x,y)/set(x,y,val)/fill(val).
-- **GameMap extends MapData**: convenience subclass that auto-creates "ground" layer and generateTest().
+### Map data (chunk-based)
+- **MapData**: width, height, tileSize, chunkSize, layerNames, chunks Map<string, ChunkData>. getTile/setTile delegate to chunks via worldToChunk().
+- **ChunkData**: cx, cy, chunkSize, layers Map<string, Uint16Array>. getTile/setTile with bounds checks.
+- **GameMap**: static facade — `GameMap.load(url)` delegates to MapLoader.
+- **TileCollision**: static `collidesWithLayer(map, layerName, x, y, hitbox)` — AABB vs tile grid check.
+
+### Map layers
+- `ground` — base terrain tiles
+- `ground_detail` — decorative tiles above ground (below entities)
+- `fringe` — tiles rendered above entities (tree tops, roofs, etc.)
+- `collision` — collision mask (tile > 0 = blocked)
 
 ### Serialization pipeline
+- **MapLoader**: fetch map JSON + tileset JSON, build MapData with chunks from raw tile arrays
 - **MapSerializer**: serialize(mapData) → JSON object, deserialize(json) → MapData
-- **MapLoader**: fetch(url) → MapSerializer.deserialize() → MapData (browser context)
 - **MapValidator**: validate(mapData) → { valid, errors[] }
+
+### Map JSON format
+```json
+{
+  "id": "test_map",
+  "width": 100, "height": 100,
+  "tileSize": 16, "chunkSize": 16,
+  "tileset": "world",
+  "layers": ["ground", "ground_detail", "fringe", "collision"],
+  "chunks": [
+    { "cx": 0, "cy": 0, "tiles": {
+      "ground": { "encoding": "raw", "data": [1, 2, ...] },
+      "collision": { "encoding": "raw", "data": [] }
+    }}
+  ]
+}
+```
+
+### Tileset JSON format (content/tilesets/)
+```json
+{ "image": "atlas_world", "tileSize": 16, "columns": 32 }
+```
+
+## Tilemap rendering (chunk-based)
+- **MapChunkRenderer**: manages ChunkLayerViews for visible chunks. One Container per layer for z-order control.
+  - Determines visible chunks from camera position + viewport size
+  - Lazily creates ChunkLayerView when chunk enters view for first time
+  - Hides (visible=false) chunk views that leave the viewport
+  - Tracks empty chunk+layer combos to skip re-checking
+  - Caches tile Textures (sliced from atlas) in a Map<tileId, Texture>
+  - `rebuildChunk(cx, cy)` for editor/dynamic tile changes
+- **ChunkLayerView**: Container of Sprites for one chunk's one layer. Positioned at world coords (cx * chunkSize * tileSize).
+- Z-order in SceneMap: ground container → ground_detail container → entities → fringe container
+
+## Debug overlays (client/render/)
+- **ChunkDebugOverlay**: blue tile grid lines + red chunk boundary lines (2px). Uses Graphics.rect + fill.
+- **TileLayerDebugOverlay**: highlights tiles in a named layer (used for collision). Configurable color.
+- **HitboxDebugOverlay**: renders entity hitbox as cyan rectangle.
+- All toggle with Escape (sync with `engine.debug.visible`).
 
 ## Pixel-perfect rendering rules
 - All render-time positions use `Math.floor` (sprites AND camera)
 - Camera and sprites must use the SAME rounding function to avoid 1px oscillation
 - Game logic keeps float coordinates — rounding is render-only
 - `roundPixels: true` in PixiJS as GPU-level safety net
-
-## Tilemap rendering
-- Pool of (MAX_TILES_X+2) * (MAX_TILES_Y+2) Graphics objects (pre-allocated for max viewport)
-- Each frame: calculate visible tile range from camera, reassign tiles using viewport.tilesX/Y
-- Out-of-bounds tiles get visible=false, excess pool entries hidden
-- Currently uses Graphics.rect + fill (placeholder)
-- TODO: migrate to Sprites with tileset textures for batching
 
 ## Editor architecture (skeleton)
 - **EditorApp**: composes shared Renderer + SceneManager + GameLoop. No Input (will use mouse).

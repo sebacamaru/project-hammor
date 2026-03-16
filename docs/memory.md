@@ -15,36 +15,41 @@
 - Service locator pattern: ClientApp passes `this` to subsystems
 - Polling input (not event-driven)
 - Scene stack with full lifecycle (enter/exit/update/render/destroy)
-- Shared viewport reference: Camera and TilemapRenderer hold reference to Renderer's ViewportState
+- Shared viewport reference: Camera and MapChunkRenderer hold reference to Renderer's ViewportState
 - Overscan strategy: viewport uses Math.ceil for tile count (CSS "cover"), clipped by parent overflow:hidden
 - Pixel-perfect rounding: Math.floor everywhere in render path (never Math.round)
-- Data model: MapData/LayerData (pure data) → GameMap extends MapData for convenience
+- Chunk-based map data: MapData holds Map<string, ChunkData>, tiles accessed via worldToChunk()
 - See [architecture.md](architecture.md) for detailed subsystem docs
 
 ## Key files
 - `src/client/ClientApp.js` — orchestrator (was Engine.js), init order matters
 - `src/client/main.js` — entry point
-- `src/client/game/Player.js` — player movement with WASD/arrows
+- `src/client/game/Player.js` — player movement with WASD/arrows + tile collision
 - `src/client/game/PlayerView.js` — AnimatedSprite from spritesheet, floor-snapped positioning
 - `src/client/scenes/SceneMap.js` — main game scene, wires everything together
 - `src/client/input/Input.js` — keyboard polling
+- `src/client/render/ChunkDebugOverlay.js` — tile grid + chunk boundary debug lines
+- `src/client/render/HitboxDebugOverlay.js` — entity hitbox debug rectangles
+- `src/client/render/TileLayerDebugOverlay.js` — collision layer debug highlight
 - `src/shared/core/Config.js` — viewport constraints, tick rate
 - `src/shared/core/GameLoop.js` — fixed timestep loop
 - `src/shared/render/Renderer.js` — Pixi setup, owns ViewportState, resize logic
 - `src/shared/render/ResolutionManager.js` — pure function: computeViewport()
 - `src/shared/render/ViewportState.js` — plain data class (scale, tiles, dimensions, offsets)
-- `src/shared/render/Camera.js` — follows player, bounds clamping, uses viewport reference
-- `src/shared/render/TilemapRenderer.js` — pre-allocated pool for max viewport, culls per frame
+- `src/shared/render/Camera.js` — follows player, bounds clamping, debug free mode (IJKL)
+- `src/shared/render/MapChunkRenderer.js` — chunk-based tilemap rendering (Sprites from atlas)
+- `src/shared/render/ChunkLayerView.js` — single chunk+layer Sprite container
 - `src/shared/render/EntityRenderer.js` — entity→sprite sync with interpolation
 - `src/shared/render/DebugOverlay.js` — FPS/stats, toggled with Escape
-- `src/shared/data/models/MapData.js` — pure map data (width, height, layers)
-- `src/shared/data/models/LayerData.js` — single tile layer (Uint16Array + get/set)
-- `src/shared/data/models/GameMap.js` — extends MapData, adds generateTest()
+- `src/shared/data/TileCollision.js` — AABB vs tile-layer collision check
+- `src/shared/data/models/MapData.js` — chunk-based map data (width, height, chunks)
+- `src/shared/data/models/ChunkData.js` — single chunk tile data (layers of Uint16Array)
+- `src/shared/data/models/GameMap.js` — static loader facade
 - `src/shared/data/models/Entity.js` — base entity data (no PixiJS)
 - `src/shared/data/models/EntityManager.js` — entity registry
 - `src/shared/data/models/EntityData.js` — serializable entity snapshot
 - `src/shared/data/models/PlayerAnimations.js` — animation metadata
-- `src/shared/data/loaders/MapLoader.js` — fetch JSON → MapData
+- `src/shared/data/loaders/MapLoader.js` — fetch map + tileset JSON → MapData with chunks
 - `src/shared/data/serializers/MapSerializer.js` — MapData ↔ JSON
 - `src/shared/data/validators/MapValidator.js` — validate map integrity
 - `src/shared/assets/AssetsManager.js` — PixiJS Assets wrapper
@@ -59,16 +64,17 @@
 - roundPixels: true for pixel art
 - resolution: 1 (CSS scaling, not devicePixelRatio)
 - app.renderer.resize(w, h) for dynamic viewport changes
-- Graphics per-tile is expensive — migrate to Sprites when tilesets are ready
+- Graphics per-tile is expensive — use Sprites with shared textures
 
 ## Status
 - Modular architecture implemented: client/editor/server/shared
 - Core client architecture working: viewport, rendering, entities, input, scenes
-- Data model layer: MapData, LayerData, EntityData, MapSerializer, MapValidator, MapLoader
-- Editor skeleton: EditorApp, EditorState, BrushTool, EraserTool, EditorMapService
-- Server skeleton: ServerApp, WorldMap, ServerMapLoader
+- Chunk-based map system: MapData + ChunkData, JSON map loading with tileset metadata
+- Multi-layer tilemap: ground, ground_detail, fringe (above entities), collision
+- MapChunkRenderer: Sprite-based chunk rendering with lazy texture cache from atlas
+- Tile collision: AABB hitbox vs collision layer, per-axis resolve in Player
+- Debug overlays: collision (red), hitbox (cyan), tile grid (blue), chunk boundaries (red)
 - Player animated sprite from spritesheet (4x31 frames, 16x16)
-- Debug overlay: Escape to toggle, shows FPS/cam/player/viewport/canvas/container
-- Using placeholder Graphics for tiles (no real tileset art yet)
-- No networking, no collision, no real map loading from JSON yet
+- Content structure: atlas/, maps/, tilesets/, sprites/, dialogue/, interactions/, items/, npcs/, objects/, skills/
 - Editor and server are stubs, not functional
+- No networking yet
