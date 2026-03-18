@@ -55,9 +55,10 @@
 - `src/shared/assets/AssetsManager.js` — PixiJS Assets wrapper
 - `src/shared/assets/AssetManifest.js` — bundle definitions
 - `src/shared/assets/SpriteSheetSlicer.js` — texture slicing utility
-- `src/editor/EditorApp.js` — editor orchestrator
+- `src/editor/EditorApp.js` — editor orchestrator (save flow via editor-server)
 - `src/editor/EditorShell.js` — HTML layout
-- `src/editor/EditorState.js` — central editor state
+- `src/editor/EditorConfig.js` — EDITOR_SERVER_ORIGIN constant
+- `src/editor/EditorState.js` — central editor state (includes saveStatus)
 - `src/editor/EditorViewport.js` — canvas mouse/keyboard events → ToolManager
 - `src/editor/scenes/SceneEditor.js` — main editor scene
 - `src/editor/tools/ToolManager.js` — tool registry + temporary tool
@@ -65,6 +66,12 @@
 - `src/editor/tools/PencilTool.js` — paint tiles
 - `src/editor/tools/EraseTool.js` — erase tiles (set to -1)
 - `src/editor/utils/clampEditorCamera.js` — editor camera clamp (half-viewport margins)
+- `tools/editor-server/src/server.js` — Fastify dev server (port 3032)
+- `tools/editor-server/src/routes/maps.js` — map list/load/save API
+- `tools/editor-server/src/routes/tilesets.js` — tileset API
+- `tools/editor-server/src/lib/map-codecs.js` — authored↔runtime conversion
+- `tools/editor-server/src/lib/paths.js` — content path resolution
+- `tools/editor-server/src/lib/fs-utils.js` — file I/O + backup helpers
 - `src/server/ServerApp.js` — headless tick loop (skeleton)
 
 ## PixiJS v8 gotchas
@@ -86,6 +93,7 @@
 - Player animated sprite from spritesheet (4x31 frames, 16x16)
 - Content structure: atlas/, maps/, tilesets/, sprites/, dialogue/, interactions/, items/, npcs/, objects/, skills/
 - Editor functional: tools (pan/pencil/eraser), panels, viewport with navigation (Space+drag, middle mouse), camera clamp
+- Editor-server: Fastify dev server (port 3032) for save/load, dual-format persistence (authored + runtime), auto-backups
 - Empty tile is -1 (EMPTY_TILE), tile IDs are 0-indexed into atlas, Int16Array storage
 - Server is stub, not functional
 - No networking yet

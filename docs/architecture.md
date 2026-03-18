@@ -215,9 +215,17 @@ EditorApp (orchestrator) — src/editor/EditorApp.js
 - On tile edit: tool creates a command → history executes it → MapDocument emits change → EditorApp triggers `rebuildFullMap()`
 - `rebuildFullMap()` converts MapDocument → MapData via RuntimeMapBridge, then loads tileset via TilesetRegistry
 
-### Editor persistence
-- `loadMap()` — reads from localStorage or fetches JSON, imports via RuntimeMapImporter → MapDocument
-- `saveMap()` — serializes MapDocument → JSON, writes to localStorage, optionally triggers file download
+### Editor persistence (editor-server)
+- **editor-server** (`tools/editor-server/`): Fastify on port 3032 (localhost only, CORS for local dev origins)
+- **Routes**: `GET /api/maps` (list), `GET /api/maps/:id` (load), `PUT /api/maps/:id` (save), `GET /api/tilesets/:id`
+- **Save flow**: `EditorApp.saveMap()` → PUT authored JSON to editor-server → server writes both:
+  - `content/maps/.authored/{id}.json` — editor-native format (flat Uint16Array layers)
+  - `content/maps/{id}.json` — runtime format (chunk-based, for client/server consumption)
+- **Backups**: timestamped copies saved to `content/maps/.backup/` before each overwrite
+- **Load flow**: editor-server returns authored JSON; if only runtime exists, converts via `runtimeToAuthoredJson()`
+- **Codecs** (`map-codecs.js`): reuses editor's `MapSerializer` + `RuntimeMapBridge` for authored↔runtime conversion
+- **Status UX**: `EditorState.saveStatus` (idle/saving/saved/error) → `StatusBarPanel` shows save feedback
+- **Config**: `EDITOR_SERVER_ORIGIN` in `EditorConfig.js` (`http://localhost:3032`)
 - Keyboard shortcuts: **Ctrl+Z** undo, **Ctrl+Shift+Z / Ctrl+Y** redo, **Ctrl+S** save, **Ctrl+R** reload
 
 ### Editor navigation
