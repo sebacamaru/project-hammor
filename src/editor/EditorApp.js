@@ -11,6 +11,7 @@ import { ToolManager } from "./tools/ToolManager.js";
 import { PanTool } from "./tools/PanTool.js";
 import { PencilTool } from "./tools/PencilTool.js";
 import { EraseTool } from "./tools/EraseTool.js";
+import { EyedropperTool } from "./tools/EyedropperTool.js";
 
 import { ToolbarPanel } from "./panels/ToolbarPanel.js";
 import { LayersPanel } from "./panels/LayersPanel.js";
@@ -60,6 +61,7 @@ export class EditorApp {
     this.toolManager.register("pan", new PanTool(this.state));
     this.toolManager.register("pencil", new PencilTool(this.state));
     this.toolManager.register("eraser", new EraseTool(this.state));
+    this.toolManager.register("eyedropper", new EyedropperTool(this.state));
 
     // Panels
     this.toolbar = new ToolbarPanel(this.shell.toolbarEl, this.state);

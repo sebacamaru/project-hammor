@@ -15,6 +15,7 @@ export class EditorViewport {
 
     this.isPointerDown = false;
     this._temporaryPanActive = false;
+    this._temporaryEraserActive = false;
     this._wheelAccumulator = 0;
 
     this.onPointerDown = this.onPointerDown.bind(this);
@@ -119,6 +120,12 @@ export class EditorViewport {
       this.renderer.canvas.style.cursor = "move";
     }
 
+    // Temporary eraser: right click
+    if (e.button === 2) {
+      this.toolManager.setTemporaryTool("eraser");
+      this._temporaryEraserActive = true;
+    }
+
     const ctx = this.buildPointerContext(e);
     this.updateHoverTile(ctx);
 
@@ -145,6 +152,12 @@ export class EditorViewport {
       this.toolManager.clearTemporaryTool();
       this._temporaryPanActive = false;
       this.renderer.canvas.style.cursor = "";
+    }
+
+    // Clear temporary eraser
+    if (this._temporaryEraserActive) {
+      this.toolManager.clearTemporaryTool();
+      this._temporaryEraserActive = false;
     }
   }
 

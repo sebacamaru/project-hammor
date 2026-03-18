@@ -13,6 +13,7 @@ export class ToolsPanel {
       <div class="tools-buttons">
         <button type="button" data-tool="pencil">Pencil</button>
         <button type="button" data-tool="eraser">Erase</button>
+        <button type="button" data-tool="eyedropper">Eyedropper</button>
       </div>
     `;
 
