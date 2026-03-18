@@ -1,5 +1,6 @@
 import { Assets, Container, Texture, Rectangle } from "pixi.js";
 import { ChunkLayerView } from "./ChunkLayerView.js";
+import { VisibleChunkTracker } from "./VisibleChunkTracker.js";
 
 export class MapChunkRenderer {
   /**
@@ -34,6 +35,13 @@ export class MapChunkRenderer {
     // Track which chunk+layer combos were checked and found empty
     /** @type {Set<string>} */
     this._emptyKeys = new Set();
+
+    this._chunkTracker = new VisibleChunkTracker(map.chunkSize, map.tileSize);
+
+    // Last streaming diff (for debug overlay)
+    this._lastVisible = new Set();
+    this._lastEntered = [];
+    this._lastExited = [];
   }
 
   _getTileTexture(tileId) {
@@ -67,54 +75,59 @@ export class MapChunkRenderer {
   }
 
   update(camera, zoom = 1) {
-    const chunkPx = this.map.chunkSize * this.map.tileSize;
     const visibleW = this.viewport.tilesX * this.map.tileSize / zoom;
     const visibleH = this.viewport.tilesY * this.map.tileSize / zoom;
-    const startCx = Math.floor(camera.x / chunkPx);
-    const startCy = Math.floor(camera.y / chunkPx);
-    const endCx = Math.floor((camera.x + visibleW) / chunkPx);
-    const endCy = Math.floor((camera.y + visibleH) / chunkPx);
 
-    // Track which views are visible this frame
-    const visibleKeys = new Set();
+    const { entered, exited, visible } = this._chunkTracker.update(
+      camera.x, camera.y, visibleW, visibleH
+    );
 
-    for (let cy = startCy; cy <= endCy; cy++) {
-      for (let cx = startCx; cx <= endCx; cx++) {
-        const chunk = this.map.getChunk(cx, cy);
-        if (!chunk) continue;
+    this._lastVisible = visible;
+    this._lastEntered = entered;
+    this._lastExited = exited;
 
-        for (const layerName of this.layerNames) {
-          const key = this._viewKey(cx, cy, layerName);
-          visibleKeys.add(key);
+    // Mount chunks that entered the viewport
+    for (const chunkKey of entered) {
+      const [cxStr, cyStr] = chunkKey.split(",");
+      const cx = +cxStr;
+      const cy = +cyStr;
 
-          // Already created — just make visible
-          if (this.chunkViews.has(key)) {
-            this.chunkViews.get(key).container.visible = true;
-            continue;
-          }
+      const chunk = this.map.getChunk(cx, cy);
+      if (!chunk) continue;
 
-          // Already checked and was empty
-          if (this._emptyKeys.has(key)) continue;
+      for (const layerName of this.layerNames) {
+        const key = this._viewKey(cx, cy, layerName);
 
-          // Check if layer has any content
-          const layer = chunk.getLayer(layerName);
-          if (!layer || !layer.some(v => v >= 0)) {
-            this._emptyKeys.add(key);
-            continue;
-          }
+        // Already cached as empty content — skip
+        if (this._emptyKeys.has(key)) continue;
 
-          // Create new view
-          const view = new ChunkLayerView(chunk, layerName, this.tileSize, this._boundGetTexture);
-          this.chunkViews.set(key, view);
-          this.layerContainers.get(layerName).addChild(view.container);
+        // Check if layer has any content
+        const layer = chunk.getLayer(layerName);
+        if (!layer || !layer.some(v => v >= 0)) {
+          this._emptyKeys.add(key);
+          continue;
         }
+
+        // Create new view
+        const view = new ChunkLayerView(chunk, layerName, this.tileSize, this._boundGetTexture);
+        this.chunkViews.set(key, view);
+        this.layerContainers.get(layerName).addChild(view.container);
       }
     }
 
-    // Hide non-visible chunk views
-    for (const [key, view] of this.chunkViews) {
-      if (!visibleKeys.has(key)) {
-        view.container.visible = false;
+    // Destroy chunks that exited the viewport
+    for (const chunkKey of exited) {
+      const [cxStr, cyStr] = chunkKey.split(",");
+      const cx = +cxStr;
+      const cy = +cyStr;
+
+      for (const layerName of this.layerNames) {
+        const key = this._viewKey(cx, cy, layerName);
+        const view = this.chunkViews.get(key);
+        if (view) {
+          view.destroy();
+          this.chunkViews.delete(key);
+        }
       }
     }
   }
@@ -148,6 +161,19 @@ export class MapChunkRenderer {
         this.layerContainers.get(layerName).addChild(view.container);
       }
     }
+  }
+
+  getDebugInfo() {
+    return {
+      visibleChunkCount: this._lastVisible.size,
+      visibleChunkKeys: [...this._lastVisible],
+      enteredChunkCount: this._lastEntered.length,
+      enteredChunkKeys: [...this._lastEntered],
+      exitedChunkCount: this._lastExited.length,
+      exitedChunkKeys: [...this._lastExited],
+      mountedViewCount: this.chunkViews.size,
+      emptyKeyCount: this._emptyKeys.size,
+    };
   }
 
   destroy() {

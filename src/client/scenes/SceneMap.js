@@ -28,7 +28,11 @@ export class SceneMap extends Scene {
     this.camera.setBounds(this.map.width, this.map.height);
 
     // Chunk-based tilemap rendering
-    this.chunkRenderer = new MapChunkRenderer(this.map, viewport, ["ground", "ground_detail", "fringe"]);
+    this.chunkRenderer = new MapChunkRenderer(this.map, viewport, [
+      "ground",
+      "ground_detail",
+      "fringe",
+    ]);
     this.root.addChild(this.chunkRenderer.getLayerContainer("ground"));
     this.root.addChild(this.chunkRenderer.getLayerContainer("ground_detail"));
 
@@ -45,7 +49,12 @@ export class SceneMap extends Scene {
     this.root.addChild(this.chunkRenderer.getLayerContainer("fringe"));
 
     // Debug overlays (sync with debug mode)
-    this.collisionDebug = new TileLayerDebugOverlay(this.map, viewport, "collision", 0xff0000);
+    this.collisionDebug = new TileLayerDebugOverlay(
+      this.map,
+      viewport,
+      "collision",
+      0xff0000,
+    );
     this.root.addChild(this.collisionDebug.container);
 
     this.hitboxDebug = new HitboxDebugOverlay();
@@ -67,10 +76,20 @@ export class SceneMap extends Scene {
 
     // Debug camera: IJKL enters free mode, WASD returns to follow
     const input = this.engine.input;
-    if (input.held("KeyI") || input.held("KeyJ") || input.held("KeyK") || input.held("KeyL")) {
+    if (
+      input.held("KeyI") ||
+      input.held("KeyJ") ||
+      input.held("KeyK") ||
+      input.held("KeyL")
+    ) {
       this.camera.freeMode = true;
       this.camera.debugMove(input);
-    } else if (input.held("KeyW") || input.held("KeyA") || input.held("KeyS") || input.held("KeyD")) {
+    } else if (
+      input.held("KeyW") ||
+      input.held("KeyA") ||
+      input.held("KeyS") ||
+      input.held("KeyD")
+    ) {
       this.camera.freeMode = false;
     }
 
@@ -78,7 +97,10 @@ export class SceneMap extends Scene {
     const d = this.engine.debug;
     const vp = this.engine.renderer.viewport;
     d.set("cam", `${Math.round(this.camera.x)}, ${Math.round(this.camera.y)}`);
-    d.set("player", `${Math.round(this.player.x)}, ${Math.round(this.player.y)}`);
+    d.set(
+      "player",
+      `${Math.round(this.player.x)}, ${Math.round(this.player.y)}`,
+    );
     // Use sprite center (8px offset) for chunk calculation
     const tileX = Math.floor((this.player.x + 8) / TILE_SIZE);
     const tileY = Math.floor((this.player.y + 8) / TILE_SIZE);
@@ -89,6 +111,30 @@ export class SceneMap extends Scene {
     d.set("canvas", `${vp.cssWidth}x${vp.cssHeight}`);
     const el = this.engine.renderer.rootElement;
     d.set("container", `${el.clientWidth}x${el.clientHeight}`);
+
+    if (this.engine.debug.visible && this.chunkRenderer) {
+      const ci = this.chunkRenderer.getDebugInfo();
+      const chunkPx = this.map.chunkSize * this.map.tileSize;
+      d.set("---chunks---", "");
+      d.set("chunk size", `${this.map.chunkSize} tiles`);
+      d.set("camera chunk", `${Math.floor(this.camera.x / chunkPx)},${Math.floor(this.camera.y / chunkPx)}`);
+      d.set("visible chunks", ci.visibleChunkCount);
+      d.set("views / chunks", `${ci.mountedViewCount}/${ci.visibleChunkCount}`);
+      d.set(
+        "entered",
+        ci.enteredChunkCount > 0 ? ci.enteredChunkKeys.join(" ") : "",
+      );
+      d.set("exited", ci.exitedChunkCount > 0 ? ci.exitedChunkKeys.join(" ") : "");
+      d.set("empty cached", ci.emptyKeyCount);
+      if (ci.visibleChunkCount > 0) {
+        const keys = ci.visibleChunkKeys.map(k => k.split(",").map(Number));
+        const minX = Math.min(...keys.map(([x]) => x));
+        const maxX = Math.max(...keys.map(([x]) => x));
+        const minY = Math.min(...keys.map(([_, y]) => y));
+        const maxY = Math.max(...keys.map(([_, y]) => y));
+        d.set("chunk bounds", `${minX}-${maxX}, ${minY}-${maxY}`);
+      }
+    }
   }
 
   render(alpha) {

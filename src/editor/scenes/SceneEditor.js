@@ -36,8 +36,9 @@ export class SceneEditor extends Scene {
     this.hoverOverlay = new Graphics();
     this.root.addChild(this.hoverOverlay);
 
-    const initialMap = this.engine.runtimeMap
-      ?? await GameMap.load("/content/maps/test_map.json");
+    const initialMap =
+      this.engine.runtimeMap ??
+      (await GameMap.load("/content/maps/test_map.json"));
 
     this.setMap(initialMap, { resetCamera: true });
   }
@@ -69,6 +70,30 @@ export class SceneEditor extends Scene {
     d.set("mode", s.mode);
     d.set("tool", s.activeTool);
     d.set("layer", s.activeLayer);
+
+    if (this.engine.debug.visible && this.chunkRenderer) {
+      const ci = this.chunkRenderer.getDebugInfo();
+      const chunkPx = this.map.chunkSize * this.map.tileSize;
+      d.set("---chunks---", "");
+      d.set("chunk size", `${this.map.chunkSize} tiles`);
+      d.set("camera chunk", `${Math.floor(this.camera.x / chunkPx)},${Math.floor(this.camera.y / chunkPx)}`);
+      d.set("visible chunks", ci.visibleChunkCount);
+      d.set("views / chunks", `${ci.mountedViewCount}/${ci.visibleChunkCount}`);
+      d.set(
+        "entered",
+        ci.enteredChunkCount > 0 ? ci.enteredChunkKeys.join(" ") : "",
+      );
+      d.set("exited", ci.exitedChunkCount > 0 ? ci.exitedChunkKeys.join(" ") : "");
+      d.set("empty cached", ci.emptyKeyCount);
+      if (ci.visibleChunkCount > 0) {
+        const keys = ci.visibleChunkKeys.map(k => k.split(",").map(Number));
+        const minX = Math.min(...keys.map(([x]) => x));
+        const maxX = Math.max(...keys.map(([x]) => x));
+        const minY = Math.min(...keys.map(([_, y]) => y));
+        const maxY = Math.max(...keys.map(([_, y]) => y));
+        d.set("chunk bounds", `${minX}-${maxX}, ${minY}-${maxY}`);
+      }
+    }
   }
 
   render(alpha) {
@@ -169,6 +194,12 @@ export class SceneEditor extends Scene {
     this.hoverOverlay.fill({ color: 0xffffff, alpha: 0.08 });
   }
 
+  rebuildChunk(cx, cy) {
+    if (this.chunkRenderer) {
+      this.chunkRenderer.rebuildChunk(cx, cy);
+    }
+  }
+
   exit() {
     this.engine.renderer.stage.removeChild(this.root);
   }
@@ -194,7 +225,8 @@ export class SceneEditor extends Scene {
     const nextVisuals = this.buildMapVisuals(this.map);
 
     nextVisuals.groundLayer.visible = !!nextState.visibleLayers.ground;
-    nextVisuals.groundDetailLayer.visible = !!nextState.visibleLayers.ground_detail;
+    nextVisuals.groundDetailLayer.visible =
+      !!nextState.visibleLayers.ground_detail;
     nextVisuals.fringeLayer.visible = !!nextState.visibleLayers.fringe;
     nextVisuals.collisionDebug.enabled = this.engine.debug.visible;
     nextVisuals.chunkDebug.enabled = this.engine.debug.visible;
@@ -220,11 +252,11 @@ export class SceneEditor extends Scene {
 
   buildMapVisuals(map) {
     const container = new Container();
-    const chunkRenderer = new MapChunkRenderer(map, this.engine.renderer.viewport, [
-      "ground",
-      "ground_detail",
-      "fringe",
-    ]);
+    const chunkRenderer = new MapChunkRenderer(
+      map,
+      this.engine.renderer.viewport,
+      ["ground", "ground_detail", "fringe"],
+    );
 
     const groundLayer = chunkRenderer.getLayerContainer("ground");
     const groundDetailLayer = chunkRenderer.getLayerContainer("ground_detail");
@@ -236,7 +268,10 @@ export class SceneEditor extends Scene {
       "collision",
       0xff0000,
     );
-    const chunkDebug = new ChunkDebugOverlay(map, this.engine.renderer.viewport);
+    const chunkDebug = new ChunkDebugOverlay(
+      map,
+      this.engine.renderer.viewport,
+    );
 
     container.addChild(groundLayer);
     container.addChild(groundDetailLayer);
