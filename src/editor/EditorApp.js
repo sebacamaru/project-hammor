@@ -36,6 +36,11 @@ export class EditorApp {
     this.renderer = new Renderer(this.shell.viewportEl);
     await this.renderer.init();
 
+    // Default editor scale = auto-computed scale for this screen
+    const autoScale = this.renderer.viewport.scale;
+    this.state.update((s) => { s.editorScale = autoScale; });
+    this.renderer.setScaleOverride(autoScale);
+
     // Assets compartidos
     await AssetManager.init();
     await AssetManager.loadBundle("core");

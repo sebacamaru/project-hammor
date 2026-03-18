@@ -44,8 +44,7 @@ export class StatusBarPanel {
     }
 
     if (zoomEl) {
-      const zoom = s.camera?.zoom || 1;
-      zoomEl.textContent = `Zoom: ${zoom}x`;
+      zoomEl.textContent = `Zoom: ${s.editorScale}x`;
     }
 
     if (dirtyEl) {

@@ -28,9 +28,9 @@ export class EditorState {
       camera: {
         x: 0,
         y: 0,
-        zoom: 1,
       },
 
+      editorScale: 1,
       uiVisible: true,
 
       map: null,

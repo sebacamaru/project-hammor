@@ -24,9 +24,8 @@ export class PanTool {
 
     const scale = this._viewportScale;
     this.state.update((s) => {
-      const zoom = s.camera.zoom || 1;
-      s.camera.x -= dx / (scale * zoom);
-      s.camera.y -= dy / (scale * zoom);
+      s.camera.x -= dx / scale;
+      s.camera.y -= dy / scale;
     });
   }
 

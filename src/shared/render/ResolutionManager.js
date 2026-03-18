@@ -24,29 +24,37 @@ import {
  * @param {number} parentHeight Available container height in CSS pixels
  * @param {ViewportState} out   ViewportState to mutate in-place
  */
-export function computeViewport(parentWidth, parentHeight, out) {
+export function computeViewport(parentWidth, parentHeight, out, forcedScale = null) {
   let bestScale = MIN_SCALE;
   let bestTilesX = BASE_TILES_X;
   let bestTilesY = BASE_TILES_Y;
 
-  // Try scales from highest to lowest — first valid match wins
-  for (let scale = MAX_SCALE; scale >= MIN_SCALE; scale--) {
-    const tileStep = TILE_SIZE * scale;
+  if (forcedScale !== null) {
+    // Forced scale: skip auto-detection, no tile clamping
+    bestScale = forcedScale;
+    const tileStep = TILE_SIZE * forcedScale;
+    bestTilesX = Math.ceil(parentWidth / tileStep);
+    bestTilesY = Math.ceil(parentHeight / tileStep);
+  } else {
+    // Try scales from highest to lowest — first valid match wins
+    for (let scale = MAX_SCALE; scale >= MIN_SCALE; scale--) {
+      const tileStep = TILE_SIZE * scale;
 
-    // How many tiles to cover the screen (overscan — rounds up)
-    let tilesX = Math.ceil(parentWidth / tileStep);
-    let tilesY = Math.ceil(parentHeight / tileStep);
+      // How many tiles to cover the screen (overscan — rounds up)
+      let tilesX = Math.ceil(parentWidth / tileStep);
+      let tilesY = Math.ceil(parentHeight / tileStep);
 
-    // Clamp to allowed tile ranges
-    tilesX = Math.max(MIN_TILES_X, Math.min(MAX_TILES_X, tilesX));
-    tilesY = Math.max(MIN_TILES_Y, Math.min(MAX_TILES_Y, tilesY));
+      // Clamp to allowed tile ranges
+      tilesX = Math.max(MIN_TILES_X, Math.min(MAX_TILES_X, tilesX));
+      tilesY = Math.max(MIN_TILES_Y, Math.min(MAX_TILES_Y, tilesY));
 
-    // Accept if at least MIN tiles fit at this scale
-    if (MIN_TILES_X * tileStep <= parentWidth && MIN_TILES_Y * tileStep <= parentHeight) {
-      bestScale = scale;
-      bestTilesX = tilesX;
-      bestTilesY = tilesY;
-      break;
+      // Accept if at least MIN tiles fit at this scale
+      if (MIN_TILES_X * tileStep <= parentWidth && MIN_TILES_Y * tileStep <= parentHeight) {
+        bestScale = scale;
+        bestTilesX = tilesX;
+        bestTilesY = tilesY;
+        break;
+      }
     }
   }
 

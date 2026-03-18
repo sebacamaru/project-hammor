@@ -9,6 +9,7 @@ export class Renderer {
     this.canvas = null;
     this.stage = null;
     this.viewport = new ViewportState();
+    this._scaleOverride = null;
   }
 
   async init() {
@@ -19,6 +20,7 @@ export class Renderer {
       this.rootElement.clientWidth,
       this.rootElement.clientHeight,
       this.viewport,
+      this._scaleOverride,
     );
 
     this.app = new Application();
@@ -49,11 +51,22 @@ export class Renderer {
     this.canvas.style.position = "absolute";
   }
 
+  setScaleOverride(scale) {
+    this._scaleOverride = scale;
+    this.resize();
+  }
+
+  clearScaleOverride() {
+    this._scaleOverride = null;
+    this.resize();
+  }
+
   resize() {
     computeViewport(
       this.rootElement.clientWidth,
       this.rootElement.clientHeight,
       this.viewport,
+      this._scaleOverride,
     );
 
     // Resize Pixi's internal rendering surface

@@ -31,7 +31,6 @@ export class SceneEditor extends Scene {
       s.map = this.map;
       s.camera.x = 0;
       s.camera.y = 0;
-      s.camera.zoom = 1;
     });
 
     this.chunkRenderer = new MapChunkRenderer(this.map, viewport, [
@@ -90,15 +89,12 @@ export class SceneEditor extends Scene {
   }
 
   render(alpha) {
-    const zoom = this.state.get().camera.zoom || 1;
+    this.root.x = Math.floor(-this.camera.x);
+    this.root.y = Math.floor(-this.camera.y);
 
-    this.root.scale.set(zoom);
-    this.root.x = Math.floor(-this.camera.x * zoom);
-    this.root.y = Math.floor(-this.camera.y * zoom);
-
-    this.chunkRenderer.update(this.camera, zoom);
-    this.collisionDebug.render(this.camera, zoom);
-    this.chunkDebug.render(this.camera, zoom);
+    this.chunkRenderer.update(this.camera);
+    this.collisionDebug.render(this.camera);
+    this.chunkDebug.render(this.camera);
   }
 
   exit() {

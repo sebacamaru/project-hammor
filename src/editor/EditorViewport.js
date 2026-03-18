@@ -1,4 +1,9 @@
-import { EDITOR_MIN_ZOOM, EDITOR_MAX_ZOOM } from "./EditorConfig.js";
+import {
+  EDITOR_MIN_ZOOM,
+  EDITOR_MAX_ZOOM,
+  EDITOR_ZOOM_WHEEL_THRESHOLD,
+} from "./EditorConfig.js";
+import { waitFrames } from "./utils/waitFrames.js";
 
 export class EditorViewport {
   constructor(container, renderer, state, toolManager, input) {
@@ -10,6 +15,7 @@ export class EditorViewport {
 
     this.isPointerDown = false;
     this._temporaryPanActive = false;
+    this._wheelAccumulator = 0;
 
     this.onPointerDown = this.onPointerDown.bind(this);
     this.onPointerMove = this.onPointerMove.bind(this);
@@ -53,31 +59,52 @@ export class EditorViewport {
     }
   }
 
-  onWheel(e) {
+  async onWheel(e) {
     e.preventDefault();
 
     const s = this.state.get();
     if (!s.map) return;
 
+    this._wheelAccumulator += e.deltaY;
+    if (Math.abs(this._wheelAccumulator) < EDITOR_ZOOM_WHEEL_THRESHOLD) return;
+
+    const step = this._wheelAccumulator > 0 ? -1 : 1;
+    this._wheelAccumulator = 0;
+
+    const oldScale = s.editorScale;
+    const newScale = Math.max(
+      EDITOR_MIN_ZOOM,
+      Math.min(EDITOR_MAX_ZOOM, oldScale + step),
+    );
+    if (newScale === oldScale) return;
+
+    // World point under cursor before scale change
     const rect = this.renderer.app.canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
+    const worldX = s.camera.x + screenX / oldScale;
+    const worldY = s.camera.y + screenY / oldScale;
 
-    const oldZoom = s.camera.zoom;
-    const step = e.deltaY < 0 ? 1 : -1;
-    const newZoom = Math.max(EDITOR_MIN_ZOOM, Math.min(EDITOR_MAX_ZOOM, oldZoom + step));
-    if (newZoom === oldZoom) return;
+    // Apply new scale (triggers viewport recomputation + canvas CSS update)
+    const canvas = this.renderer.canvas;
+    canvas.style.visibility = "hidden";
+    this.renderer.setScaleOverride(newScale);
 
-    // World point under cursor before zoom
-    const worldX = s.camera.x + screenX / oldZoom;
-    const worldY = s.camera.y + screenY / oldZoom;
+    // Get new canvas rect (canvas may shift due to centering offset change)
+    const newRect = this.renderer.app.canvas.getBoundingClientRect();
+    const newScreenX = e.clientX - newRect.left;
+    const newScreenY = e.clientY - newRect.top;
 
     // Adjust camera so the same world point stays under the cursor
     this.state.update((st) => {
-      st.camera.x = worldX - screenX / newZoom;
-      st.camera.y = worldY - screenY / newZoom;
-      st.camera.zoom = newZoom;
+      st.camera.x = worldX - newScreenX / newScale;
+      st.camera.y = worldY - newScreenY / newScale;
+      st.editorScale = newScale;
     });
+
+    // Wait for browser to apply layout before showing canvas
+    await waitFrames(4);
+    canvas.style.visibility = "visible";
   }
 
   onPointerDown(e) {
@@ -147,10 +174,10 @@ export class EditorViewport {
     let tileY = null;
 
     if (map) {
-      const zoom = camera.zoom || 1;
+      const scale = this.renderer.viewport.scale;
 
-      worldX = camera.x + screenX / zoom;
-      worldY = camera.y + screenY / zoom;
+      worldX = camera.x + screenX / scale;
+      worldY = camera.y + screenY / scale;
 
       tileX = Math.floor(worldX / map.tileSize);
       tileY = Math.floor(worldY / map.tileSize);
