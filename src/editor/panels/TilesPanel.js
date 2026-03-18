@@ -48,6 +48,7 @@ export class TilesPanel {
       this.state.patch({
         selectedTileId: tileId,
         selectedBrush: { width: 1, height: 1, tiles: [tileId] },
+        activeTool: "pencil",
       });
     });
   }

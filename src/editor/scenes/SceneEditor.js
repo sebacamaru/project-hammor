@@ -1,4 +1,4 @@
-import { Container, Graphics } from "pixi.js";
+import { Container, Graphics, Sprite } from "pixi.js";
 import { Scene } from "../../shared/scene/Scene.js";
 import { Camera } from "../../shared/render/Camera.js";
 import { GameMap } from "../../shared/data/models/GameMap.js";
@@ -59,6 +59,11 @@ export class SceneEditor extends Scene {
     this.chunkDebug = new ChunkDebugOverlay(this.map, viewport);
     this.root.addChild(this.chunkDebug.container);
 
+    this.brushPreview = new Sprite();
+    this.brushPreview.alpha = 0.5;
+    this.brushPreview.visible = false;
+    this.root.addChild(this.brushPreview);
+
     this.hoverOverlay = new Graphics();
     this.root.addChild(this.hoverOverlay);
   }
@@ -107,7 +112,34 @@ export class SceneEditor extends Scene {
     this.chunkRenderer.update(this.camera);
     this.collisionDebug.render(this.camera);
     this.chunkDebug.render(this.camera);
+    this.updateBrushPreview();
     this.updateHoverOverlay();
+  }
+
+  updateBrushPreview() {
+    const state = this.state.get();
+    const hover = state.hoverTile;
+    const brush = state.selectedBrush;
+
+    if (
+      !hover ||
+      !brush ||
+      brush.width !== 1 ||
+      brush.height !== 1 ||
+      brush.tiles[0] == null ||
+      brush.tiles[0] < 0
+    ) {
+      this.brushPreview.visible = false;
+      return;
+    }
+
+    const tileId = brush.tiles[0];
+    const tex = this.chunkRenderer._getTileTexture(tileId);
+
+    this.brushPreview.texture = tex;
+    this.brushPreview.x = hover.x * this.map.tileSize;
+    this.brushPreview.y = hover.y * this.map.tileSize;
+    this.brushPreview.visible = true;
   }
 
   updateHoverOverlay() {
@@ -128,6 +160,7 @@ export class SceneEditor extends Scene {
   }
 
   destroy() {
+    this.brushPreview?.destroy();
     this.collisionDebug?.destroy();
     this.chunkDebug?.destroy();
     this.chunkRenderer?.destroy();
