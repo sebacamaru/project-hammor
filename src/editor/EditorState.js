@@ -15,12 +15,12 @@ export class EditorState {
         fringe: true,
       },
 
-      selectedTileId: -1,
+      selectedTileId: 4,
 
       selectedBrush: {
         width: 1,
         height: 1,
-        tiles: [-1],
+        tiles: [4],
       },
 
       hoverTile: null,
@@ -32,6 +32,8 @@ export class EditorState {
 
       editorScale: 1,
       uiVisible: true,
+
+      dirtyChunks: new Set(),
 
       map: null,
       dirty: false,

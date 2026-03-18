@@ -1,4 +1,4 @@
-import { Container } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import { Scene } from "../../shared/scene/Scene.js";
 import { Camera } from "../../shared/render/Camera.js";
 import { GameMap } from "../../shared/data/models/GameMap.js";
@@ -58,6 +58,9 @@ export class SceneEditor extends Scene {
 
     this.chunkDebug = new ChunkDebugOverlay(this.map, viewport);
     this.root.addChild(this.chunkDebug.container);
+
+    this.hoverOverlay = new Graphics();
+    this.root.addChild(this.hoverOverlay);
   }
 
   update(dt) {
@@ -68,6 +71,15 @@ export class SceneEditor extends Scene {
     const mapWidthPx = this.map.width * this.map.tileSize;
     const mapHeightPx = this.map.height * this.map.tileSize;
     clampEditorCamera(s.camera, mapWidthPx, mapHeightPx, vp);
+
+    // Rebuild chunks modified by editor tools
+    if (s.dirtyChunks.size > 0) {
+      for (const key of s.dirtyChunks) {
+        const [cx, cy] = key.split(",").map(Number);
+        this.chunkRenderer.rebuildChunk(cx, cy);
+      }
+      s.dirtyChunks.clear();
+    }
 
     this.camera.x = Math.floor(s.camera.x);
     this.camera.y = Math.floor(s.camera.y);
@@ -95,6 +107,20 @@ export class SceneEditor extends Scene {
     this.chunkRenderer.update(this.camera);
     this.collisionDebug.render(this.camera);
     this.chunkDebug.render(this.camera);
+    this.updateHoverOverlay();
+  }
+
+  updateHoverOverlay() {
+    this.hoverOverlay.clear();
+    const hover = this.state.get().hoverTile;
+    if (!hover) return;
+
+    const ts = this.map.tileSize;
+    const x = hover.x * ts;
+    const y = hover.y * ts;
+
+    this.hoverOverlay.rect(x, y, ts, ts);
+    this.hoverOverlay.fill({ color: 0xffffff, alpha: 0.08 });
   }
 
   exit() {
