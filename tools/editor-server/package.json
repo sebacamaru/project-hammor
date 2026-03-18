@@ -1,0 +1,13 @@
+{
+  "name": "editor-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "fastify": "^5.2.1"
+  }
+}

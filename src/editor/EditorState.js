@@ -38,6 +38,8 @@ export class EditorState {
 
       map: null,
       dirty: false,
+      saveStatus: "idle",
+      statusMessage: "",
     };
 
     this.listeners = new Set();

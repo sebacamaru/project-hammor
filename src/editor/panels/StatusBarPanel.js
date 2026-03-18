@@ -17,6 +17,7 @@ export class StatusBarPanel {
         <span class="status-item" data-role="tile"></span>
         <span class="status-item" data-role="zoom"></span>
         <span class="status-item" data-role="dirty"></span>
+        <span class="status-item status-item-status" data-role="status"></span>
       </div>
     `;
   }
@@ -30,6 +31,7 @@ export class StatusBarPanel {
     const tileEl = this.el.querySelector('[data-role="tile"]');
     const zoomEl = this.el.querySelector('[data-role="zoom"]');
     const dirtyEl = this.el.querySelector('[data-role="dirty"]');
+    const statusEl = this.el.querySelector('[data-role="status"]');
 
     if (modeEl) modeEl.textContent = `Mode: ${s.mode}`;
     if (layerEl) layerEl.textContent = `Layer: ${s.activeLayer}`;
@@ -49,6 +51,10 @@ export class StatusBarPanel {
 
     if (dirtyEl) {
       dirtyEl.textContent = s.dirty ? "Unsaved changes" : "Saved";
+    }
+
+    if (statusEl) {
+      statusEl.textContent = s.statusMessage ? `Status: ${s.statusMessage}` : "";
     }
   }
 

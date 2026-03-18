@@ -4,11 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "editor": "concurrently \"bun run dev:editor-server\" \"bun run dev:client\"",
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:editor-server": "cd tools/editor-server && bun run dev",
+    "dev:client": "bun run dev"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "vite": "^8.0.0"
   },
   "dependencies": {

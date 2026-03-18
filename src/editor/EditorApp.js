@@ -22,10 +22,10 @@ import { TilesPanel } from "./panels/TilesPanel.js";
 import { SceneEditor } from "./scenes/SceneEditor.js";
 import { EditorViewport } from "./EditorViewport.js";
 import { MapSerializer } from "./document/MapSerializer.js";
-import { RuntimeMapImporter } from "./document/RuntimeMapImporter.js";
 import { History } from "./history/History.js";
 import { RuntimeMapBridge } from "./runtime/RuntimeMapBridge.js";
 import { TilesetRegistry } from "../shared/data/loaders/TilesetRegistry.js";
+import { EDITOR_SERVER_ORIGIN } from "./EditorConfig.js";
 
 export class EditorApp {
   constructor(root) {
@@ -35,6 +35,8 @@ export class EditorApp {
     this.runtimeMap = null;
     this.history = new History();
     this._runtimeReloadVersion = 0;
+    this._statusResetTimeoutId = null;
+    this._statusToken = 0;
 
     this.onKeyDown = this.onKeyDown.bind(this);
   }
@@ -163,7 +165,9 @@ export class EditorApp {
     if (!event || event.type !== "tilesChanged") return;
 
     this.syncDirtyState();
-    this.rebuildFullMap();
+    void this.rebuildFullMap().catch((error) => {
+      console.error("Runtime rebuild failed", error);
+    });
   }
 
   async saveMap({ download = false } = {}) {
@@ -174,25 +178,63 @@ export class EditorApp {
     }
 
     const serialized = MapSerializer.serialize(this.document);
-    localStorage.setItem(
-      this.getStorageKey(this.document.meta.id),
-      JSON.stringify(serialized),
-    );
+    const mapId = this.document.meta.id;
+    this.setOperationStatus("saving", "Saving map...");
 
-    if (download) {
-      this.downloadEditorMapJson(this.document.meta.id, serialized);
+    try {
+      await this.putMapDocument(mapId, serialized);
+      localStorage.setItem(this.getStorageKey(mapId), JSON.stringify(serialized));
+
+      if (download) {
+        this.downloadEditorMapJson(mapId, serialized);
+      }
+
+      this.document.markClean();
+      this.syncDirtyState();
+      this.setOperationStatus("saved", "Map saved", { autoReset: true });
+      return serialized;
+    } catch (error) {
+      console.error(`Failed to save map "${mapId}" to editor-server`, error);
+      this.setOperationStatus("error", "Save failed");
+
+      try {
+        localStorage.setItem(this.getStorageKey(mapId), JSON.stringify(serialized));
+        console.warn(`Stored local recovery copy for map "${mapId}" after save failure`);
+      } catch (storageError) {
+        console.error(`Failed to store local recovery copy for map "${mapId}"`, storageError);
+      }
+
+      throw error;
     }
-
-    this.document.markClean();
-    this.syncDirtyState();
-    return serialized;
   }
 
   async loadMap(mapId) {
-    const storedJson = localStorage.getItem(this.getStorageKey(mapId));
-    const doc = storedJson
-      ? MapSerializer.deserialize(JSON.parse(storedJson))
-      : RuntimeMapImporter.fromRuntimeJson(await this.fetchMapJson(mapId));
+    let doc;
+    this.setOperationStatus("loading", "Loading map...");
+
+    try {
+      const mapJson = await this.fetchMapDocument(mapId);
+      doc = MapSerializer.deserialize(mapJson);
+    } catch (error) {
+      console.error(`Failed to load map "${mapId}" from editor-server`, error);
+
+      const storedJson = localStorage.getItem(this.getStorageKey(mapId));
+      if (!storedJson) {
+        this.setOperationStatus("error", "Failed to load map");
+        throw error;
+      }
+
+      console.warn(`Using local recovery copy for map "${mapId}"`);
+      try {
+        doc = MapSerializer.deserialize(JSON.parse(storedJson));
+      } catch (storageError) {
+        this.setOperationStatus("error", "Failed to load map");
+        throw new Error(
+          `Failed to load map "${mapId}" from editor-server and local recovery is invalid: ${storageError.message}`,
+        );
+      }
+    }
+
     doc.meta.id ??= mapId;
     doc.markClean();
 
@@ -208,6 +250,7 @@ export class EditorApp {
     });
 
     this.syncDirtyState();
+    this.setOperationStatus("idle", "Map loaded", { autoReset: true });
   }
 
   async rebuildFullMap() {
@@ -250,10 +293,59 @@ export class EditorApp {
     });
   }
 
-  async fetchMapJson(mapId) {
-    const response = await fetch(`/content/maps/${mapId}.json`);
+  async fetchMapDocument(mapId) {
+    // Primary load path: ask the local editor-server for the authored document.
+    let response;
+
+    try {
+      response = await fetch(`${EDITOR_SERVER_ORIGIN}/api/maps/${mapId}`);
+    } catch (error) {
+      throw new Error(
+        `Failed to reach editor-server at ${EDITOR_SERVER_ORIGIN}: ${error.message}`,
+      );
+    }
+
     if (!response.ok) {
-      throw new Error(`Failed to load map "${mapId}": ${response.status}`);
+      let details = "";
+      try {
+        const payload = await response.json();
+        details = payload?.error ? ` ${payload.error}` : "";
+      } catch {
+        // ignore JSON parse errors here and surface the status code below
+      }
+      throw new Error(`Failed to load map "${mapId}": ${response.status}${details}`);
+    }
+
+    return response.json();
+  }
+
+  async putMapDocument(mapId, payload) {
+    // Primary save path: persist the authored document through the local editor-server.
+    let response;
+
+    try {
+      response = await fetch(`${EDITOR_SERVER_ORIGIN}/api/maps/${mapId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      throw new Error(
+        `Failed to reach editor-server at ${EDITOR_SERVER_ORIGIN}: ${error.message}`,
+      );
+    }
+
+    if (!response.ok) {
+      let details = "";
+      try {
+        const body = await response.json();
+        details = body?.error ? ` ${body.error}` : "";
+      } catch {
+        // ignore JSON parse errors here and surface the status code below
+      }
+      throw new Error(`Failed to save map "${mapId}": ${response.status}${details}`);
     }
 
     return response.json();
@@ -273,6 +365,43 @@ export class EditorApp {
     });
   }
 
+  setOperationStatus(saveStatus, statusMessage, { autoReset = false } = {}) {
+    this.clearStatusResetTimeout();
+
+    const statusToken = ++this._statusToken;
+    this.state.patch({
+      saveStatus,
+      statusMessage,
+    });
+
+    if (autoReset) {
+      this.scheduleStatusReset(statusToken);
+    }
+  }
+
+  scheduleStatusReset(statusToken, delayMs = 1800) {
+    this._statusResetTimeoutId = window.setTimeout(() => {
+      if (statusToken !== this._statusToken) {
+        return;
+      }
+
+      this._statusResetTimeoutId = null;
+      this.state.patch({
+        saveStatus: "idle",
+        statusMessage: "",
+      });
+    }, delayMs);
+  }
+
+  clearStatusResetTimeout() {
+    if (this._statusResetTimeoutId == null) {
+      return;
+    }
+
+    window.clearTimeout(this._statusResetTimeoutId);
+    this._statusResetTimeoutId = null;
+  }
+
   downloadEditorMapJson(mapId, serialized) {
     const blob = new Blob([
       JSON.stringify(serialized, null, 2),
@@ -282,8 +411,9 @@ export class EditorApp {
 
     link.href = url;
     link.download = `${mapId}.json`;
+    document.body.appendChild(link);
     link.click();
-
+    link.remove();
     URL.revokeObjectURL(url);
   }
 
@@ -316,13 +446,17 @@ export class EditorApp {
 
     if (e.code === "KeyS") {
       e.preventDefault();
-      this.saveMap();
+      void this.saveMap().catch((error) => {
+        console.error("Save failed", error);
+      });
       return;
     }
 
     if (e.code === "KeyR") {
       e.preventDefault();
-      this.reloadRuntimeMap();
+      void this.reloadRuntimeMap().catch((error) => {
+        console.error("Runtime reload failed", error);
+      });
     }
   }
 }
