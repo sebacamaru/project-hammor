@@ -3,5 +3,27 @@
   "image": "/content/atlas/atlas_world.webp",
   "tileSize": 16,
   "columns": 128,
-  "rows": 128
+  "rows": 128,
+  "editor": {
+    "groups": [
+      {
+        "id": "ground_basic",
+        "name": "Ground Basic 1",
+        "startId": 0,
+        "count": 16
+      },
+      {
+        "id": "ground_row2",
+        "name": "Ground Row 1",
+        "startId": 128,
+        "count": 16
+      },
+      {
+        "id": "ground_row3",
+        "name": "Ground Row 2",
+        "startId": 256,
+        "count": 16
+      }
+    ]
+  }
 }

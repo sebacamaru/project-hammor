@@ -11,6 +11,7 @@ export class SceneEditor extends Scene {
   constructor(state) {
     super();
     this.state = state;
+    this.mapVisuals = null;
   }
 
   async enter(engine) {
@@ -21,43 +22,8 @@ export class SceneEditor extends Scene {
 
     const viewport = this.engine.renderer.viewport;
 
-    this.map = await GameMap.load("/content/maps/test_map.json");
-
     this.camera = new Camera(viewport);
-    this.camera.setBounds(this.map.width, this.map.height);
     this.camera.freeMode = true;
-
-    this.state.update((s) => {
-      s.map = this.map;
-      s.camera.x = 0;
-      s.camera.y = 0;
-    });
-
-    this.chunkRenderer = new MapChunkRenderer(this.map, viewport, [
-      "ground",
-      "ground_detail",
-      "fringe",
-    ]);
-
-    this.groundLayer = this.chunkRenderer.getLayerContainer("ground");
-    this.groundDetailLayer =
-      this.chunkRenderer.getLayerContainer("ground_detail");
-    this.fringeLayer = this.chunkRenderer.getLayerContainer("fringe");
-
-    this.root.addChild(this.groundLayer);
-    this.root.addChild(this.groundDetailLayer);
-    this.root.addChild(this.fringeLayer);
-
-    this.collisionDebug = new TileLayerDebugOverlay(
-      this.map,
-      viewport,
-      "collision",
-      0xff0000,
-    );
-    this.root.addChild(this.collisionDebug.container);
-
-    this.chunkDebug = new ChunkDebugOverlay(this.map, viewport);
-    this.root.addChild(this.chunkDebug.container);
 
     this.gridOverlay = new Graphics();
     this.root.addChild(this.gridOverlay);
@@ -69,25 +35,22 @@ export class SceneEditor extends Scene {
 
     this.hoverOverlay = new Graphics();
     this.root.addChild(this.hoverOverlay);
+
+    const initialMap = this.engine.runtimeMap
+      ?? await GameMap.load("/content/maps/test_map.json");
+
+    this.setMap(initialMap, { resetCamera: true });
   }
 
   update(dt) {
     const s = this.state.get();
     const vp = this.engine.renderer.viewport;
+    if (!this.map) return;
 
     // Clamp state camera with editor margins (half-viewport around map)
     const mapWidthPx = this.map.width * this.map.tileSize;
     const mapHeightPx = this.map.height * this.map.tileSize;
     clampEditorCamera(s.camera, mapWidthPx, mapHeightPx, vp);
-
-    // Rebuild chunks modified by editor tools
-    if (s.dirtyChunks.size > 0) {
-      for (const key of s.dirtyChunks) {
-        const [cx, cy] = key.split(",").map(Number);
-        this.chunkRenderer.rebuildChunk(cx, cy);
-      }
-      s.dirtyChunks.clear();
-    }
 
     this.camera.x = Math.floor(s.camera.x);
     this.camera.y = Math.floor(s.camera.y);
@@ -109,6 +72,8 @@ export class SceneEditor extends Scene {
   }
 
   render(alpha) {
+    if (!this.map) return;
+
     this.root.x = Math.floor(-this.camera.x);
     this.root.y = Math.floor(-this.camera.y);
 
@@ -194,7 +159,7 @@ export class SceneEditor extends Scene {
   updateHoverOverlay() {
     this.hoverOverlay.clear();
     const hover = this.state.get().hoverTile;
-    if (!hover) return;
+    if (!hover || !this.map) return;
 
     const ts = this.map.tileSize;
     const x = hover.x * ts;
@@ -208,12 +173,121 @@ export class SceneEditor extends Scene {
     this.engine.renderer.stage.removeChild(this.root);
   }
 
+  setMap(map, { resetCamera = false } = {}) {
+    // Current sync strategy is still a full refresh, but we build the new map
+    // visuals first and only swap once the visible chunks are already populated.
+    const prevVisuals = this.mapVisuals;
+    const nextState = this.state.get();
+
+    if (resetCamera) {
+      this.state.update((s) => {
+        s.camera.x = 0;
+        s.camera.y = 0;
+      });
+    }
+
+    this.map = map;
+    this.camera.setBounds(this.map.width, this.map.height);
+    this.camera.x = Math.floor(this.state.get().camera.x);
+    this.camera.y = Math.floor(this.state.get().camera.y);
+
+    const nextVisuals = this.buildMapVisuals(this.map);
+
+    nextVisuals.groundLayer.visible = !!nextState.visibleLayers.ground;
+    nextVisuals.groundDetailLayer.visible = !!nextState.visibleLayers.ground_detail;
+    nextVisuals.fringeLayer.visible = !!nextState.visibleLayers.fringe;
+    nextVisuals.collisionDebug.enabled = this.engine.debug.visible;
+    nextVisuals.chunkDebug.enabled = this.engine.debug.visible;
+
+    // Prewarm visible chunks before exposing the new container, so we never show
+    // a frame with empty map layers during the full rebuild swap.
+    nextVisuals.chunkRenderer.update(this.camera);
+
+    this.root.addChildAt(nextVisuals.container, 0);
+    this.mapVisuals = nextVisuals;
+    this.applyMapVisuals(nextVisuals);
+
+    if (prevVisuals) {
+      this.root.removeChild(prevVisuals.container);
+      this.destroyMapVisuals(prevVisuals);
+    }
+
+    this.state.update((s) => {
+      s.map = this.map;
+      s.dirtyChunks.clear();
+    });
+  }
+
+  buildMapVisuals(map) {
+    const container = new Container();
+    const chunkRenderer = new MapChunkRenderer(map, this.engine.renderer.viewport, [
+      "ground",
+      "ground_detail",
+      "fringe",
+    ]);
+
+    const groundLayer = chunkRenderer.getLayerContainer("ground");
+    const groundDetailLayer = chunkRenderer.getLayerContainer("ground_detail");
+    const fringeLayer = chunkRenderer.getLayerContainer("fringe");
+
+    const collisionDebug = new TileLayerDebugOverlay(
+      map,
+      this.engine.renderer.viewport,
+      "collision",
+      0xff0000,
+    );
+    const chunkDebug = new ChunkDebugOverlay(map, this.engine.renderer.viewport);
+
+    container.addChild(groundLayer);
+    container.addChild(groundDetailLayer);
+    container.addChild(fringeLayer);
+    container.addChild(collisionDebug.container);
+    container.addChild(chunkDebug.container);
+
+    return {
+      map,
+      container,
+      chunkRenderer,
+      groundLayer,
+      groundDetailLayer,
+      fringeLayer,
+      collisionDebug,
+      chunkDebug,
+    };
+  }
+
+  applyMapVisuals(visuals) {
+    this.chunkRenderer = visuals.chunkRenderer;
+    this.groundLayer = visuals.groundLayer;
+    this.groundDetailLayer = visuals.groundDetailLayer;
+    this.fringeLayer = visuals.fringeLayer;
+    this.collisionDebug = visuals.collisionDebug;
+    this.chunkDebug = visuals.chunkDebug;
+  }
+
+  destroyMapVisuals(visuals = this.mapVisuals) {
+    if (!visuals) return;
+
+    visuals.collisionDebug?.destroy();
+    visuals.chunkDebug?.destroy();
+    visuals.chunkRenderer?.destroy();
+
+    if (visuals === this.mapVisuals) {
+      this.mapVisuals = null;
+      this.chunkRenderer = null;
+      this.groundLayer = null;
+      this.groundDetailLayer = null;
+      this.fringeLayer = null;
+      this.collisionDebug = null;
+      this.chunkDebug = null;
+    }
+  }
+
   destroy() {
+    this.destroyMapVisuals();
     this.gridOverlay?.destroy();
     this.brushPreview?.destroy();
-    this.collisionDebug?.destroy();
-    this.chunkDebug?.destroy();
-    this.chunkRenderer?.destroy();
+    this.hoverOverlay?.destroy();
     this.root?.destroy({ children: true });
   }
 }

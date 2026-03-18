@@ -143,8 +143,17 @@ window resize → Renderer.resize()
 
 ### Tileset JSON format (content/tilesets/)
 ```json
-{ "image": "atlas_world", "tileSize": 16, "columns": 32 }
+{
+  "image": "atlas_world", "tileSize": 16, "columns": 32,
+  "editor": {
+    "groups": [
+      { "id": "terrain", "name": "Terrain", "startId": 0, "count": 32 }
+    ]
+  }
+}
 ```
+- `editor.groups` defines named tile groups for the TilesPanel UI
+- **TilesetRegistry** (`shared/data/loaders/TilesetRegistry.js`): static cache-based loader, fetches from `/content/tilesets/{id}_tileset.json`. Used by both editor and MapLoader.
 
 ## Tilemap rendering (chunk-based)
 - **MapChunkRenderer**: manages ChunkLayerViews for visible chunks. One Container per layer for z-order control.
@@ -175,13 +184,23 @@ EditorApp (orchestrator) — src/editor/EditorApp.js
 ├── EditorShell       — HTML layout (toolbar, viewport, side panels, status bar)
 ├── EditorState       — central state: activeTool, activeLayer, visibleLayers,
 │                       selectedBrush, camera {x,y,zoom}, map, hoverTile, dirty
+├── MapDocument       — editor/document/ — authoring data (Uint16Array flat, 0xffff=empty)
+│   ├── event subscription system (subscribe/emit)
+│   ├── write-lock safety (withWriteLock)
+│   └── dirty tracking
+├── History           — editor/history/ — undo/redo (command pattern)
+│   ├── PaintTilesCommand — stores forward + inverse tile changes
+│   └── EraseTilesCommand — sets tiles to -1
+├── RuntimeMapBridge  — editor/runtime/ — MapDocument → MapData (full rebuild)
 ├── EditorViewport    — canvas mouse/keyboard events → pointer context → ToolManager
 │   └── Temporary pan activation: Space+left drag or middle mouse drag
 ├── ToolManager       — tool registry, temporaryToolId for transient tool switching
-│   ├── PanTool       — camera drag (compensates viewport.scale * zoom)
-│   ├── PencilTool    — paint selected tile on active layer
-│   └── EraseTool     — set tile to -1 on active layer
-├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel
+│   ├── PanTool           — camera drag (compensates viewport.scale * zoom)
+│   ├── PencilTool        — paint selected tile (executes PaintTilesCommand)
+│   ├── EraseTool         — set tile to -1 (executes EraseTilesCommand)
+│   └── EyedropperTool    — pick tile from map, auto-switch to pencil
+├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel, TilesPanel
+│   └── TilesPanel    — group selector + tile picker grid (from tileset.editor.groups)
 ├── SceneEditor       — loads map, Camera (freeMode), MapChunkRenderer, clampEditorCamera
 ├── Renderer          — shared, PixiJS Application + dynamic viewport
 ├── Input             — shared, polling-based keyboard state
@@ -189,6 +208,17 @@ EditorApp (orchestrator) — src/editor/EditorApp.js
 ├── GameLoop          — shared, fixed timestep + RAF
 └── DebugOverlay      — shared, FPS/stats (Escape to toggle)
 ```
+
+### Editor document model
+- **MapDocument** stores tile data as flat `Uint16Array` (0xffff = empty sentinel, converts to/from -1 at runtime boundary)
+- Tools inject document/history via closures: `getDocument()` and `getHistory()`
+- On tile edit: tool creates a command → history executes it → MapDocument emits change → EditorApp triggers `rebuildFullMap()`
+- `rebuildFullMap()` converts MapDocument → MapData via RuntimeMapBridge, then loads tileset via TilesetRegistry
+
+### Editor persistence
+- `loadMap()` — reads from localStorage or fetches JSON, imports via RuntimeMapImporter → MapDocument
+- `saveMap()` — serializes MapDocument → JSON, writes to localStorage, optionally triggers file download
+- Keyboard shortcuts: **Ctrl+Z** undo, **Ctrl+Shift+Z / Ctrl+Y** redo, **Ctrl+S** save, **Ctrl+R** reload
 
 ### Editor navigation
 - **Pan**: Space+left drag or middle mouse drag activates temporary pan tool. Cursor changes to "move".

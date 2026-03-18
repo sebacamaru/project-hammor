@@ -1,6 +1,10 @@
+import { PaintTilesCommand } from "../history/commands/PaintTilesCommand.js";
+
 export class PencilTool {
-  constructor(state) {
+  constructor(state, getDocument, getHistory) {
     this.state = state;
+    this.getDocument = getDocument;
+    this.getHistory = getHistory;
     this.isPainting = false;
     this.lastPaintKey = null;
   }
@@ -23,14 +27,18 @@ export class PencilTool {
   paint(ctx) {
     const s = this.state.get();
     const map = s.map;
+    const doc = this.getDocument();
+    const history = this.getHistory();
     const brush = s.selectedBrush;
 
-    if (!map || !brush) return;
+    if (!map || !doc || !history || !brush) return;
     if (ctx.tileX == null || ctx.tileY == null) return;
 
     const paintKey = `${ctx.tileX},${ctx.tileY},${s.activeLayer}`;
     if (paintKey === this.lastPaintKey) return;
     this.lastPaintKey = paintKey;
+
+    const changes = [];
 
     for (let by = 0; by < brush.height; by++) {
       for (let bx = 0; bx < brush.width; bx++) {
@@ -44,17 +52,16 @@ export class PencilTool {
 
         if (!this.isInsideMap(map, x, y)) continue;
 
-        const current = map.getTile(s.activeLayer, x, y);
+        const current = doc.getTile(s.activeLayer, x, y);
         if (current === tileId) continue;
 
-        map.setTile(s.activeLayer, x, y, tileId);
-
-        const { cx, cy } = map.worldToChunk(x, y);
-        s.dirtyChunks.add(`${cx},${cy}`);
+        changes.push({ x, y, tileId });
       }
     }
 
-    this.state.patch({ dirty: true });
+    if (changes.length === 0) return;
+
+    history.execute(new PaintTilesCommand(doc, s.activeLayer, changes));
   }
 
   isInsideMap(map, x, y) {

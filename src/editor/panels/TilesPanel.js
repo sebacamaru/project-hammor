@@ -1,15 +1,13 @@
-import { TILESET_CONFIG } from "../TilesetConfig.js";
-
 const TILE_DISPLAY_SIZE = 32; // 16px tiles rendered at 2x in the panel
 
 export class TilesPanel {
   constructor(el, state) {
     this.el = el;
     this.state = state;
-    this.currentGroupId = TILESET_CONFIG.groups[0]?.id ?? null;
+    this.currentGroupId = null;
+    this.tilesetId = null;
 
     this.render();
-    this.renderGroup(this.currentGroupId);
     this.unsubscribe = this.state.subscribe(() => this.sync());
     this.sync();
   }
@@ -25,12 +23,7 @@ export class TilesPanel {
 
     // Populate group dropdown
     const select = this.el.querySelector(".tiles-group-select");
-    for (const group of TILESET_CONFIG.groups) {
-      const opt = document.createElement("option");
-      opt.value = group.id;
-      opt.textContent = group.name;
-      select.appendChild(opt);
-    }
+    select.disabled = true;
 
     // Group change
     select.addEventListener("change", (e) => {
@@ -57,14 +50,15 @@ export class TilesPanel {
     const grid = this.el.querySelector(".tiles-grid");
     if (!grid) return;
 
-    const group = TILESET_CONFIG.groups.find((g) => g.id === groupId);
+    const tileset = this.getTileset();
+    const groups = this.getGroups();
+    const group = groups.find((g) => g.id === groupId);
     if (!group) {
       grid.innerHTML = "";
       return;
     }
 
-    const { image, tileSize, columns } = TILESET_CONFIG;
-    const scale = TILE_DISPLAY_SIZE / tileSize;
+    const { image, tileSize, columns } = tileset;
     let html = "";
 
     for (let i = 0; i < group.count; i++) {
@@ -95,11 +89,59 @@ export class TilesPanel {
 
   sync() {
     const s = this.state.get();
+    this.syncTilesetUi();
+
     const cells = this.el.querySelectorAll(".tile-cell");
     for (const cell of cells) {
       const id = Number(cell.dataset.tileId);
       cell.classList.toggle("is-selected", id === s.selectedTileId);
     }
+  }
+
+  syncTilesetUi() {
+    const tileset = this.getTileset();
+    const nextTilesetId = tileset?.id ?? null;
+
+    if (nextTilesetId !== this.tilesetId) {
+      this.tilesetId = nextTilesetId;
+      this.rebuildGroupOptions();
+    }
+
+    const groups = this.getGroups();
+    const hasCurrentGroup = groups.some((group) => group.id === this.currentGroupId);
+    if (!hasCurrentGroup) {
+      this.currentGroupId = groups[0]?.id ?? null;
+      this.rebuildGroupOptions();
+    }
+
+    this.renderGroup(this.currentGroupId);
+  }
+
+  rebuildGroupOptions() {
+    const select = this.el.querySelector(".tiles-group-select");
+    if (!select) return;
+
+    const groups = this.getGroups();
+    select.innerHTML = "";
+
+    for (const group of groups) {
+      const opt = document.createElement("option");
+      opt.value = group.id;
+      opt.textContent = group.name;
+      opt.selected = group.id === this.currentGroupId;
+      select.appendChild(opt);
+    }
+
+    select.disabled = groups.length === 0;
+    select.value = this.currentGroupId ?? "";
+  }
+
+  getTileset() {
+    return this.state.get().map?.tileset ?? null;
+  }
+
+  getGroups() {
+    return this.getTileset()?.editor?.groups ?? [];
   }
 
   destroy() {

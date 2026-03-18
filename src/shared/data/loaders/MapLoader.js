@@ -1,4 +1,5 @@
 import { MapData } from "../models/MapData.js";
+import { TilesetRegistry } from "./TilesetRegistry.js";
 
 export class MapLoader {
   static async load(mapUrl) {
@@ -8,13 +9,8 @@ export class MapLoader {
     }
     const mapJson = await mapResponse.json();
 
-    // Load tileset metadata
-    const tilesetUrl = `/content/tilesets/${mapJson.tileset}_tileset.json`;
-    const tilesetResponse = await fetch(tilesetUrl);
-    if (!tilesetResponse.ok) {
-      throw new Error(`Failed to load tileset from ${tilesetUrl}: ${tilesetResponse.status}`);
-    }
-    const tilesetJson = await tilesetResponse.json();
+    const tilesetId = mapJson.tileset ?? "world";
+    const tilesetJson = await TilesetRegistry.load(tilesetId);
 
     // Build MapData
     const map = new MapData(
@@ -25,7 +21,7 @@ export class MapLoader {
       mapJson.layers,
     );
     map.id = mapJson.id;
-    map.tilesetId = mapJson.tileset;
+    map.tilesetId = tilesetId;
     map.tileset = tilesetJson;
 
     // Load chunks

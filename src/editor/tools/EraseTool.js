@@ -1,6 +1,10 @@
+import { EraseTilesCommand } from "../history/commands/EraseTilesCommand.js";
+
 export class EraseTool {
-  constructor(state) {
+  constructor(state, getDocument, getHistory) {
     this.state = state;
+    this.getDocument = getDocument;
+    this.getHistory = getHistory;
     this.isErasing = false;
     this.lastEraseKey = null;
   }
@@ -23,8 +27,10 @@ export class EraseTool {
   erase(ctx) {
     const s = this.state.get();
     const map = s.map;
+    const doc = this.getDocument();
+    const history = this.getHistory();
 
-    if (!map) return;
+    if (!map || !doc || !history) return;
     if (ctx.tileX == null || ctx.tileY == null) return;
 
     const eraseKey = `${ctx.tileX},${ctx.tileY},${s.activeLayer}`;
@@ -33,15 +39,13 @@ export class EraseTool {
 
     if (!this.isInsideMap(map, ctx.tileX, ctx.tileY)) return;
 
-    const current = map.getTile(s.activeLayer, ctx.tileX, ctx.tileY);
+    const current = doc.getTile(s.activeLayer, ctx.tileX, ctx.tileY);
     if (current === -1) return;
 
-    map.setTile(s.activeLayer, ctx.tileX, ctx.tileY, -1);
-
-    const { cx, cy } = map.worldToChunk(ctx.tileX, ctx.tileY);
-    s.dirtyChunks.add(`${cx},${cy}`);
-
-    this.state.patch({ dirty: true });
+    history.execute(new EraseTilesCommand(doc, s.activeLayer, [{
+      x: ctx.tileX,
+      y: ctx.tileY,
+    }]));
   }
 
   isInsideMap(map, x, y) {

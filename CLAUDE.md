@@ -132,17 +132,30 @@ src/
 │   ├── EditorShell.js        HTML layout (toolbar, viewport, panels, status bar)
 │   ├── EditorState.js        Central state (tool, layer, camera, map, brush, etc.)
 │   ├── EditorViewport.js     Canvas mouse/keyboard events → ToolManager
+│   ├── document/
+│   │   ├── MapDocument.js        Authoring data (Uint16Array flat, events, write-lock)
+│   │   ├── MapSerializer.js      MapDocument ↔ JSON
+│   │   └── RuntimeMapImporter.js Runtime MapData → MapDocument
+│   ├── history/
+│   │   ├── History.js            Undo/redo stack (command pattern)
+│   │   └── commands/
+│   │       ├── PaintTilesCommand.js  Forward + inverse tile paint
+│   │       └── EraseTilesCommand.js  Sets tiles to -1
+│   ├── runtime/
+│   │   └── RuntimeMapBridge.js   MapDocument → MapData (full rebuild)
 │   ├── scenes/
 │   │   └── SceneEditor.js    Main editor scene (map + camera + chunk renderer)
 │   ├── tools/
 │   │   ├── ToolManager.js    Tool registry + temporary tool support
 │   │   ├── PanTool.js        Camera drag (accounts for viewport.scale)
-│   │   ├── PencilTool.js     Paint tiles
-│   │   └── EraseTool.js      Erase tiles (sets to -1)
+│   │   ├── PencilTool.js     Paint tiles (via PaintTilesCommand)
+│   │   ├── EraseTool.js      Erase tiles (via EraseTilesCommand)
+│   │   └── EyedropperTool.js Pick tile from map, auto-switch to pencil
 │   ├── panels/
 │   │   ├── ToolbarPanel.js   Top toolbar
 │   │   ├── ToolsPanel.js     Tool selector
 │   │   ├── LayersPanel.js    Layer visibility
+│   │   ├── TilesPanel.js     Tile group selector + tile picker grid
 │   │   └── StatusBarPanel.js Bottom status bar
 │   └── utils/
 │       └── clampEditorCamera.js  Editor camera clamp (half-viewport margins)
@@ -185,6 +198,7 @@ src/
         │   ├── LayerData.js       Single tile layer (legacy)
         │   └── GameMap.js         Static loader facade
         ├── loaders/MapLoader.js        Fetch JSON maps + tileset
+        ├── loaders/TilesetRegistry.js  Cached tileset metadata loader (shared by editor + client)
         ├── serializers/MapSerializer.js  MapData ↔ JSON
         └── validators/MapValidator.js    Map validation
 
@@ -228,13 +242,21 @@ content/
 EditorApp (orchestrator) — src/editor/EditorApp.js
 ├── EditorShell       — editor/ — HTML layout (toolbar, viewport, panels)
 ├── EditorState       — editor/ — central state (tool, layer, camera, map)
+├── MapDocument       — editor/document/ — authoring data (Uint16Array flat, 0xffff=empty)
+├── History           — editor/history/ — undo/redo command stack
+│   ├── PaintTilesCommand — forward + inverse tile changes
+│   └── EraseTilesCommand — sets tiles to -1
+├── RuntimeMapBridge  — editor/runtime/ — MapDocument → MapData (full rebuild)
 ├── EditorViewport    — editor/ — canvas mouse/keyboard → ToolManager
 │   └── Temporary pan: Space+left drag or middle mouse drag
 ├── ToolManager       — editor/tools/ — tool registry, temporaryToolId
-│   ├── PanTool       — camera drag (compensates viewport.scale)
-│   ├── PencilTool    — paint selected tile
-│   └── EraseTool     — set tile to -1
+│   ├── PanTool           — camera drag (compensates viewport.scale)
+│   ├── PencilTool        — paint selected tile (via PaintTilesCommand)
+│   ├── EraseTool         — set tile to -1 (via EraseTilesCommand)
+│   └── EyedropperTool    — pick tile from map, auto-switch to pencil
+├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel, TilesPanel
 ├── SceneEditor       — editor/scenes/ — map loading, chunk renderer, camera clamp
+├── TilesetRegistry   — shared/data/loaders/ — cached tileset metadata loader
 ├── Renderer          — shared/render/ — PixiJS Application, dynamic viewport
 ├── Input             — shared/input/ — polling-based keyboard state
 ├── SceneManager      — shared/scene/ — scene stack
