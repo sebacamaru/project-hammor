@@ -40,7 +40,7 @@ export class MapChunkRenderer {
     let tex = this.tileTextures.get(tileId);
     if (tex) return tex;
 
-    const atlasIndex = tileId - 1;
+    const atlasIndex = tileId;
     const tileX = atlasIndex % this.columns;
     const tileY = Math.floor(atlasIndex / this.columns);
 
@@ -66,12 +66,14 @@ export class MapChunkRenderer {
     return this.layerContainers.get(layerName);
   }
 
-  update(camera) {
+  update(camera, zoom = 1) {
     const chunkPx = this.map.chunkSize * this.map.tileSize;
+    const visibleW = this.viewport.tilesX * this.map.tileSize / zoom;
+    const visibleH = this.viewport.tilesY * this.map.tileSize / zoom;
     const startCx = Math.floor(camera.x / chunkPx);
     const startCy = Math.floor(camera.y / chunkPx);
-    const endCx = Math.floor((camera.x + this.viewport.tilesX * this.map.tileSize) / chunkPx);
-    const endCy = Math.floor((camera.y + this.viewport.tilesY * this.map.tileSize) / chunkPx);
+    const endCx = Math.floor((camera.x + visibleW) / chunkPx);
+    const endCy = Math.floor((camera.y + visibleH) / chunkPx);
 
     // Track which views are visible this frame
     const visibleKeys = new Set();
@@ -96,7 +98,7 @@ export class MapChunkRenderer {
 
           // Check if layer has any content
           const layer = chunk.getLayer(layerName);
-          if (!layer || !layer.some(v => v > 0)) {
+          if (!layer || !layer.some(v => v >= 0)) {
             this._emptyKeys.add(key);
             continue;
           }
@@ -127,7 +129,7 @@ export class MapChunkRenderer {
       this._emptyKeys.delete(key);
 
       const layer = chunk?.getLayer(layerName);
-      const hasContent = layer && layer.some(v => v > 0);
+      const hasContent = layer && layer.some(v => v >= 0);
 
       const existing = this.chunkViews.get(key);
       if (existing) {

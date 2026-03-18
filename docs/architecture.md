@@ -5,7 +5,7 @@
 src/
 ├── shared/    Reusable core: render pipeline, scene system, data models, assets
 ├── client/    Game runtime: ClientApp, Input, Player, gameplay scenes
-├── editor/    Map editor: EditorApp, tools, state (skeleton)
+├── editor/    Map editor: EditorApp, tools, panels, viewport, scenes
 └── server/    Headless server: ServerApp, world management (skeleton)
 ```
 
@@ -74,6 +74,7 @@ window resize → Renderer.resize()
 
 ### Config constants (shared/core/Config.js)
 - TILE_SIZE = 16
+- EMPTY_TILE = -1
 - BASE_TILES_X = 40, BASE_TILES_Y = 22
 - MIN_SCALE = 2, MAX_SCALE = 6
 - MIN_TILES_X = 38, MAX_TILES_X = 46
@@ -108,7 +109,7 @@ window resize → Renderer.resize()
 
 ### Map data (chunk-based)
 - **MapData**: width, height, tileSize, chunkSize, layerNames, chunks Map<string, ChunkData>. getTile/setTile delegate to chunks via worldToChunk().
-- **ChunkData**: cx, cy, chunkSize, layers Map<string, Uint16Array>. getTile/setTile with bounds checks.
+- **ChunkData**: cx, cy, chunkSize, layers Map<string, Int16Array> (filled with -1). getTile/setTile with bounds checks. Out-of-bounds returns -1.
 - **GameMap**: static facade — `GameMap.load(url)` delegates to MapLoader.
 - **TileCollision**: static `collidesWithLayer(map, layerName, x, y, hitbox)` — AABB vs tile grid check.
 
@@ -116,7 +117,7 @@ window resize → Renderer.resize()
 - `ground` — base terrain tiles
 - `ground_detail` — decorative tiles above ground (below entities)
 - `fringe` — tiles rendered above entities (tree tops, roofs, etc.)
-- `collision` — collision mask (tile > 0 = blocked)
+- `collision` — collision mask (tile >= 0 = blocked, -1 = passable)
 
 ### Serialization pipeline
 - **MapLoader**: fetch map JSON + tileset JSON, build MapData with chunks from raw tile arrays
@@ -133,7 +134,7 @@ window resize → Renderer.resize()
   "layers": ["ground", "ground_detail", "fringe", "collision"],
   "chunks": [
     { "cx": 0, "cy": 0, "tiles": {
-      "ground": { "encoding": "raw", "data": [1, 2, ...] },
+      "ground": { "encoding": "raw", "data": [0, 1, ...] },
       "collision": { "encoding": "raw", "data": [] }
     }}
   ]
@@ -168,11 +169,38 @@ window resize → Renderer.resize()
 - Game logic keeps float coordinates — rounding is render-only
 - `roundPixels: true` in PixiJS as GPU-level safety net
 
-## Editor architecture (skeleton)
-- **EditorApp**: composes shared Renderer + SceneManager + GameLoop. No Input (will use mouse).
-- **EditorState**: currentTool, selectedTileId, brushSize, activeLayer
-- **BrushTool/EraserTool**: pure logic, apply(mapData, x, y, ...) → modify tiles
-- **EditorMapService**: uses shared MapLoader + MapSerializer for load/save
+## Editor architecture
+```
+EditorApp (orchestrator) — src/editor/EditorApp.js
+├── EditorShell       — HTML layout (toolbar, viewport, side panels, status bar)
+├── EditorState       — central state: activeTool, activeLayer, visibleLayers,
+│                       selectedBrush, camera {x,y,zoom}, map, hoverTile, dirty
+├── EditorViewport    — canvas mouse/keyboard events → pointer context → ToolManager
+│   └── Temporary pan activation: Space+left drag or middle mouse drag
+├── ToolManager       — tool registry, temporaryToolId for transient tool switching
+│   ├── PanTool       — camera drag (compensates viewport.scale * zoom)
+│   ├── PencilTool    — paint selected tile on active layer
+│   └── EraseTool     — set tile to -1 on active layer
+├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel
+├── SceneEditor       — loads map, Camera (freeMode), MapChunkRenderer, clampEditorCamera
+├── Renderer          — shared, PixiJS Application + dynamic viewport
+├── Input             — shared, polling-based keyboard state
+├── SceneManager      — shared, scene stack
+├── GameLoop          — shared, fixed timestep + RAF
+└── DebugOverlay      — shared, FPS/stats (Escape to toggle)
+```
+
+### Editor navigation
+- **Pan**: Space+left drag or middle mouse drag activates temporary pan tool. Cursor changes to "move".
+- **Pan speed**: PanTool divides mouse delta by `viewportScale * zoom` for 1:1 visual tracking.
+- **Camera clamp**: `clampEditorCamera(camera, mapWPx, mapHPx, viewport)` allows half-viewport margin around map, so any corner can be centered on screen.
+- **Pointer context**: EditorViewport builds `{screenX/Y, worldX/Y, tileX/Y, viewportScale}` from mouse events.
+
+### Editor state flow
+- EditorState is the single source of truth for camera position
+- SceneEditor.update() clamps state.camera, then copies to visual Camera with Math.floor
+- PanTool modifies state.camera directly
+- ToolManager.temporaryToolId overrides state.activeTool without changing UI selection
 
 ## Server architecture (skeleton)
 - **ServerApp**: setInterval-based tick loop (no RAF). Imports only shared/core/ and shared/data/.

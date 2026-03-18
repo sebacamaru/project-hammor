@@ -13,7 +13,7 @@ export class TileLayerDebugOverlay {
     this.container.addChild(this.graphics);
   }
 
-  render(camera) {
+  render(camera, zoom = 1) {
     this.graphics.clear();
     if (!this.enabled) {
       this.container.visible = false;
@@ -23,15 +23,15 @@ export class TileLayerDebugOverlay {
 
     const startX = Math.floor(camera.x / TILE_SIZE) - 1;
     const startY = Math.floor(camera.y / TILE_SIZE) - 1;
-    const cols = this.viewport.tilesX + 2;
-    const rows = this.viewport.tilesY + 2;
+    const cols = Math.ceil(this.viewport.tilesX / zoom) + 2;
+    const rows = Math.ceil(this.viewport.tilesY / zoom) + 2;
 
     for (let dy = 0; dy < rows; dy++) {
       for (let dx = 0; dx < cols; dx++) {
         const tx = startX + dx;
         const ty = startY + dy;
         const value = this.map.getTile(this.layerName, tx, ty);
-        if (value <= 0) continue;
+        if (value < 0) continue;
         this.graphics.rect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       }
     }

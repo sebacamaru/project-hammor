@@ -1,4 +1,6 @@
+import "./styles/editor.css";
 import { EditorApp } from "./EditorApp.js";
 
-const app = new EditorApp();
-app.start(document.getElementById("editor"));
+const root = document.getElementById("editor");
+const app = new EditorApp(root);
+app.start();

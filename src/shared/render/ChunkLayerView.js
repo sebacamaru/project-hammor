@@ -28,7 +28,7 @@ export class ChunkLayerView {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const tileId = layer[y * size + x];
-        if (tileId <= 0) continue;
+        if (tileId < 0) continue;
 
         const sprite = new Sprite(this.tileTextureFn(tileId));
         sprite.x = x * this.tileSize;

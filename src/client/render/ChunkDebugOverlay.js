@@ -13,7 +13,7 @@ export class ChunkDebugOverlay {
     this.container.addChild(this.chunkGraphics);
   }
 
-  render(camera) {
+  render(camera, zoom = 1) {
     this.tileGraphics.clear();
     this.chunkGraphics.clear();
     if (!this.enabled) {
@@ -23,8 +23,8 @@ export class ChunkDebugOverlay {
     this.container.visible = true;
 
     const chunkPx = this.map.chunkSize * TILE_SIZE;
-    const viewW = this.viewport.tilesX * TILE_SIZE;
-    const viewH = this.viewport.tilesY * TILE_SIZE;
+    const viewW = this.viewport.tilesX * TILE_SIZE / zoom;
+    const viewH = this.viewport.tilesY * TILE_SIZE / zoom;
 
     // Map pixel bounds
     const mapW = this.map.width * TILE_SIZE;

@@ -36,7 +36,7 @@ export class TilemapRenderer {
     let tex = this.tileTextures.get(tileId);
     if (tex) return tex;
 
-    const atlasIndex = tileId - 1;
+    const atlasIndex = tileId;
     const tileX = atlasIndex % this.columns;
     const tileY = Math.floor(atlasIndex / this.columns);
 
@@ -69,7 +69,7 @@ export class TilemapRenderer {
 
         const tileId = this.map.getTile(this.layerName, tx, ty);
 
-        if (tileId <= 0) {
+        if (tileId < 0) {
           sprite.visible = false;
           continue;
         }

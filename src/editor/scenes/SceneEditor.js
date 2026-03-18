@@ -3,34 +3,58 @@ import { Scene } from "../../shared/scene/Scene.js";
 import { Camera } from "../../shared/render/Camera.js";
 import { GameMap } from "../../shared/data/models/GameMap.js";
 import { MapChunkRenderer } from "../../shared/render/MapChunkRenderer.js";
-import { TILE_SIZE } from "../../shared/core/Config.js";
 import { TileLayerDebugOverlay } from "../../client/render/TileLayerDebugOverlay.js";
 import { ChunkDebugOverlay } from "../../client/render/ChunkDebugOverlay.js";
+import { clampEditorCamera } from "../utils/clampEditorCamera.js";
 
 export class SceneEditor extends Scene {
+  constructor(state) {
+    super();
+    this.state = state;
+  }
+
   async enter(engine) {
     this.engine = engine;
+
     this.root = new Container();
-    engine.renderer.stage.addChild(this.root);
+    this.engine.renderer.stage.addChild(this.root);
 
-    const viewport = engine.renderer.viewport;
+    const viewport = this.engine.renderer.viewport;
 
-    // Cargar mapa
     this.map = await GameMap.load("/content/maps/test_map.json");
 
-    // Cámara libre (sin player)
     this.camera = new Camera(viewport);
     this.camera.setBounds(this.map.width, this.map.height);
     this.camera.freeMode = true;
 
-    // Tilemap por chunks
-    this.chunkRenderer = new MapChunkRenderer(this.map, viewport, ["ground", "ground_detail", "fringe"]);
-    this.root.addChild(this.chunkRenderer.getLayerContainer("ground"));
-    this.root.addChild(this.chunkRenderer.getLayerContainer("ground_detail"));
-    this.root.addChild(this.chunkRenderer.getLayerContainer("fringe"));
+    this.state.update((s) => {
+      s.map = this.map;
+      s.camera.x = 0;
+      s.camera.y = 0;
+      s.camera.zoom = 1;
+    });
 
-    // Debug overlays
-    this.collisionDebug = new TileLayerDebugOverlay(this.map, viewport, "collision", 0xff0000);
+    this.chunkRenderer = new MapChunkRenderer(this.map, viewport, [
+      "ground",
+      "ground_detail",
+      "fringe",
+    ]);
+
+    this.groundLayer = this.chunkRenderer.getLayerContainer("ground");
+    this.groundDetailLayer =
+      this.chunkRenderer.getLayerContainer("ground_detail");
+    this.fringeLayer = this.chunkRenderer.getLayerContainer("fringe");
+
+    this.root.addChild(this.groundLayer);
+    this.root.addChild(this.groundDetailLayer);
+    this.root.addChild(this.fringeLayer);
+
+    this.collisionDebug = new TileLayerDebugOverlay(
+      this.map,
+      viewport,
+      "collision",
+      0xff0000,
+    );
     this.root.addChild(this.collisionDebug.container);
 
     this.chunkDebug = new ChunkDebugOverlay(this.map, viewport);
@@ -38,37 +62,43 @@ export class SceneEditor extends Scene {
   }
 
   update(dt) {
-    const input = this.engine.input;
-    const speed = this.camera.debugSpeed;
+    const s = this.state.get();
+    const vp = this.engine.renderer.viewport;
 
-    // WASD mueve la cámara
-    if (input.held("KeyW")) this.camera.y -= speed;
-    if (input.held("KeyS")) this.camera.y += speed;
-    if (input.held("KeyA")) this.camera.x -= speed;
-    if (input.held("KeyD")) this.camera.x += speed;
+    // Clamp state camera with editor margins (half-viewport around map)
+    const mapWidthPx = this.map.width * this.map.tileSize;
+    const mapHeightPx = this.map.height * this.map.tileSize;
+    clampEditorCamera(s.camera, mapWidthPx, mapHeightPx, vp);
 
-    // IJKL también funciona
-    this.camera.debugMove(input);
+    this.camera.x = Math.floor(s.camera.x);
+    this.camera.y = Math.floor(s.camera.y);
 
-    // Debug overlay sync
+    this.groundLayer.visible = !!s.visibleLayers.ground;
+    this.groundDetailLayer.visible = !!s.visibleLayers.ground_detail;
+    this.fringeLayer.visible = !!s.visibleLayers.fringe;
+
     this.collisionDebug.enabled = this.engine.debug.visible;
     this.chunkDebug.enabled = this.engine.debug.visible;
 
-    // Debug info
     const d = this.engine.debug;
-    const vp = this.engine.renderer.viewport;
     d.set("cam", `${Math.round(this.camera.x)}, ${Math.round(this.camera.y)}`);
     d.set("viewport", `${vp.tilesX}x${vp.tilesY} @${vp.scale}x`);
     d.set("canvas", `${vp.cssWidth}x${vp.cssHeight}`);
+    d.set("mode", s.mode);
+    d.set("tool", s.activeTool);
+    d.set("layer", s.activeLayer);
   }
 
   render(alpha) {
-    this.root.x = -this.camera.x;
-    this.root.y = -this.camera.y;
+    const zoom = this.state.get().camera.zoom || 1;
 
-    this.chunkRenderer.update(this.camera);
-    this.collisionDebug.render(this.camera);
-    this.chunkDebug.render(this.camera);
+    this.root.scale.set(zoom);
+    this.root.x = Math.floor(-this.camera.x * zoom);
+    this.root.y = Math.floor(-this.camera.y * zoom);
+
+    this.chunkRenderer.update(this.camera, zoom);
+    this.collisionDebug.render(this.camera, zoom);
+    this.chunkDebug.render(this.camera, zoom);
   }
 
   exit() {
@@ -76,9 +106,9 @@ export class SceneEditor extends Scene {
   }
 
   destroy() {
-    this.collisionDebug.destroy();
-    this.chunkDebug.destroy();
-    this.chunkRenderer.destroy();
-    this.root.destroy({ children: true });
+    this.collisionDebug?.destroy();
+    this.chunkDebug?.destroy();
+    this.chunkRenderer?.destroy();
+    this.root?.destroy({ children: true });
   }
 }

@@ -20,7 +20,14 @@
       "Bash(git push --force-with-lease origin main)",
       "Bash(rm -rf .git)",
       "Bash(git init)",
-      "Bash(git add -A)"
+      "Bash(git add -A)",
+      "Bash(git add src/client/ClientApp.js src/client/game/Player.js src/client/scenes/SceneMap.js src/shared/assets/AssetManifest.js src/shared/data/loaders/MapLoader.js src/shared/data/models/GameMap.js src/shared/data/models/MapData.js src/shared/data/models/ChunkData.js src/shared/render/TilemapRenderer.js src/shared/scene/SceneManager.js src/shared/data/TileCollision.js src/client/render/ content/)",
+      "Bash(git push)",
+      "Bash(git -C \"C:/Users/barduck/Desktop/project-hammor\" status)",
+      "Bash(git -C \"C:/Users/barduck/Desktop/project-hammor\" log --oneline -3)",
+      "Bash(git -C \"C:/Users/barduck/Desktop/project-hammor\" add src/shared/render/ChunkLayerView.js src/shared/render/MapChunkRenderer.js src/client/scenes/SceneMap.js)",
+      "Bash(git -C:*)",
+      "Bash(git -C \"C:/Users/barduck/Desktop/project-hammor\" push)"
     ]
   }
 }

@@ -50,7 +50,7 @@ ClientApp (orchestrator) — src/client/ClientApp.js
 ├── Renderer        — shared/render/ — PixiJS Application, dynamic viewport
 │   ├── ViewportState   — plain data: scale, tiles, dimensions, offsets
 │   └── ResolutionManager — pure function to compute viewport from screen size
-├── Input           — client/input/ — polling-based keyboard state
+├── Input           — shared/input/ — polling-based keyboard state
 ├── SceneManager    — shared/scene/ — scene stack (goto/push/pop)
 ├── GameLoop        — shared/core/ — fixed timestep + RAF
 └── DebugOverlay    — shared/render/ — FPS/stats (Escape to toggle)
@@ -69,9 +69,15 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `PlayerAnimations` = animation metadata in `shared/data/models/`.
 - `EntityData` = serializable snapshot in `shared/data/models/`.
 
+### Tile ID convention
+- **`-1` = empty/invisible tile** (`EMPTY_TILE` in Config.js). Tile 0 is valid (first atlas tile).
+- **0-indexed atlas**: `atlasIndex = tileId` directly. Tile 0 → atlas position 0, tile 1 → atlas position 1, etc.
+- Renderers skip tiles `< 0`. Collision checks use `>= 0` (any valid tile is solid).
+- Tile arrays use `Int16Array` (signed, supports -1). Initialized with `.fill(-1)`.
+
 ### Data model (shared/data/)
 - `MapData` = chunk-based map data (width, height, tileSize, chunkSize, layerNames, chunks Map).
-- `ChunkData` = single chunk tile data (cx, cy, chunkSize, layers Map of Uint16Array).
+- `ChunkData` = single chunk tile data (cx, cy, chunkSize, layers Map of Int16Array, filled with -1).
 - `GameMap` = static loader facade (`GameMap.load(url)` → calls MapLoader).
 - `MapLoader` = fetch JSON map + tileset metadata, build MapData with chunks.
 - `TileCollision` = static AABB vs tile-layer collision check.
@@ -109,7 +115,8 @@ src/
 ├── client/
 │   ├── main.js              Entry point
 │   ├── ClientApp.js          Orchestrator (was Engine.js)
-│   ├── input/Input.js        Keyboard polling
+│   ├── input/                (empty — Input moved to shared/input/)
+
 │   ├── game/
 │   │   ├── Player.js         Player entity (extends Entity, has hitbox + collision)
 │   │   └── PlayerView.js     Player sprite (AnimatedSprite)
@@ -120,20 +127,35 @@ src/
 │   └── scenes/
 │       └── SceneMap.js       Main gameplay scene
 ├── editor/
-│   ├── EditorApp.js          Editor shell (Renderer + SceneManager)
-│   ├── EditorState.js        Tool/selection state
-│   ├── EditorMapService.js   Load/save maps
-│   └── tools/
-│       ├── BrushTool.js      Paint tiles
-│       └── EraserTool.js     Erase tiles
+│   ├── main.js              Editor entry point
+│   ├── EditorApp.js          Editor orchestrator (Renderer + SceneManager + Tools + Panels)
+│   ├── EditorShell.js        HTML layout (toolbar, viewport, panels, status bar)
+│   ├── EditorState.js        Central state (tool, layer, camera, map, brush, etc.)
+│   ├── EditorViewport.js     Canvas mouse/keyboard events → ToolManager
+│   ├── scenes/
+│   │   └── SceneEditor.js    Main editor scene (map + camera + chunk renderer)
+│   ├── tools/
+│   │   ├── ToolManager.js    Tool registry + temporary tool support
+│   │   ├── PanTool.js        Camera drag (accounts for viewport.scale)
+│   │   ├── PencilTool.js     Paint tiles
+│   │   └── EraseTool.js      Erase tiles (sets to -1)
+│   ├── panels/
+│   │   ├── ToolbarPanel.js   Top toolbar
+│   │   ├── ToolsPanel.js     Tool selector
+│   │   ├── LayersPanel.js    Layer visibility
+│   │   └── StatusBarPanel.js Bottom status bar
+│   └── utils/
+│       └── clampEditorCamera.js  Editor camera clamp (half-viewport margins)
 ├── server/
 │   ├── ServerApp.js          Headless tick loop (no PixiJS)
 │   ├── world/WorldMap.js     Server map wrapper
 │   └── loaders/ServerMapLoader.js  Load maps from fs
 └── shared/
     ├── core/
-    │   ├── Config.js         All constants
+    │   ├── Config.js         All constants (TILE_SIZE, EMPTY_TILE, TICK_RATE, etc.)
     │   └── GameLoop.js       Fixed timestep loop
+    ├── input/
+    │   └── Input.js          Polling-based keyboard state (shared by client + editor)
     ├── render/
     │   ├── Renderer.js       PixiJS Application wrapper
     │   ├── Camera.js         Viewport follow/clamp + debug free mode
@@ -201,10 +223,34 @@ content/
 - Graphics objects are expensive (each = draw call). Prefer Sprites with shared textures.
 - `app.renderer.resize(w, h)` to change internal resolution dynamically.
 
+### Editor subsystem ownership
+```
+EditorApp (orchestrator) — src/editor/EditorApp.js
+├── EditorShell       — editor/ — HTML layout (toolbar, viewport, panels)
+├── EditorState       — editor/ — central state (tool, layer, camera, map)
+├── EditorViewport    — editor/ — canvas mouse/keyboard → ToolManager
+│   └── Temporary pan: Space+left drag or middle mouse drag
+├── ToolManager       — editor/tools/ — tool registry, temporaryToolId
+│   ├── PanTool       — camera drag (compensates viewport.scale)
+│   ├── PencilTool    — paint selected tile
+│   └── EraseTool     — set tile to -1
+├── SceneEditor       — editor/scenes/ — map loading, chunk renderer, camera clamp
+├── Renderer          — shared/render/ — PixiJS Application, dynamic viewport
+├── Input             — shared/input/ — polling-based keyboard state
+├── SceneManager      — shared/scene/ — scene stack
+├── GameLoop          — shared/core/ — fixed timestep + RAF
+└── DebugOverlay      — shared/render/ — FPS/stats (Escape to toggle)
+```
+
+### Editor navigation
+- **Pan**: Space+left drag or middle mouse drag activates temporary pan (doesn't change UI-selected tool)
+- **Cursor**: changes to "move" during pan, restores after
+- **Camera clamp**: `clampEditorCamera()` allows half-viewport margin around map (any corner can be centered)
+- **Pan speed**: PanTool divides mouse delta by `viewportScale * zoom` for 1:1 visual movement
+
 ## Future systems (not yet implemented)
 - **Networking**: WebSocket connection, binary protocol. Client-side prediction + server reconciliation.
 - **NPC/Monster entities**: Same entity system, different update logic.
-- **Editor UI**: Panels, canvas interaction, mouse input, tool palette.
 - **Server networking**: Real WebSocket server with Colyseus or custom.
 
 ## Debug

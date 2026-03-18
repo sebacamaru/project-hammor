@@ -3,7 +3,8 @@ export class LayerData {
     this.name = name;
     this.width = width;
     this.height = height;
-    this.data = new Uint16Array(width * height);
+    this.data = new Int16Array(width * height);
+    this.data.fill(-1);
   }
 
   get(x, y) {

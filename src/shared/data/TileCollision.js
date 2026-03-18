@@ -13,7 +13,7 @@ export class TileCollision {
 
     for (let ty = tileTop; ty <= tileBottom; ty++) {
       for (let tx = tileLeft; tx <= tileRight; tx++) {
-        if (map.getTile(layerName, tx, ty) > 0) return true;
+        if (map.getTile(layerName, tx, ty) >= 0) return true;
       }
     }
     return false;

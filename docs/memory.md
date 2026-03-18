@@ -27,7 +27,7 @@
 - `src/client/game/Player.js` — player movement with WASD/arrows + tile collision
 - `src/client/game/PlayerView.js` — AnimatedSprite from spritesheet, floor-snapped positioning
 - `src/client/scenes/SceneMap.js` — main game scene, wires everything together
-- `src/client/input/Input.js` — keyboard polling
+- `src/shared/input/Input.js` — keyboard polling (shared by client + editor)
 - `src/client/render/ChunkDebugOverlay.js` — tile grid + chunk boundary debug lines
 - `src/client/render/HitboxDebugOverlay.js` — entity hitbox debug rectangles
 - `src/client/render/TileLayerDebugOverlay.js` — collision layer debug highlight
@@ -43,7 +43,7 @@
 - `src/shared/render/DebugOverlay.js` — FPS/stats, toggled with Escape
 - `src/shared/data/TileCollision.js` — AABB vs tile-layer collision check
 - `src/shared/data/models/MapData.js` — chunk-based map data (width, height, chunks)
-- `src/shared/data/models/ChunkData.js` — single chunk tile data (layers of Uint16Array)
+- `src/shared/data/models/ChunkData.js` — single chunk tile data (layers of Int16Array, filled with -1)
 - `src/shared/data/models/GameMap.js` — static loader facade
 - `src/shared/data/models/Entity.js` — base entity data (no PixiJS)
 - `src/shared/data/models/EntityManager.js` — entity registry
@@ -55,7 +55,16 @@
 - `src/shared/assets/AssetsManager.js` — PixiJS Assets wrapper
 - `src/shared/assets/AssetManifest.js` — bundle definitions
 - `src/shared/assets/SpriteSheetSlicer.js` — texture slicing utility
-- `src/editor/EditorApp.js` — editor shell (skeleton)
+- `src/editor/EditorApp.js` — editor orchestrator
+- `src/editor/EditorShell.js` — HTML layout
+- `src/editor/EditorState.js` — central editor state
+- `src/editor/EditorViewport.js` — canvas mouse/keyboard events → ToolManager
+- `src/editor/scenes/SceneEditor.js` — main editor scene
+- `src/editor/tools/ToolManager.js` — tool registry + temporary tool
+- `src/editor/tools/PanTool.js` — camera drag
+- `src/editor/tools/PencilTool.js` — paint tiles
+- `src/editor/tools/EraseTool.js` — erase tiles (set to -1)
+- `src/editor/utils/clampEditorCamera.js` — editor camera clamp (half-viewport margins)
 - `src/server/ServerApp.js` — headless tick loop (skeleton)
 
 ## PixiJS v8 gotchas
@@ -76,5 +85,7 @@
 - Debug overlays: collision (red), hitbox (cyan), tile grid (blue), chunk boundaries (red)
 - Player animated sprite from spritesheet (4x31 frames, 16x16)
 - Content structure: atlas/, maps/, tilesets/, sprites/, dialogue/, interactions/, items/, npcs/, objects/, skills/
-- Editor and server are stubs, not functional
+- Editor functional: tools (pan/pencil/eraser), panels, viewport with navigation (Space+drag, middle mouse), camera clamp
+- Empty tile is -1 (EMPTY_TILE), tile IDs are 0-indexed into atlas, Int16Array storage
+- Server is stub, not functional
 - No networking yet
