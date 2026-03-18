@@ -27,6 +27,28 @@ export class RuntimeMapBridge {
       }
     }
 
+    map.clearAllDirty();
     return map;
+  }
+
+  /**
+   * Apply incremental tile changes from a MapDocument tilesChanged event
+   * to an existing runtime MapData, returning the set of affected chunk keys.
+   * @param {MapData} runtimeMap
+   * @param {{ layerId: string, changes: Array<{ x: number, y: number, tileId: number }> }} event
+   * @returns {Set<string>} affected chunk keys ("cx,cy")
+   */
+  static applyTilesChangedEvent(runtimeMap, event) {
+    const { layerId, changes } = event;
+    const affectedChunks = new Set();
+
+    for (const { x, y, tileId } of changes) {
+      const result = runtimeMap.setTile(layerId, x, y, tileId);
+      if (result) {
+        affectedChunks.add(`${result.cx},${result.cy}`);
+      }
+    }
+
+    return affectedChunks;
   }
 }

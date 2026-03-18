@@ -54,7 +54,9 @@ export class EditorApp {
 
     // Default editor scale = auto-computed scale for this screen
     const autoScale = this.renderer.viewport.scale;
-    this.state.update((s) => { s.editorScale = autoScale; });
+    this.state.update((s) => {
+      s.editorScale = autoScale;
+    });
     this.renderer.setScaleOverride(autoScale);
 
     // Assets compartidos
@@ -75,11 +77,19 @@ export class EditorApp {
     this.toolManager.register("pan", new PanTool(this.state));
     this.toolManager.register(
       "pencil",
-      new PencilTool(this.state, () => this.document, () => this.history),
+      new PencilTool(
+        this.state,
+        () => this.document,
+        () => this.history,
+      ),
     );
     this.toolManager.register(
       "eraser",
-      new EraseTool(this.state, () => this.document, () => this.history),
+      new EraseTool(
+        this.state,
+        () => this.document,
+        () => this.history,
+      ),
     );
     this.toolManager.register(
       "eyedropper",
@@ -139,18 +149,26 @@ export class EditorApp {
 
     // Tool shortcuts
     if (this.input.pressed("KeyB")) {
-      this.state.update((s) => { s.activeTool = "pencil"; });
+      this.state.update((s) => {
+        s.activeTool = "pencil";
+      });
     }
     if (this.input.pressed("KeyE")) {
-      this.state.update((s) => { s.activeTool = "eraser"; });
+      this.state.update((s) => {
+        s.activeTool = "eraser";
+      });
     }
     if (this.input.pressed("KeyI")) {
-      this.state.update((s) => { s.activeTool = "eyedropper"; });
+      this.state.update((s) => {
+        s.activeTool = "eyedropper";
+      });
     }
 
     // Grid toggle
     if (this.input.pressed("KeyG")) {
-      this.state.update((s) => { s.showGrid = !s.showGrid; });
+      this.state.update((s) => {
+        s.showGrid = !s.showGrid;
+      });
     }
 
     this.scenes.update(dt);
@@ -165,9 +183,23 @@ export class EditorApp {
     if (!event || event.type !== "tilesChanged") return;
 
     this.syncDirtyState();
-    void this.rebuildFullMap().catch((error) => {
-      console.error("Runtime rebuild failed", error);
-    });
+
+    if (!this.runtimeMap) return;
+
+    const changedChunks = RuntimeMapBridge.applyTilesChangedEvent(
+      this.runtimeMap,
+      event,
+    );
+
+    if (changedChunks.size === 0) return;
+
+    const currentScene = this.scenes.current;
+    if (currentScene?.rebuildChunk) {
+      for (const key of changedChunks) {
+        const [cx, cy] = key.split(",").map(Number);
+        currentScene.rebuildChunk(cx, cy);
+      }
+    }
   }
 
   async saveMap({ download = false } = {}) {
@@ -183,7 +215,10 @@ export class EditorApp {
 
     try {
       await this.putMapDocument(mapId, serialized);
-      localStorage.setItem(this.getStorageKey(mapId), JSON.stringify(serialized));
+      localStorage.setItem(
+        this.getStorageKey(mapId),
+        JSON.stringify(serialized),
+      );
 
       if (download) {
         this.downloadEditorMapJson(mapId, serialized);
@@ -198,10 +233,18 @@ export class EditorApp {
       this.setOperationStatus("error", "Save failed");
 
       try {
-        localStorage.setItem(this.getStorageKey(mapId), JSON.stringify(serialized));
-        console.warn(`Stored local recovery copy for map "${mapId}" after save failure`);
+        localStorage.setItem(
+          this.getStorageKey(mapId),
+          JSON.stringify(serialized),
+        );
+        console.warn(
+          `Stored local recovery copy for map "${mapId}" after save failure`,
+        );
       } catch (storageError) {
-        console.error(`Failed to store local recovery copy for map "${mapId}"`, storageError);
+        console.error(
+          `Failed to store local recovery copy for map "${mapId}"`,
+          storageError,
+        );
       }
 
       throw error;
@@ -313,7 +356,9 @@ export class EditorApp {
       } catch {
         // ignore JSON parse errors here and surface the status code below
       }
-      throw new Error(`Failed to load map "${mapId}": ${response.status}${details}`);
+      throw new Error(
+        `Failed to load map "${mapId}": ${response.status}${details}`,
+      );
     }
 
     return response.json();
@@ -345,7 +390,9 @@ export class EditorApp {
       } catch {
         // ignore JSON parse errors here and surface the status code below
       }
-      throw new Error(`Failed to save map "${mapId}": ${response.status}${details}`);
+      throw new Error(
+        `Failed to save map "${mapId}": ${response.status}${details}`,
+      );
     }
 
     return response.json();
@@ -403,9 +450,9 @@ export class EditorApp {
   }
 
   downloadEditorMapJson(mapId, serialized) {
-    const blob = new Blob([
-      JSON.stringify(serialized, null, 2),
-    ], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(serialized, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
@@ -420,7 +467,9 @@ export class EditorApp {
   onKeyDown(e) {
     const target = e.target;
     if (target instanceof HTMLElement) {
-      const isEditable = target.closest("input, textarea, select, [contenteditable='true']");
+      const isEditable = target.closest(
+        "input, textarea, select, [contenteditable='true']",
+      );
       if (isEditable) return;
     }
 

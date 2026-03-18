@@ -12,6 +12,12 @@ export class MapData {
     this.layerNames = layerNames;
     /** @type {Map<string, ChunkData>} */
     this.chunks = new Map();
+
+    // Dirty tracking
+    /** @type {Set<string>} chunk keys that changed since last consume */
+    this.dirtyChunks = new Set();
+    /** @type {Map<string, Set<string>>} chunk key → set of dirty layer names */
+    this.dirtyLayersByChunk = new Map();
   }
 
   // Minimal compat: old MapSerializer/MapValidator iterate mapData.layers
@@ -51,17 +57,76 @@ export class MapData {
   }
 
   getTile(layerName, x, y) {
-    if (!this.isInside(x, y)) return 0;
+    if (!this.isInside(x, y)) return -1;
     const { cx, cy, localX, localY } = this.worldToChunk(x, y);
     const chunk = this.getChunk(cx, cy);
-    if (!chunk) return 0;
+    if (!chunk) return -1;
     return chunk.getTile(layerName, localX, localY);
   }
 
+  /**
+   * Sets a tile value. Returns change metadata or null if no change occurred.
+   * @returns {{ cx: number, cy: number, layerName: string, x: number, y: number, prev: number, value: number } | null}
+   */
   setTile(layerName, x, y, value) {
-    if (!this.isInside(x, y)) return;
+    if (!this.isInside(x, y)) return null;
     const { cx, cy, localX, localY } = this.worldToChunk(x, y);
     const chunk = this.getOrCreateChunk(cx, cy);
+    const prev = chunk.getTile(layerName, localX, localY);
+    if (prev === value) return null;
     chunk.setTile(layerName, localX, localY, value);
+    this.markChunkDirty(cx, cy, layerName);
+    return { cx, cy, layerName, x, y, prev, value };
+  }
+
+  // --- Dirty tracking ---
+
+  markChunkDirty(cx, cy, layerName) {
+    const key = this.getChunkKey(cx, cy);
+    this.dirtyChunks.add(key);
+    if (layerName != null) {
+      let layers = this.dirtyLayersByChunk.get(key);
+      if (!layers) {
+        layers = new Set();
+        this.dirtyLayersByChunk.set(key, layers);
+      }
+      layers.add(layerName);
+    }
+  }
+
+  isChunkDirty(cx, cy) {
+    return this.dirtyChunks.has(this.getChunkKey(cx, cy));
+  }
+
+  clearChunkDirty(cx, cy) {
+    const key = this.getChunkKey(cx, cy);
+    this.dirtyChunks.delete(key);
+    this.dirtyLayersByChunk.delete(key);
+  }
+
+  clearAllDirty() {
+    this.dirtyChunks.clear();
+    this.dirtyLayersByChunk.clear();
+  }
+
+  /**
+   * Returns cloned dirty state and clears internal tracking.
+   * @returns {{ dirtyChunks: Set<string>, dirtyLayers: Map<string, Set<string>> }}
+   */
+  consumeDirtyChunks() {
+    const chunks = new Set(this.dirtyChunks);
+    const layers = new Map();
+    for (const [key, layerSet] of this.dirtyLayersByChunk) {
+      layers.set(key, new Set(layerSet));
+    }
+    this.clearAllDirty();
+    return { dirtyChunks: chunks, dirtyLayers: layers };
+  }
+
+  markAllDirty() {
+    for (const key of this.chunks.keys()) {
+      this.dirtyChunks.add(key);
+      this.dirtyLayersByChunk.set(key, new Set(this.layerNames));
+    }
   }
 }
