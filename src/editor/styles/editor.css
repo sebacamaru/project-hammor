@@ -180,3 +180,53 @@ canvas {
     padding: 0 10px;
     font-size: 12px;
 }
+
+/* Tiles panel */
+
+.editor-panel-left {
+    overflow-y: auto;
+}
+
+.tiles-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tiles-group-select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    color: white;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.tiles-group-select option {
+    background: #1a1a1a;
+    color: white;
+}
+
+.tiles-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+.tile-cell {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 2px;
+}
+
+.tile-cell:hover {
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.tile-cell.is-selected {
+    border-color: #4fc3f7;
+}

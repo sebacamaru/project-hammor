@@ -16,6 +16,7 @@ import { ToolbarPanel } from "./panels/ToolbarPanel.js";
 import { LayersPanel } from "./panels/LayersPanel.js";
 import { ToolsPanel } from "./panels/ToolsPanel.js";
 import { StatusBarPanel } from "./panels/StatusBarPanel.js";
+import { TilesPanel } from "./panels/TilesPanel.js";
 
 import { SceneEditor } from "./scenes/SceneEditor.js";
 import { EditorViewport } from "./EditorViewport.js";
@@ -62,6 +63,7 @@ export class EditorApp {
 
     // Panels
     this.toolbar = new ToolbarPanel(this.shell.toolbarEl, this.state);
+    this.tilesPanel = new TilesPanel(this.shell.leftPanelEl, this.state);
     this.layers = new LayersPanel(this.shell.rightPanelEl, this.state);
     this.tools = new ToolsPanel(this.shell.toolsEl, this.state);
     this.status = new StatusBarPanel(this.shell.statusBarEl, this.state);
