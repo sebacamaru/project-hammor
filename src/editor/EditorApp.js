@@ -110,6 +110,22 @@ export class EditorApp {
       });
     }
 
+    // Tool shortcuts
+    if (this.input.pressed("KeyB")) {
+      this.state.update((s) => { s.activeTool = "pencil"; });
+    }
+    if (this.input.pressed("KeyE")) {
+      this.state.update((s) => { s.activeTool = "eraser"; });
+    }
+    if (this.input.pressed("KeyI")) {
+      this.state.update((s) => { s.activeTool = "eyedropper"; });
+    }
+
+    // Grid toggle
+    if (this.input.pressed("KeyG")) {
+      this.state.update((s) => { s.showGrid = !s.showGrid; });
+    }
+
     this.scenes.update(dt);
   }
 

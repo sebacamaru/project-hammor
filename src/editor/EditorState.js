@@ -32,6 +32,7 @@ export class EditorState {
 
       editorScale: 1,
       uiVisible: true,
+      showGrid: true,
 
       dirtyChunks: new Set(),
 

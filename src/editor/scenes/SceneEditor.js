@@ -59,6 +59,9 @@ export class SceneEditor extends Scene {
     this.chunkDebug = new ChunkDebugOverlay(this.map, viewport);
     this.root.addChild(this.chunkDebug.container);
 
+    this.gridOverlay = new Graphics();
+    this.root.addChild(this.gridOverlay);
+
     this.brushPreview = new Sprite();
     this.brushPreview.alpha = 0.5;
     this.brushPreview.visible = false;
@@ -112,8 +115,54 @@ export class SceneEditor extends Scene {
     this.chunkRenderer.update(this.camera);
     this.collisionDebug.render(this.camera);
     this.chunkDebug.render(this.camera);
+    this.renderGrid();
     this.updateBrushPreview();
     this.updateHoverOverlay();
+  }
+
+  renderGrid() {
+    this.gridOverlay.clear();
+    if (!this.state.get().showGrid) {
+      this.gridOverlay.visible = false;
+      return;
+    }
+    this.gridOverlay.visible = true;
+
+    const ts = this.map.tileSize;
+    const vp = this.engine.renderer.viewport;
+    const viewW = vp.tilesX * ts;
+    const viewH = vp.tilesY * ts;
+    const mapW = this.map.width * ts;
+    const mapH = this.map.height * ts;
+
+    const startX = this.camera.x - ts;
+    const startY = this.camera.y - ts;
+    const endX = this.camera.x + viewW + ts;
+    const endY = this.camera.y + viewH + ts;
+
+    const y0 = Math.max(0, startY);
+    const y1 = Math.min(mapH, endY);
+    const x0 = Math.max(0, startX);
+    const x1 = Math.min(mapW, endX);
+    const drawH = y1 - y0;
+    const drawW = x1 - x0;
+
+    const firstCol = Math.floor(startX / ts);
+    const lastCol = Math.ceil(endX / ts);
+    const firstRow = Math.floor(startY / ts);
+    const lastRow = Math.ceil(endY / ts);
+
+    for (let col = firstCol; col <= lastCol; col++) {
+      const x = col * ts;
+      if (x < 0 || x >= mapW) continue;
+      this.gridOverlay.rect(x, y0, 1, drawH);
+    }
+    for (let row = firstRow; row <= lastRow; row++) {
+      const y = row * ts;
+      if (y < 0 || y >= mapH) continue;
+      this.gridOverlay.rect(x0, y, drawW, 1);
+    }
+    this.gridOverlay.fill({ color: 0xffffff, alpha: 0.12 });
   }
 
   updateBrushPreview() {
@@ -160,6 +209,7 @@ export class SceneEditor extends Scene {
   }
 
   destroy() {
+    this.gridOverlay?.destroy();
     this.brushPreview?.destroy();
     this.collisionDebug?.destroy();
     this.chunkDebug?.destroy();
