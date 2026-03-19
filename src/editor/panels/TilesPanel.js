@@ -1,4 +1,4 @@
-const TILE_DISPLAY_SIZE = 32; // 16px tiles rendered at 2x in the panel
+const TILE_DISPLAY_SIZE = 48; // 16px tiles rendered at 2x in the panel
 
 export class TilesPanel {
   constructor(el, state) {
@@ -108,7 +108,9 @@ export class TilesPanel {
     }
 
     const groups = this.getGroups();
-    const hasCurrentGroup = groups.some((group) => group.id === this.currentGroupId);
+    const hasCurrentGroup = groups.some(
+      (group) => group.id === this.currentGroupId,
+    );
     if (!hasCurrentGroup) {
       this.currentGroupId = groups[0]?.id ?? null;
       this.rebuildGroupOptions();
