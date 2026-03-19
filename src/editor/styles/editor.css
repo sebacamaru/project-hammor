@@ -1,7 +1,14 @@
+@font-face {
+    font-family: "Google Sans Code";
+    src: url("/fonts/GoogleSansCode-VariableFont_wght.ttf") format("truetype");
+    font-weight: 100 900;
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    font-family: "Google Sans Code", monospace;
 }
 
 html,
@@ -60,9 +67,9 @@ canvas {
 .editor-statusbar {
     pointer-events: auto;
     border: 1px solid rgba(255, 255, 255, 0.22);
-    background-color: rgba(0, 0, 0, 0.65);
+    background-color: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(6px);
-    border-radius: 12px;
+    border-radius: 8px;
     color: white;
 }
 
@@ -113,8 +120,10 @@ canvas {
 .toolbar-buttons,
 .tools-buttons {
     display: flex;
-    gap: 8px;
-    padding: 10px;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
 }
 
 .toolbar-buttons button,
@@ -123,9 +132,14 @@ canvas {
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(255, 255, 255, 0.06);
     color: white;
-    padding: 8px 12px;
+    padding: 14px 20px;
     border-radius: 10px;
     cursor: pointer;
+}
+
+.toolbar-buttons button {
+    font-size: 18px;
+    font-weight: lighter;
 }
 
 .toolbar-buttons button.is-active,
@@ -139,7 +153,7 @@ canvas {
 }
 
 .panel-title {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
     margin-bottom: 12px;
 }
