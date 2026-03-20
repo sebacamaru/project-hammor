@@ -65,7 +65,7 @@ export class SceneMap extends Scene {
       this._currentRegionRx = startEntry?.rx ?? 0;
       this._currentRegionRy = startEntry?.ry ?? 0;
 
-      const surroundings = this._getSurroundingRegionCoords(this._currentRegionRx, this._currentRegionRy);
+      const surroundings = this._getRegionCoordsInRadius(this._currentRegionRx, this._currentRegionRy, 1);
       await Promise.all(surroundings.map(({ rx, ry }) => this._ensureRegionLoaded(rx, ry)));
     } else {
       // No world data — load single map as direct region at (0,0)
@@ -315,10 +315,10 @@ export class SceneMap extends Scene {
     );
   }
 
-  _getSurroundingRegionCoords(rx, ry) {
+  _getRegionCoordsInRadius(rx, ry, radius) {
     const coords = [];
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
         coords.push({ rx: rx + dx, ry: ry + dy });
       }
     }
@@ -361,21 +361,23 @@ export class SceneMap extends Scene {
   }
 
   _syncRegions(rx, ry) {
-    // Build desired key set
-    const desired = new Set();
-    const surroundings = this._getSurroundingRegionCoords(rx, ry);
-    for (const coord of surroundings) {
-      desired.add(makeRegionKey(coord.rx, coord.ry));
+    // Load set (radius 1 = 3×3) — regions to ensure loaded
+    const loadCoords = this._getRegionCoordsInRadius(rx, ry, 1);
+
+    // Keep set (radius 2 = 5×5) — hysteresis to avoid thrashing
+    const keep = new Set();
+    for (const coord of this._getRegionCoordsInRadius(rx, ry, 2)) {
+      keep.add(makeRegionKey(coord.rx, coord.ry));
     }
 
     // Load desired first
-    for (const coord of surroundings) {
+    for (const coord of loadCoords) {
       this._ensureRegionLoaded(coord.rx, coord.ry);
     }
 
-    // Unload stale — skip regions still being loaded
+    // Unload only far-away regions — skip regions still being loaded
     for (const key of [...this.loadedRegions.keys()]) {
-      if (!desired.has(key) && !this._loadingKeys.has(key)) {
+      if (!keep.has(key) && !this._loadingKeys.has(key)) {
         this._unloadRegion(key);
       }
     }
