@@ -37,6 +37,36 @@ async function listJsonFileIds(dirPath) {
   }
 }
 
+// Reads the meta block from a single map file (authored first, runtime fallback).
+// Returns { id, name, width, height } — never throws.
+async function readMapMeta(id) {
+  const fallback = { id, name: id, width: null, height: null };
+  try {
+    const authoredPath = getAuthoredMapPath(id);
+    const runtimePath = getRuntimeMapPath(id);
+
+    let json = null;
+    if (await fileExists(authoredPath)) {
+      json = await readJsonFile(authoredPath);
+    } else if (await fileExists(runtimePath)) {
+      json = await readJsonFile(runtimePath);
+    }
+
+    // Authored format: meta.width/height; runtime format: top-level width/height
+    const meta = json.meta ?? json;
+    if (!meta) return fallback;
+
+    return {
+      id,
+      name: meta.name ?? meta.id ?? id,
+      width: typeof meta.width === "number" ? meta.width : null,
+      height: typeof meta.height === "number" ? meta.height : null,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 // Exposes the minimal list/load/save map API used by the editor.
 export async function registerMapRoutes(fastify) {
   fastify.get("/api/maps", async () => {
@@ -46,12 +76,7 @@ export async function registerMapRoutes(fastify) {
     ]);
     const ids = [...new Set([...authoredIds, ...runtimeIds])].sort();
 
-    return ids.map((id) => ({
-      id,
-      path: authoredIds.includes(id)
-        ? `content/maps/.authored/${id}.json`
-        : `content/maps/${id}.json`,
-    }));
+    return Promise.all(ids.map((id) => readMapMeta(id)));
   });
 
   fastify.get("/api/maps/:id", async (request, reply) => {

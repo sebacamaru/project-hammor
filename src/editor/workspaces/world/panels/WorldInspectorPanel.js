@@ -2,6 +2,7 @@ export class WorldInspectorPanel {
   constructor({ el }) {
     this.el = el;
     this._worldSection = null;
+    this._mapSection = null;
     this._cellSection = null;
 
     this._onAssignRequested = null;
@@ -97,13 +98,27 @@ export class WorldInspectorPanel {
     heightInput.addEventListener("change", handleSizeChange);
   }
 
-  renderCellInfo({ selectedCell, hoverCell, document, selectedMapId }) {
+  renderMapInfo(mapMeta) {
+    if (!mapMeta) {
+      this._mapSection.innerHTML = "";
+      return;
+    }
+    const dims = (mapMeta.width != null && mapMeta.height != null)
+      ? `${mapMeta.width} × ${mapMeta.height}` : "unknown";
+    this._mapSection.innerHTML = `
+      <div class="inspector-section-title">Map Properties</div>
+      <div class="info-row"><span class="info-label">Name</span><span class="info-value">${mapMeta.name || mapMeta.id}</span></div>
+      <div class="info-row"><span class="info-label">Size</span><span class="info-value">${dims}</span></div>
+    `;
+  }
+
+  renderCellInfo({ selectedCell, hoverCell, document, selectedMapId, isSelectedMapCompatible }) {
     if (selectedCell) {
       const cell = document.getCell(selectedCell.rx, selectedCell.ry);
       if (cell) {
-        this._renderOccupiedCell(selectedCell, cell, document, selectedMapId);
+        this._renderOccupiedCell(selectedCell, cell, document, selectedMapId, isSelectedMapCompatible);
       } else {
-        this._renderEmptyCell(selectedCell, document, selectedMapId);
+        this._renderEmptyCell(selectedCell, document, selectedMapId, isSelectedMapCompatible);
       }
     } else if (hoverCell) {
       const cell = document.getCell(hoverCell.rx, hoverCell.ry);
@@ -123,6 +138,7 @@ export class WorldInspectorPanel {
   destroy() {
     this.el.innerHTML = "";
     this._worldSection = null;
+    this._mapSection = null;
     this._cellSection = null;
   }
 
@@ -132,25 +148,32 @@ export class WorldInspectorPanel {
     this._worldSection = document.createElement("div");
     this._worldSection.className = "world-inspector-world";
 
+    this._mapSection = document.createElement("div");
+    this._mapSection.className = "world-inspector-map";
+
     this._cellSection = document.createElement("div");
     this._cellSection.className = "world-inspector-cell";
 
     this.el.appendChild(this._worldSection);
+    this.el.appendChild(this._mapSection);
     this.el.appendChild(this._cellSection);
   }
 
-  _renderEmptyCell(selectedCell, doc, selectedMapId) {
+  _renderEmptyCell(selectedCell, doc, selectedMapId, isSelectedMapCompatible) {
     const { rx, ry } = selectedCell;
-    const canAssign = selectedMapId && doc.canAssignMap(rx, ry, selectedMapId);
+    const canAssign = selectedMapId && isSelectedMapCompatible && doc.canAssignMap(rx, ry, selectedMapId);
     const assignDisabled = canAssign ? "" : "disabled";
     const canCreate = doc.canPlaceAt(rx, ry);
     const createDisabled = canCreate ? "" : "disabled";
+    const compatHint = selectedMapId && !isSelectedMapCompatible
+      ? '<div class="inspector-compat-msg">Selected map is incompatible with this world size</div>' : "";
 
     this._cellSection.innerHTML = `
       <div class="inspector-section-title">Selected Cell</div>
       <div class="info-row"><span class="info-label">Position</span><span class="info-value">${rx}, ${ry}</span></div>
       <div class="info-row"><span class="info-label">Map</span><span class="info-value">empty</span></div>
       <div class="info-row"><span class="info-label">Selected Map</span><span class="info-value">${selectedMapId ?? "none"}</span></div>
+      ${compatHint}
       <button class="inspector-action" data-action="assign" ${assignDisabled}>Assign Selected Map</button>
       <button class="inspector-action" data-action="create" ${createDisabled}>Create Map Here</button>
     `;
@@ -161,17 +184,21 @@ export class WorldInspectorPanel {
       ?.addEventListener("click", () => this._onCreateMapRequested?.());
   }
 
-  _renderOccupiedCell(selectedCell, cell, doc, selectedMapId) {
+  _renderOccupiedCell(selectedCell, cell, doc, selectedMapId, isSelectedMapCompatible) {
     const { rx, ry } = selectedCell;
     const canReplace = selectedMapId
+      && isSelectedMapCompatible
       && selectedMapId !== cell.mapId
       && !doc.findMapUsage(selectedMapId);
     const replaceDisabled = canReplace ? "" : "disabled";
+    const compatHint = selectedMapId && !isSelectedMapCompatible
+      ? '<div class="inspector-compat-msg">Selected map is incompatible with this world size</div>' : "";
 
     this._cellSection.innerHTML = `
       <div class="inspector-section-title">Selected Cell</div>
       <div class="info-row"><span class="info-label">Position</span><span class="info-value">${rx}, ${ry}</span></div>
       <div class="info-row"><span class="info-label">Map</span><span class="info-value">${cell.mapId}</span></div>
+      ${compatHint}
       <button class="inspector-action" data-action="open">Open Map</button>
       <button class="inspector-action" data-action="remove">Remove from World</button>
       <button class="inspector-action" data-action="replace" ${replaceDisabled}>Replace with Selected Map</button>

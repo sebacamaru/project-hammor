@@ -18,6 +18,7 @@ export class WorldGridView {
 
     this._onHover = null;
     this._onSelect = null;
+    this._isMapCompatible = null;
     this._lastHoverKey = null;
 
     // Pan state
@@ -78,6 +79,10 @@ export class WorldGridView {
 
   onSelect(cb) {
     this._onSelect = cb;
+  }
+
+  setCompatibilityCheck(fn) {
+    this._isMapCompatible = fn;
   }
 
   screenToCell(canvasX, canvasY) {
@@ -184,7 +189,8 @@ export class WorldGridView {
 
     // Ghost preview for valid placement
     const { selectedMapId } = this.state;
-    if (hoverCell && selectedMapId
+    const isCompat = this._isMapCompatible ? this._isMapCompatible(selectedMapId) : true;
+    if (hoverCell && selectedMapId && isCompat
         && this.document.canAssignMap(hoverCell.rx, hoverCell.ry, selectedMapId)) {
       const { x, y } = this._cellToScreen(hoverCell.rx, hoverCell.ry);
       ctx.fillStyle = "rgba(80, 200, 130, 0.25)";

@@ -164,6 +164,12 @@
     margin-bottom: 12px;
 }
 
+.world-inspector-map:not(:empty) {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 8px;
+    margin-bottom: 8px;
+}
+
 .world-inspector-cell {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding-top: 8px;
@@ -241,12 +247,48 @@
     margin-top: 4px;
 }
 
+/* Library item layout */
+
+.world-library-item-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.world-library-item-meta {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.35);
+    margin-top: 1px;
+}
+
 /* Library used marker */
 
 .world-library-item.is-used::after {
     content: "•";
     margin-left: 6px;
     color: rgba(80, 130, 200, 0.7);
+}
+
+/* Incompatible map items */
+
+.world-library-item.is-incompatible {
+    opacity: 0.4;
+}
+
+.world-library-badge-incompatible {
+    font-size: 9px;
+    color: rgba(255, 180, 80, 0.8);
+    margin-left: 6px;
+    font-style: italic;
+}
+
+/* Inspector compatibility hint */
+
+.inspector-compat-msg {
+    font-size: 10px;
+    color: rgba(255, 180, 80, 0.6);
+    font-style: italic;
+    margin-top: 4px;
 }
 
 /* Status bar */

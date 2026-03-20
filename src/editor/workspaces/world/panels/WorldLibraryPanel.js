@@ -39,12 +39,12 @@ export class WorldLibraryPanel {
   }
 
   hasMap(mapId) {
-    return this._maps.includes(mapId);
+    return this._maps.some((m) => m.id === mapId);
   }
 
-  addMap(mapId) {
-    if (!this._maps.includes(mapId)) {
-      this._maps.push(mapId);
+  addMap(mapObj) {
+    if (!this._maps.some((m) => m.id === mapObj.id)) {
+      this._maps.push(mapObj);
       this._renderMaps();
     }
   }
@@ -161,11 +161,31 @@ export class WorldLibraryPanel {
     // Map list
     const list = document.createElement("div");
     list.className = "world-library-list";
-    for (const mapId of this._maps) {
+    for (const map of this._maps) {
       const item = document.createElement("div");
       item.className = "world-library-item";
-      item.dataset.mapId = mapId;
-      item.textContent = mapId;
+      item.dataset.mapId = map.id;
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "world-library-item-name";
+      nameEl.textContent = map.name || map.id;
+      item.appendChild(nameEl);
+
+      if (map.width != null && map.height != null) {
+        const metaEl = document.createElement("div");
+        metaEl.className = "world-library-item-meta";
+        metaEl.textContent = `${map.width} × ${map.height}`;
+        item.appendChild(metaEl);
+      }
+
+      if (map.compatible === false) {
+        item.classList.add("is-incompatible");
+        const badge = document.createElement("span");
+        badge.className = "world-library-badge-incompatible";
+        badge.textContent = "incompatible";
+        item.appendChild(badge);
+      }
+
       list.appendChild(item);
     }
     list.addEventListener("click", this._onMapClick);

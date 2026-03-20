@@ -6,6 +6,7 @@ import { WorldHistory } from "./WorldHistory.js";
 import { WorldGridView } from "./WorldGridView.js";
 import { WorldLibraryPanel } from "./panels/WorldLibraryPanel.js";
 import { WorldInspectorPanel } from "./panels/WorldInspectorPanel.js";
+import { EDITOR_SERVER_ORIGIN } from "../map/MapEditorConfig.js";
 
 export class WorldEditorApp {
   constructor() {
@@ -28,6 +29,8 @@ export class WorldEditorApp {
     this.worlds = [];
     this.activeWorldId = null;
     this._worldCounter = 0;
+    this._mapCatalog = [];
+    this._isMounted = false;
 
     this.statusMessage = "";
     this._statusVersion = 0;
@@ -36,6 +39,7 @@ export class WorldEditorApp {
   }
 
   async mount(host, editor) {
+    this._isMounted = true;
     this.host = host;
     this.editor = editor || null;
 
@@ -87,6 +91,7 @@ export class WorldEditorApp {
       state: this.state,
     });
     this.gridView.mount(gridSlot);
+    this.gridView.setCompatibilityCheck((mapId) => this._isMapCompatible(mapId));
 
     this.gridView.onHover((cell) => {
       this.state.hoverCell = cell;
@@ -95,6 +100,7 @@ export class WorldEditorApp {
         hoverCell: cell,
         document: this.document,
         selectedMapId: this.state.selectedMapId,
+        isSelectedMapCompatible: this.state.selectedMapId ? this._isMapCompatible(this.state.selectedMapId) : false,
       });
       this.gridView.render();
     });
@@ -116,6 +122,7 @@ export class WorldEditorApp {
           hoverCell: this.state.hoverCell,
           document: this.document,
           selectedMapId: this.state.selectedMapId,
+          isSelectedMapCompatible: selectedMapId ? this._isMapCompatible(selectedMapId) : false,
         });
       }
     });
@@ -127,8 +134,9 @@ export class WorldEditorApp {
 
     // Library panel
     this.libraryPanel = new WorldLibraryPanel({ el: librarySlot });
-    this.libraryPanel.setMaps(["town", "forest", "dungeon"]);
+    this.libraryPanel.setMaps([]);
     this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
+    this._fetchMapCatalog();
 
     this.libraryPanel.onWorldSelected((worldId) => this._loadWorld(worldId));
     this.libraryPanel.onCreateWorld(() => this._createWorld());
@@ -137,11 +145,13 @@ export class WorldEditorApp {
     this.libraryPanel.onMapSelected((mapId) => {
       this.state.selectedMapId = mapId;
       this.libraryPanel.setSelectedMapId(mapId);
+      this.inspectorPanel.renderMapInfo(this._getMapMeta(mapId));
       this.inspectorPanel.renderCellInfo({
         selectedCell: this.state.selectedCell,
         hoverCell: this.state.hoverCell,
         document: this.document,
         selectedMapId: mapId,
+        isSelectedMapCompatible: mapId ? this._isMapCompatible(mapId) : false,
       });
       this.gridView.render();
     });
@@ -154,7 +164,9 @@ export class WorldEditorApp {
       hoverCell: null,
       document: this.document,
       selectedMapId: null,
+      isSelectedMapCompatible: false,
     });
+    this.inspectorPanel.renderMapInfo(null);
 
     this.inspectorPanel.onAssignRequested(() => {
       const { selectedCell, selectedMapId } = this.state;
@@ -198,7 +210,10 @@ export class WorldEditorApp {
       this.history.push({ type: "create", rx, ry, before, after: { mapId: newMapId } });
       this.isDirty = true;
       this.state.selectedMapId = newMapId;
-      this.libraryPanel.addMap(newMapId);
+      const ms = this.document.getMapSize();
+      const entry = { id: newMapId, name: newMapId, width: ms.width, height: ms.height };
+      this._mapCatalog.push(entry);
+      this.libraryPanel.setMaps(this._getLibraryMaps());
       this.libraryPanel.setSelectedMapId(newMapId);
       this._renderAll();
       this._syncHistoryButtons();
@@ -231,6 +246,7 @@ export class WorldEditorApp {
       if (!accepted) return;
       this.isDirty = true;
       this._saveActiveWorldState();
+      this.libraryPanel.setMaps(this._getLibraryMaps());
       this._renderAll();
       this._setStatus("Map size updated");
     });
@@ -296,6 +312,8 @@ export class WorldEditorApp {
   }
 
   unmount() {
+    this._isMounted = false;
+
     if (this._onKeyDown) {
       window.removeEventListener("keydown", this._onKeyDown);
       this._onKeyDown = null;
@@ -389,6 +407,8 @@ export class WorldEditorApp {
     this.isDirty = false;
 
     this.gridView.setDocument(this.document);
+    this.libraryPanel.setMaps(this._getLibraryMaps());
+    this.inspectorPanel.renderMapInfo(null);
     this._renderAll();
     this._syncHistoryButtons();
     this.gridView.centerOnContent();
@@ -433,7 +453,32 @@ export class WorldEditorApp {
 
   // --- document mutations ---
 
+  _getMapMeta(mapId) {
+    if (!mapId) return null;
+    return this._mapCatalog.find(m => m.id === mapId) || null;
+  }
+
+  _isMapCompatible(mapId) {
+    const mapSize = this.document?.getMapSize();
+    if (!mapSize || mapSize.width == null || mapSize.height == null) return false;
+    const map = this._mapCatalog.find(m => m.id === mapId);
+    if (!map || map.width == null || map.height == null) return false;
+    return map.width === mapSize.width && map.height === mapSize.height;
+  }
+
+  _getLibraryMaps() {
+    const mapSize = this.document?.getMapSize();
+    const hasValidSize = mapSize && mapSize.width != null && mapSize.height != null;
+    return this._mapCatalog.map(m => ({
+      ...m,
+      compatible: hasValidSize
+        && m.width != null && m.height != null
+        && m.width === mapSize.width && m.height === mapSize.height,
+    }));
+  }
+
   _assignMapToCell(rx, ry, mapId) {
+    if (!this._isMapCompatible(mapId)) return false;
     if (!this.document.canAssignMap(rx, ry, mapId)) return false;
     const prev = this.document.getCell(rx, ry);
     const before = prev ? { mapId: prev.mapId } : null;
@@ -455,6 +500,7 @@ export class WorldEditorApp {
   _replaceCell(rx, ry, mapId) {
     if (!this.document.hasCell(rx, ry)) return false;
     if (!mapId) return false;
+    if (!this._isMapCompatible(mapId)) return false;
     const current = this.document.getCell(rx, ry);
     if (current.mapId === mapId) return false;
     if (this.document.findMapUsage(mapId)) return false;
@@ -467,10 +513,29 @@ export class WorldEditorApp {
 
   _generateMapId() {
     let i = 1;
-    while (this.libraryPanel.hasMap(`map_${i}`)) {
+    while (this._mapCatalog.some((m) => m.id === `map_${i}`)) {
       i++;
     }
     return `map_${i}`;
+  }
+
+  // --- map catalog ---
+
+  async _fetchMapCatalog() {
+    try {
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/maps`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!this._isMounted) return;
+      this._mapCatalog = Array.isArray(data) ? data : [];
+      this.libraryPanel.setMaps(this._getLibraryMaps());
+      this._syncLibraryUsed();
+    } catch {
+      if (!this._isMounted) return;
+      this._mapCatalog = [];
+      this.libraryPanel.setMaps([]);
+      this._setStatus("Failed to load maps");
+    }
   }
 
   // --- undo / redo ---
@@ -532,11 +597,13 @@ export class WorldEditorApp {
   _renderAll() {
     this.gridView.render();
     this.inspectorPanel.renderWorldInfo(this.document);
+    this.inspectorPanel.renderMapInfo(this._getMapMeta(this.state.selectedMapId));
     this.inspectorPanel.renderCellInfo({
       selectedCell: this.state.selectedCell,
       hoverCell: this.state.hoverCell,
       document: this.document,
       selectedMapId: this.state.selectedMapId,
+      isSelectedMapCompatible: this.state.selectedMapId ? this._isMapCompatible(this.state.selectedMapId) : false,
     });
     this._syncLibraryUsed();
   }
