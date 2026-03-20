@@ -108,7 +108,7 @@ window resize → Renderer.resize()
 ## Data model (shared/data/)
 
 ### Map data (chunk-based)
-- **MapData**: width, height, tileSize, chunkSize, layerNames, chunks Map<string, ChunkData>. getTile/setTile delegate to chunks via worldToChunk().
+- **MapData**: width, height, tileSize, chunkSize, layerNames, chunks Map<string, ChunkData>. getTile/setTile delegate to chunks via worldToChunk(). Has dirty tracking (`dirtyChunks`, `markChunkDirty()`, `consumeDirty()`). `setTile()` returns change metadata or null. `getTile()` returns -1 for out-of-bounds.
 - **ChunkData**: cx, cy, chunkSize, layers Map<string, Int16Array> (filled with -1). getTile/setTile with bounds checks. Out-of-bounds returns -1.
 - **GameMap**: static facade — `GameMap.load(url)` delegates to MapLoader.
 - **TileCollision**: static `collidesWithLayer(map, layerName, x, y, hitbox)` — AABB vs tile grid check.
@@ -157,12 +157,14 @@ window resize → Renderer.resize()
 
 ## Tilemap rendering (chunk-based)
 - **MapChunkRenderer**: manages ChunkLayerViews for visible chunks. One Container per layer for z-order control.
-  - Determines visible chunks from camera position + viewport size
+  - Uses **VisibleChunkTracker** to compute enter/exit diff per frame (incremental mount/hide)
   - Lazily creates ChunkLayerView when chunk enters view for first time
   - Hides (visible=false) chunk views that leave the viewport
   - Tracks empty chunk+layer combos to skip re-checking
   - Caches tile Textures (sliced from atlas) in a Map<tileId, Texture>
   - `rebuildChunk(cx, cy)` for editor/dynamic tile changes
+  - Exposes `_lastVisible`, `_lastEntered`, `_lastExited` for debug overlay
+- **VisibleChunkTracker**: pure chunk visibility differ. `update(camX, camY, viewW, viewH)` → `{ entered, exited, visible }` Sets.
 - **ChunkLayerView**: Container of Sprites for one chunk's one layer. Positioned at world coords (cx * chunkSize * tileSize).
 - Z-order in SceneMap: ground container → ground_detail container → entities → fringe container
 
@@ -178,67 +180,105 @@ window resize → Renderer.resize()
 - Game logic keeps float coordinates — rounding is render-only
 - `roundPixels: true` in PixiJS as GPU-level safety net
 
-## Editor architecture
+## Editor architecture (shell + workspaces)
+
+The editor uses a **shell + workspaces** pattern. `EditorShell` manages tabs and workspace lifecycle. Each workspace is an independent module with its own DOM, state, and tools.
+
+### Shell layer
 ```
-EditorApp (orchestrator) — src/editor/EditorApp.js
-├── EditorShell       — HTML layout (toolbar, viewport, side panels, status bar)
-├── EditorState       — central state: activeTool, activeLayer, visibleLayers,
+EditorShell — src/editor/shell/EditorShell.js
+├── ShellState         — active workspace ID, pub-sub
+├── WorkspaceRegistry  — factory map for workspace creation
+├── Tab bar            — one tab per registered workspace
+└── Ctrl+S delegation  — routes to active workspace's save() if canSave()
+```
+
+**Workspace interface**: `mount(host)`, `unmount()`, `resize()`, `update(dt)`, `canSave()`, `save()`, `getTitle()`
+
+### Map workspace (MapEditorApp)
+```
+MapEditorApp — src/editor/workspaces/map/MapEditorApp.js
+├── MapEditorLayout   — HTML layout (viewport, toolbar, panels, status bar)
+├── MapEditorState    — central state: activeTool, activeLayer, visibleLayers,
 │                       selectedBrush, camera {x,y,zoom}, map, hoverTile, dirty
-├── MapDocument       — editor/document/ — authoring data (Uint16Array flat, 0xffff=empty)
+├── MapDocument       — authoring data (Uint16Array flat, 0xffff=empty)
 │   ├── event subscription system (subscribe/emit)
 │   ├── write-lock safety (withWriteLock)
 │   └── dirty tracking
-├── History           — editor/history/ — undo/redo (command pattern)
+├── History           — undo/redo (command pattern)
 │   ├── PaintTilesCommand — stores forward + inverse tile changes
 │   └── EraseTilesCommand — sets tiles to -1
-├── RuntimeMapBridge  — editor/runtime/ — MapDocument → MapData (full rebuild)
-├── EditorViewport    — canvas mouse/keyboard events → pointer context → ToolManager
+├── RuntimeMapBridge  — MapDocument → MapData (full rebuild)
+├── MapEditorViewport — canvas mouse/keyboard events → pointer context → ToolManager
 │   └── Temporary pan activation: Space+left drag or middle mouse drag
 ├── ToolManager       — tool registry, temporaryToolId for transient tool switching
-│   ├── PanTool           — camera drag (compensates viewport.scale * zoom)
-│   ├── PencilTool        — paint selected tile (executes PaintTilesCommand)
-│   ├── EraseTool         — set tile to -1 (executes EraseTilesCommand)
-│   └── EyedropperTool    — pick tile from map, auto-switch to pencil
+│   ├── PanTool / PencilTool / EraseTool / EyedropperTool
 ├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel, TilesPanel
 │   └── TilesPanel    — group selector + tile picker grid (from tileset.editor.groups)
 ├── SceneEditor       — loads map, Camera (freeMode), MapChunkRenderer, clampEditorCamera
-├── Renderer          — shared, PixiJS Application + dynamic viewport
-├── Input             — shared, polling-based keyboard state
-├── SceneManager      — shared, scene stack
-├── GameLoop          — shared, fixed timestep + RAF
-└── DebugOverlay      — shared, FPS/stats (Escape to toggle)
+├── Renderer / Input / SceneManager / GameLoop / DebugOverlay (shared)
+└── Shortcuts: B pencil, E eraser, I eyedropper, G grid, Tab toggle UI, Escape debug
 ```
 
-### Editor document model
+#### Map document model
 - **MapDocument** stores tile data as flat `Uint16Array` (0xffff = empty sentinel, converts to/from -1 at runtime boundary)
 - Tools inject document/history via closures: `getDocument()` and `getHistory()`
-- On tile edit: tool creates a command → history executes it → MapDocument emits change → EditorApp triggers `rebuildFullMap()`
+- On tile edit: tool creates a command → history executes it → MapDocument emits change → MapEditorApp triggers `rebuildFullMap()`
 - `rebuildFullMap()` converts MapDocument → MapData via RuntimeMapBridge, then loads tileset via TilesetRegistry
 
-### Editor persistence (editor-server)
+#### Map editor persistence (editor-server)
 - **editor-server** (`tools/editor-server/`): Fastify on port 3032 (localhost only, CORS for local dev origins)
 - **Routes**: `GET /api/maps` (list), `GET /api/maps/:id` (load), `PUT /api/maps/:id` (save), `GET /api/tilesets/:id`
-- **Save flow**: `EditorApp.saveMap()` → PUT authored JSON to editor-server → server writes both:
+- **Save flow**: `MapEditorApp.saveMap()` → PUT authored JSON to editor-server → server writes both:
   - `content/maps/.authored/{id}.json` — editor-native format (flat Uint16Array layers)
   - `content/maps/{id}.json` — runtime format (chunk-based, for client/server consumption)
 - **Backups**: timestamped copies saved to `content/maps/.backup/` before each overwrite
 - **Load flow**: editor-server returns authored JSON; if only runtime exists, converts via `runtimeToAuthoredJson()`
 - **Codecs** (`map-codecs.js`): reuses editor's `MapSerializer` + `RuntimeMapBridge` for authored↔runtime conversion
-- **Status UX**: `EditorState.saveStatus` (idle/saving/saved/error) → `StatusBarPanel` shows save feedback
-- **Config**: `EDITOR_SERVER_ORIGIN` in `EditorConfig.js` (`http://localhost:3032`)
+- **Status UX**: `MapEditorState.saveStatus` (idle/saving/saved/error) → `StatusBarPanel` shows save feedback
+- **Config**: `EDITOR_SERVER_ORIGIN` in `MapEditorConfig.js` (`http://localhost:3032`)
 - Keyboard shortcuts: **Ctrl+Z** undo, **Ctrl+Shift+Z / Ctrl+Y** redo, **Ctrl+S** save, **Ctrl+R** reload
 
-### Editor navigation
+#### Map editor navigation
 - **Pan**: Space+left drag or middle mouse drag activates temporary pan tool. Cursor changes to "move".
 - **Pan speed**: PanTool divides mouse delta by `viewportScale * zoom` for 1:1 visual tracking.
 - **Camera clamp**: `clampEditorCamera(camera, mapWPx, mapHPx, viewport)` allows half-viewport margin around map, so any corner can be centered on screen.
-- **Pointer context**: EditorViewport builds `{screenX/Y, worldX/Y, tileX/Y, viewportScale}` from mouse events.
+- **Pointer context**: MapEditorViewport builds `{screenX/Y, worldX/Y, tileX/Y, viewportScale}` from mouse events.
 
-### Editor state flow
-- EditorState is the single source of truth for camera position
+#### Map editor state flow
+- MapEditorState is the single source of truth for camera position
 - SceneEditor.update() clamps state.camera, then copies to visual Camera with Math.floor
 - PanTool modifies state.camera directly
 - ToolManager.temporaryToolId overrides state.activeTool without changing UI selection
+
+### World workspace (WorldEditorApp)
+```
+WorldEditorApp — src/editor/workspaces/world/WorldEditorApp.js
+├── WorldDocument      — cell-based world data (Map<"rx,ry", {mapId}>)
+│   ├── canPlaceAt()   — orthogonal adjacency constraint
+│   ├── canAssignMap()  — not already used + can place
+│   ├── findMapUsage() — locate map in world grid
+│   └── getBounds()    — min/max rx/ry
+├── WorldGridView      — Canvas 2D renderer (64px base cell, zoom 0.5–2.5)
+│   ├── Occupied cells (blue) with map ID label
+│   ├── Empty neighbors (dashed "+" indicators)
+│   ├── Ghost preview for valid placement
+│   └── Pan (middle mouse), zoom (scroll wheel), click select
+├── WorldEditorState   — selectedCell, hoverCell, selectedMapId, activeTool, zoom, pan
+├── WorldHistory       — undo/redo stack (assign/remove/replace/create entries)
+├── WorldLibraryPanel  — map catalog list, usage indicators (dot)
+├── WorldInspectorPanel — world info + cell info + action buttons
+│   └── Actions: assign map, remove from world, replace, create map, open map
+└── Shortcuts: F center, 1/2/3 place/replace/erase, G grid, Ctrl+Z/Y undo/redo
+```
+
+#### World document model
+- Cells stored as `Map<string, { mapId }>` where key = `"rx,ry"`
+- Adjacency constraint: new cells must be orthogonally connected to existing cells
+- Utilities: `worldKey.js` (key encode/parse), `worldAdjacency.js` (neighbor helpers), `worldBounds.js` (bounding box)
+
+### Database workspace (placeholder)
+- `DatabaseEditorApp` — registered but shows "Coming soon"
 
 ## Server architecture (skeleton)
 - **ServerApp**: setInterval-based tick loop (no RAF). Imports only shared/core/ and shared/data/.

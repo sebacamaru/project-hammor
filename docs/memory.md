@@ -8,7 +8,8 @@
 - Fixed timestep at 20Hz, variable render with interpolation
 
 ## Architecture decisions
-- **Modular separation**: shared/ (reusable), client/ (game), editor/ (tools), server/ (headless)
+- **Modular separation**: shared/ (reusable), client/ (game), editor/ (shell + workspaces), server/ (headless)
+- **Editor shell + workspaces**: EditorShell manages tabs/lifecycle, each workspace (map, world, database) is independent with own DOM/state/tools
 - **Dependency rules**: server never imports from shared/render/ or shared/assets/
 - Entity/visual separation: Entity.js is pure data in shared/, renderers in shared/render/
 - Client-specific gameplay (Player, PlayerView, Input) lives in client/
@@ -37,12 +38,13 @@
 - `src/shared/render/ResolutionManager.js` — pure function: computeViewport()
 - `src/shared/render/ViewportState.js` — plain data class (scale, tiles, dimensions, offsets)
 - `src/shared/render/Camera.js` — follows player, bounds clamping, debug free mode (IJKL)
-- `src/shared/render/MapChunkRenderer.js` — chunk-based tilemap rendering (Sprites from atlas)
+- `src/shared/render/MapChunkRenderer.js` — chunk-based tilemap rendering (Sprites from atlas, uses VisibleChunkTracker)
+- `src/shared/render/VisibleChunkTracker.js` — chunk enter/exit diff tracking per frame
 - `src/shared/render/ChunkLayerView.js` — single chunk+layer Sprite container
 - `src/shared/render/EntityRenderer.js` — entity→sprite sync with interpolation
 - `src/shared/render/DebugOverlay.js` — FPS/stats, toggled with Escape
 - `src/shared/data/TileCollision.js` — AABB vs tile-layer collision check
-- `src/shared/data/models/MapData.js` — chunk-based map data (width, height, chunks)
+- `src/shared/data/models/MapData.js` — chunk-based map data (width, height, chunks, dirty tracking)
 - `src/shared/data/models/ChunkData.js` — single chunk tile data (layers of Int16Array, filled with -1)
 - `src/shared/data/models/GameMap.js` — static loader facade
 - `src/shared/data/models/Entity.js` — base entity data (no PixiJS)
@@ -55,17 +57,25 @@
 - `src/shared/assets/AssetsManager.js` — PixiJS Assets wrapper
 - `src/shared/assets/AssetManifest.js` — bundle definitions
 - `src/shared/assets/SpriteSheetSlicer.js` — texture slicing utility
-- `src/editor/EditorApp.js` — editor orchestrator (save flow via editor-server)
-- `src/editor/EditorShell.js` — HTML layout
-- `src/editor/EditorConfig.js` — EDITOR_SERVER_ORIGIN constant
-- `src/editor/EditorState.js` — central editor state (includes saveStatus)
-- `src/editor/EditorViewport.js` — canvas mouse/keyboard events → ToolManager
-- `src/editor/scenes/SceneEditor.js` — main editor scene
-- `src/editor/tools/ToolManager.js` — tool registry + temporary tool
-- `src/editor/tools/PanTool.js` — camera drag
-- `src/editor/tools/PencilTool.js` — paint tiles
-- `src/editor/tools/EraseTool.js` — erase tiles (set to -1)
-- `src/editor/utils/clampEditorCamera.js` — editor camera clamp (half-viewport margins)
+- `src/editor/main.js` — editor entry point (registers workspaces)
+- `src/editor/shell/EditorShell.js` — top-level shell (tabs, workspace lifecycle, Ctrl+S delegation)
+- `src/editor/shell/ShellState.js` — active workspace ID, pub-sub
+- `src/editor/shell/WorkspaceRegistry.js` — factory registry for workspace creation
+- `src/editor/workspaces/map/MapEditorApp.js` — map workspace orchestrator (save flow via editor-server)
+- `src/editor/workspaces/map/MapEditorLayout.js` — HTML layout (viewport, toolbar, panels, status bar)
+- `src/editor/workspaces/map/MapEditorState.js` — central map editor state (includes saveStatus)
+- `src/editor/workspaces/map/MapEditorViewport.js` — canvas mouse/keyboard events → ToolManager
+- `src/editor/workspaces/map/MapEditorConfig.js` — EDITOR_SERVER_ORIGIN constant
+- `src/editor/workspaces/map/scenes/SceneEditor.js` — main map editor scene
+- `src/editor/workspaces/map/tools/ToolManager.js` — tool registry + temporary tool
+- `src/editor/workspaces/map/utils/clampEditorCamera.js` — editor camera clamp (half-viewport margins)
+- `src/editor/workspaces/world/WorldEditorApp.js` — world workspace orchestrator (grid + panels + history)
+- `src/editor/workspaces/world/WorldDocument.js` — cell-based world data (Map<"rx,ry", {mapId}>)
+- `src/editor/workspaces/world/WorldGridView.js` — Canvas 2D grid renderer (zoom/pan, cell interaction)
+- `src/editor/workspaces/world/WorldHistory.js` — undo/redo stack (before/after cell entries)
+- `src/editor/workspaces/world/WorldEditorState.js` — view state (selection, hover, zoom, pan)
+- `src/editor/workspaces/world/panels/WorldLibraryPanel.js` — map catalog with usage indicators
+- `src/editor/workspaces/world/panels/WorldInspectorPanel.js` — world/cell info + action buttons
 - `tools/editor-server/src/server.js` — Fastify dev server (port 3032)
 - `tools/editor-server/src/routes/maps.js` — map list/load/save API
 - `tools/editor-server/src/routes/tilesets.js` — tileset API
@@ -86,13 +96,16 @@
 - Modular architecture implemented: client/editor/server/shared
 - Core client architecture working: viewport, rendering, entities, input, scenes
 - Chunk-based map system: MapData + ChunkData, JSON map loading with tileset metadata
+- MapData dirty tracking: `dirtyChunks`, `setTile()` returns change metadata, `getTile()` returns -1 for out-of-bounds
 - Multi-layer tilemap: ground, ground_detail, fringe (above entities), collision
-- MapChunkRenderer: Sprite-based chunk rendering with lazy texture cache from atlas
+- MapChunkRenderer: Sprite-based chunk rendering with VisibleChunkTracker (incremental enter/exit diff)
 - Tile collision: AABB hitbox vs collision layer, per-axis resolve in Player
-- Debug overlays: collision (red), hitbox (cyan), tile grid (blue), chunk boundaries (red)
+- Debug overlays: collision (red), hitbox (cyan), tile grid (blue), chunk boundaries (red), chunk streaming info
 - Player animated sprite from spritesheet (4x31 frames, 16x16)
 - Content structure: atlas/, maps/, tilesets/, sprites/, dialogue/, interactions/, items/, npcs/, objects/, skills/
-- Editor functional: tools (pan/pencil/eraser), panels, viewport with navigation (Space+drag, middle mouse), camera clamp
+- Editor: shell + workspaces architecture (map, world, database placeholder)
+- Map editor: PixiJS-based tile editor with tools (pan/pencil/eraser/eyedropper), panels, viewport navigation
+- World editor: Canvas 2D grid editor for placing maps on a world grid (adjacency constraints, library, inspector)
 - Editor-server: Fastify dev server (port 3032) for save/load, dual-format persistence (authored + runtime), auto-backups
 - Empty tile is -1 (EMPTY_TILE), tile IDs are 0-indexed into atlas, Int16Array storage
 - Server is stub, not functional

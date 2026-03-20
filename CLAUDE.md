@@ -27,7 +27,7 @@
 src/
 ├── shared/    Reusable by client, editor, and server
 ├── client/    Game runtime (PixiJS + gameplay)
-├── editor/    Map editor (PixiJS + editing tools)
+├── editor/    Editor shell + workspaces (map, world, database)
 └── server/    Headless server (no PixiJS)
 ```
 
@@ -76,7 +76,9 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - Tile arrays use `Int16Array` (signed, supports -1). Initialized with `.fill(-1)`.
 
 ### Data model (shared/data/)
-- `MapData` = chunk-based map data (width, height, tileSize, chunkSize, layerNames, chunks Map).
+- `MapData` = chunk-based map data (width, height, tileSize, chunkSize, layerNames, chunks Map). Has dirty tracking (`dirtyChunks`, `markChunkDirty()`, `consumeDirty()`).
+- `MapData.setTile()` returns change metadata `{ cx, cy, layerName, x, y, prev, value }` or `null` if no change.
+- `MapData.getTile()` returns `-1` for out-of-bounds (not `0`).
 - `ChunkData` = single chunk tile data (cx, cy, chunkSize, layers Map of Int16Array, filled with -1).
 - `GameMap` = static loader facade (`GameMap.load(url)` → calls MapLoader).
 - `MapLoader` = fetch JSON map + tileset metadata, build MapData with chunks.
@@ -85,7 +87,8 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `MapValidator` = validate map integrity.
 
 ### Tilemap rendering
-- `MapChunkRenderer` = chunk-based renderer, creates/hides ChunkLayerViews per visible chunk+layer. Lazy tile texture cache from atlas.
+- `MapChunkRenderer` = chunk-based renderer, uses `VisibleChunkTracker` for enter/exit streaming. Lazy tile texture cache from atlas.
+- `VisibleChunkTracker` = tracks chunk visibility changes per frame (entered, exited, visible sets). Used by MapChunkRenderer for incremental mount/hide.
 - `ChunkLayerView` = Pixi Container of Sprites for one chunk's one layer. Positioned at chunk world coords.
 - Layers rendered in z-order: ground → ground_detail → (entities) → fringe.
 - Uses Sprites with sliced Textures from atlas (NOT Graphics objects).
@@ -127,38 +130,65 @@ src/
 │   └── scenes/
 │       └── SceneMap.js       Main gameplay scene
 ├── editor/
-│   ├── main.js              Editor entry point
-│   ├── EditorApp.js          Editor orchestrator (Renderer + SceneManager + Tools + Panels)
-│   ├── EditorShell.js        HTML layout (toolbar, viewport, panels, status bar)
-│   ├── EditorState.js        Central state (tool, layer, camera, map, brush, etc.)
-│   ├── EditorViewport.js     Canvas mouse/keyboard events → ToolManager
-│   ├── document/
-│   │   ├── MapDocument.js        Authoring data (Uint16Array flat, events, write-lock)
-│   │   ├── MapSerializer.js      MapDocument ↔ JSON
-│   │   └── RuntimeMapImporter.js Runtime MapData → MapDocument
-│   ├── history/
-│   │   ├── History.js            Undo/redo stack (command pattern)
-│   │   └── commands/
-│   │       ├── PaintTilesCommand.js  Forward + inverse tile paint
-│   │       └── EraseTilesCommand.js  Sets tiles to -1
-│   ├── runtime/
-│   │   └── RuntimeMapBridge.js   MapDocument → MapData (full rebuild)
-│   ├── scenes/
-│   │   └── SceneEditor.js    Main editor scene (map + camera + chunk renderer)
-│   ├── tools/
-│   │   ├── ToolManager.js    Tool registry + temporary tool support
-│   │   ├── PanTool.js        Camera drag (accounts for viewport.scale)
-│   │   ├── PencilTool.js     Paint tiles (via PaintTilesCommand)
-│   │   ├── EraseTool.js      Erase tiles (via EraseTilesCommand)
-│   │   └── EyedropperTool.js Pick tile from map, auto-switch to pencil
-│   ├── panels/
-│   │   ├── ToolbarPanel.js   Top toolbar
-│   │   ├── ToolsPanel.js     Tool selector
-│   │   ├── LayersPanel.js    Layer visibility
-│   │   ├── TilesPanel.js     Tile group selector + tile picker grid
-│   │   └── StatusBarPanel.js Bottom status bar
-│   └── utils/
-│       └── clampEditorCamera.js  Editor camera clamp (half-viewport margins)
+│   ├── main.js              Editor entry point (registers workspaces, switches to map)
+│   ├── shared/styles/
+│   │   └── global.css       Global fonts, resets, root layout
+│   ├── shell/
+│   │   ├── EditorShell.js   Top-level shell (tabs, workspace lifecycle, Ctrl+S delegation)
+│   │   ├── ShellState.js    Active workspace ID, pub-sub
+│   │   ├── WorkspaceRegistry.js  Factory registry for workspace creation
+│   │   └── styles/shell.css Topbar + tabs styling
+│   └── workspaces/
+│       ├── map/                        Map editor workspace (PixiJS-based tile editor)
+│       │   ├── MapEditorApp.js         Workspace orchestrator (Renderer + Tools + Panels)
+│       │   ├── MapEditorLayout.js      HTML layout (viewport, toolbar, panels, status bar)
+│       │   ├── MapEditorState.js       Central state (tool, layer, camera, map, brush, etc.)
+│       │   ├── MapEditorViewport.js    Canvas mouse/keyboard events → ToolManager
+│       │   ├── MapEditorConfig.js      EDITOR_SERVER_ORIGIN constant
+│       │   ├── document/
+│       │   │   ├── MapDocument.js        Authoring data (Uint16Array flat, events, write-lock)
+│       │   │   ├── MapSerializer.js      MapDocument ↔ JSON
+│       │   │   └── RuntimeMapImporter.js Runtime MapData → MapDocument
+│       │   ├── history/
+│       │   │   ├── History.js            Undo/redo stack (command pattern)
+│       │   │   └── commands/
+│       │   │       ├── PaintTilesCommand.js  Forward + inverse tile paint
+│       │   │       └── EraseTilesCommand.js  Sets tiles to -1
+│       │   ├── runtime/
+│       │   │   └── RuntimeMapBridge.js   MapDocument → MapData (full rebuild)
+│       │   ├── scenes/
+│       │   │   └── SceneEditor.js    Main editor scene (map + camera + chunk renderer)
+│       │   ├── tools/
+│       │   │   ├── ToolManager.js    Tool registry + temporary tool support
+│       │   │   ├── PanTool.js        Camera drag (accounts for viewport.scale)
+│       │   │   ├── PencilTool.js     Paint tiles (via PaintTilesCommand)
+│       │   │   ├── EraseTool.js      Erase tiles (via EraseTilesCommand)
+│       │   │   └── EyedropperTool.js Pick tile from map, auto-switch to pencil
+│       │   ├── panels/
+│       │   │   ├── ToolbarPanel.js   Top toolbar
+│       │   │   ├── ToolsPanel.js     Tool selector
+│       │   │   ├── LayersPanel.js    Layer visibility
+│       │   │   ├── TilesPanel.js     Tile group selector + tile picker grid
+│       │   │   └── StatusBarPanel.js Bottom status bar
+│       │   ├── utils/
+│       │   │   └── clampEditorCamera.js  Editor camera clamp (half-viewport margins)
+│       │   └── styles/map-editor.css     Map editor layout + panels
+│       ├── world/                        World editor workspace (Canvas 2D grid)
+│       │   ├── WorldEditorApp.js         Workspace orchestrator (grid + panels + history)
+│       │   ├── WorldDocument.js          Cell-based world data (Map<"rx,ry", {mapId}>)
+│       │   ├── WorldGridView.js          Canvas 2D grid renderer (cells, adjacency, zoom/pan)
+│       │   ├── WorldEditorState.js       View state (selection, hover, zoom, pan, tool)
+│       │   ├── WorldHistory.js           Undo/redo stack (before/after cell entries)
+│       │   ├── panels/
+│       │   │   ├── WorldLibraryPanel.js  Map catalog + usage indicators
+│       │   │   └── WorldInspectorPanel.js  World/cell info + action buttons
+│       │   ├── utils/
+│       │   │   ├── worldKey.js           "rx,ry" key encoding/parsing
+│       │   │   ├── worldAdjacency.js     Orthogonal neighbor helpers
+│       │   │   └── worldBounds.js        Bounding box computation
+│       │   └── styles/world-editor.css   3-column layout + grid styling
+│       └── database/
+│           └── DatabaseEditorApp.js      Placeholder workspace (coming soon)
 ├── server/
 │   ├── ServerApp.js          Headless tick loop (no PixiJS)
 │   ├── world/WorldMap.js     Server map wrapper
@@ -175,6 +205,7 @@ src/
     │   ├── ViewportState.js  Viewport data
     │   ├── ResolutionManager.js  Viewport computation
     │   ├── MapChunkRenderer.js   Chunk-based tile rendering (Sprites)
+    │   ├── VisibleChunkTracker.js  Chunk enter/exit diff tracking
     │   ├── ChunkLayerView.js     Single chunk+layer Sprite container
     │   ├── TilemapRenderer.js    Legacy tile rendering (Graphics pool)
     │   ├── EntityRenderer.js     Entity→sprite sync
@@ -252,40 +283,49 @@ tools/
 - Graphics objects are expensive (each = draw call). Prefer Sprites with shared textures.
 - `app.renderer.resize(w, h)` to change internal resolution dynamically.
 
-### Editor subsystem ownership
+### Editor shell + workspaces
 ```
-EditorApp (orchestrator) — src/editor/EditorApp.js
-├── EditorShell       — editor/ — HTML layout (toolbar, viewport, panels)
-├── EditorState       — editor/ — central state (tool, layer, camera, map, saveStatus)
-├── MapDocument       — editor/document/ — authoring data (Uint16Array flat, 0xffff=empty)
-├── History           — editor/history/ — undo/redo command stack
-│   ├── PaintTilesCommand — forward + inverse tile changes
-│   └── EraseTilesCommand — sets tiles to -1
-├── RuntimeMapBridge  — editor/runtime/ — MapDocument → MapData (full rebuild)
-├── EditorViewport    — editor/ — canvas mouse/keyboard → ToolManager
-│   └── Temporary pan: Space+left drag or middle mouse drag
-├── ToolManager       — editor/tools/ — tool registry, temporaryToolId
-│   ├── PanTool           — camera drag (compensates viewport.scale)
-│   ├── PencilTool        — paint selected tile (via PaintTilesCommand)
-│   ├── EraseTool         — set tile to -1 (via EraseTilesCommand)
-│   └── EyedropperTool    — pick tile from map, auto-switch to pencil
-├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel (save status), TilesPanel
-├── SceneEditor       — editor/scenes/ — map loading, chunk renderer, camera clamp
-├── EditorConfig      — editor/ — EDITOR_SERVER_ORIGIN (http://localhost:3032)
-├── TilesetRegistry   — shared/data/loaders/ — cached tileset metadata loader
-├── Renderer          — shared/render/ — PixiJS Application, dynamic viewport
-├── Input             — shared/input/ — polling-based keyboard state
-├── SceneManager      — shared/scene/ — scene stack
-├── GameLoop          — shared/core/ — fixed timestep + RAF
-└── DebugOverlay      — shared/render/ — FPS/stats (Escape to toggle)
+EditorShell (top-level) — src/editor/shell/EditorShell.js
+├── ShellState        — active workspace ID, pub-sub
+├── WorkspaceRegistry — factory map, creates workspace on tab switch
+├── Ctrl+S delegation — routes to active workspace's save() if canSave()
+└── Workspaces:
+    ├── MapEditorApp (map workspace) — src/editor/workspaces/map/MapEditorApp.js
+    │   ├── MapEditorLayout   — HTML layout (viewport, toolbar, panels, status bar)
+    │   ├── MapEditorState    — central state (tool, layer, camera, map, saveStatus)
+    │   ├── MapDocument       — authoring data (Uint16Array flat, 0xffff=empty)
+    │   ├── History           — undo/redo command stack
+    │   │   ├── PaintTilesCommand — forward + inverse tile changes
+    │   │   └── EraseTilesCommand — sets tiles to -1
+    │   ├── RuntimeMapBridge  — MapDocument → MapData (full rebuild)
+    │   ├── MapEditorViewport — canvas mouse/keyboard → ToolManager
+    │   │   └── Temporary pan: Space+left drag or middle mouse drag
+    │   ├── ToolManager       — tool registry, temporaryToolId
+    │   │   ├── PanTool / PencilTool / EraseTool / EyedropperTool
+    │   ├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel, TilesPanel
+    │   ├── SceneEditor       — map loading, chunk renderer, camera clamp
+    │   ├── MapEditorConfig   — EDITOR_SERVER_ORIGIN (http://localhost:3032)
+    │   ├── TilesetRegistry   — shared/data/loaders/ — cached tileset metadata
+    │   ├── Renderer / Input / SceneManager / GameLoop / DebugOverlay (shared)
+    │   └── Shortcuts: B pencil, E eraser, I eyedropper, G grid, Tab toggle UI, Escape debug
+    ├── WorldEditorApp (world workspace) — src/editor/workspaces/world/WorldEditorApp.js
+    │   ├── WorldDocument     — cell-based world data (Map<"rx,ry", {mapId}>)
+    │   │   └── Adjacency constraint: cells must be orthogonally connected
+    │   ├── WorldGridView     — Canvas 2D renderer (cells, neighbors, zoom/pan, ghost preview)
+    │   ├── WorldEditorState  — selection, hover, zoom, pan, activeTool
+    │   ├── WorldHistory      — undo/redo (assign/remove/replace/create entries)
+    │   ├── WorldLibraryPanel — map catalog with usage indicators
+    │   ├── WorldInspectorPanel — world/cell info + action buttons
+    │   └── Shortcuts: F center, 1/2/3 tools, G grid, Ctrl+Z/Y undo/redo
+    └── DatabaseEditorApp (placeholder) — coming soon
 ```
 
 ### Editor persistence (editor-server)
-- **Save flow**: Ctrl+S → `EditorApp.saveMap()` → PUT `/api/maps/:id` to editor-server (port 3032)
+- **Save flow**: Ctrl+S → shell delegates to workspace → `MapEditorApp.saveMap()` → PUT `/api/maps/:id` to editor-server (port 3032)
 - **Dual-format write**: server saves authored JSON to `content/maps/.authored/` + runtime JSON to `content/maps/`
 - **Backups**: timestamped copies in `content/maps/.backup/` before each overwrite
 - **Load flow**: editor-server GET `/api/maps/:id` → returns authored JSON (converts from runtime if no authored exists)
-- **Status UX**: `EditorState.saveStatus` drives StatusBarPanel display (saving → saved → idle, or error)
+- **Status UX**: `MapEditorState.saveStatus` drives StatusBarPanel display (saving → saved → idle, or error)
 - **Codecs**: `map-codecs.js` uses editor's own `MapSerializer` + `RuntimeMapBridge` for conversions
 
 ### Editor navigation
