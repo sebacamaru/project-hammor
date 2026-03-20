@@ -13,6 +13,11 @@ import { TileLayerDebugOverlay } from "../render/TileLayerDebugOverlay.js";
 import { HitboxDebugOverlay } from "../render/HitboxDebugOverlay.js";
 
 export class SceneMap extends Scene {
+  constructor(gameStart = {}) {
+    super();
+    this.gameStart = gameStart;
+  }
+
   async enter(engine) {
     this.engine = engine;
     this.root = new Container();
@@ -21,7 +26,14 @@ export class SceneMap extends Scene {
     const viewport = engine.renderer.viewport;
 
     // World data
-    this.map = await GameMap.load("/content/maps/test_map.json");
+    const DEFAULT_MAP = "test_map";
+    const mapId = this.gameStart.mapId || DEFAULT_MAP;
+    try {
+      this.map = await GameMap.load(`/content/maps/${mapId}.json`);
+    } catch (err) {
+      console.warn(`[SceneMap] Failed to load map "${mapId}", falling back to "${DEFAULT_MAP}":`, err.message);
+      this.map = await GameMap.load(`/content/maps/${DEFAULT_MAP}.json`);
+    }
 
     // Camera
     this.camera = new Camera(viewport);
@@ -41,7 +53,9 @@ export class SceneMap extends Scene {
     this.entityRenderer = new EntityRenderer(this.root);
 
     // Player — updated manually, not through EntityManager
-    this.player = new Player(200, 200);
+    const spawnX = (this.gameStart.x ?? 12) * TILE_SIZE;
+    const spawnY = (this.gameStart.y ?? 12) * TILE_SIZE;
+    this.player = new Player(spawnX, spawnY);
     this.playerView = new PlayerView(this.root);
     this.camera.follow(this.player);
 

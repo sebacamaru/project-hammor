@@ -5,6 +5,7 @@ import { Input } from "../shared/input/Input.js";
 import { SceneManager } from "../shared/scene/SceneManager.js";
 import { SceneMap } from "./scenes/SceneMap.js";
 import { DebugOverlay } from "../shared/render/DebugOverlay.js";
+import { ProjectSettings } from "../shared/data/loaders/ProjectSettings.js";
 
 export class ClientApp {
   async start() {
@@ -25,9 +26,13 @@ export class ClientApp {
     // Debug overlay
     this.debug = new DebugOverlay(this.renderer.stage);
 
+    // Load project settings
+    this.projectSettings = await ProjectSettings.load();
+
     // Start game loop
     this.loop = new GameLoop(this);
-    await this.scenes.goto(new SceneMap());
+    const { gameStart } = this.projectSettings;
+    await this.scenes.goto(new SceneMap(gameStart));
     this.loop.start();
 
     // Debug: expose app in dev mode
