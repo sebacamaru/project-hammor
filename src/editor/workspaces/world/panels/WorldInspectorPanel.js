@@ -7,6 +7,8 @@ export class WorldInspectorPanel {
     this._onAssignRequested = null;
     this._onRemoveRequested = null;
     this._onReplaceRequested = null;
+    this._onCreateMapRequested = null;
+    this._onOpenMapRequested = null;
 
     this._build();
   }
@@ -21,6 +23,14 @@ export class WorldInspectorPanel {
 
   onReplaceRequested(cb) {
     this._onReplaceRequested = cb;
+  }
+
+  onCreateMapRequested(cb) {
+    this._onCreateMapRequested = cb;
+  }
+
+  onOpenMapRequested(cb) {
+    this._onOpenMapRequested = cb;
   }
 
   renderWorldInfo(worldDoc) {
@@ -84,6 +94,8 @@ export class WorldInspectorPanel {
     const { rx, ry } = selectedCell;
     const canAssign = selectedMapId && doc.canAssignMap(rx, ry, selectedMapId);
     const assignDisabled = canAssign ? "" : "disabled";
+    const canCreate = doc.canPlaceAt(rx, ry);
+    const createDisabled = canCreate ? "" : "disabled";
 
     this._cellSection.innerHTML = `
       <div class="inspector-section-title">Selected Cell</div>
@@ -91,10 +103,13 @@ export class WorldInspectorPanel {
       <div class="info-row"><span class="info-label">Map</span><span class="info-value">empty</span></div>
       <div class="info-row"><span class="info-label">Selected Map</span><span class="info-value">${selectedMapId ?? "none"}</span></div>
       <button class="inspector-action" data-action="assign" ${assignDisabled}>Assign Selected Map</button>
+      <button class="inspector-action" data-action="create" ${createDisabled}>Create Map Here</button>
     `;
 
     this._cellSection.querySelector('[data-action="assign"]')
       ?.addEventListener("click", () => this._onAssignRequested?.());
+    this._cellSection.querySelector('[data-action="create"]')
+      ?.addEventListener("click", () => this._onCreateMapRequested?.());
   }
 
   _renderOccupiedCell(selectedCell, cell, doc, selectedMapId) {
@@ -108,10 +123,13 @@ export class WorldInspectorPanel {
       <div class="inspector-section-title">Selected Cell</div>
       <div class="info-row"><span class="info-label">Position</span><span class="info-value">${rx}, ${ry}</span></div>
       <div class="info-row"><span class="info-label">Map</span><span class="info-value">${cell.mapId}</span></div>
+      <button class="inspector-action" data-action="open">Open Map</button>
       <button class="inspector-action" data-action="remove">Remove from World</button>
       <button class="inspector-action" data-action="replace" ${replaceDisabled}>Replace with Selected Map</button>
     `;
 
+    this._cellSection.querySelector('[data-action="open"]')
+      ?.addEventListener("click", () => this._onOpenMapRequested?.());
     this._cellSection.querySelector('[data-action="remove"]')
       ?.addEventListener("click", () => this._onRemoveRequested?.());
     this._cellSection.querySelector('[data-action="replace"]')

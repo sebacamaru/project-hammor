@@ -25,6 +25,17 @@ export class WorldLibraryPanel {
     this._sync();
   }
 
+  hasMap(mapId) {
+    return this._maps.includes(mapId);
+  }
+
+  addMap(mapId) {
+    if (!this._maps.includes(mapId)) {
+      this._maps.push(mapId);
+      this._render();
+    }
+  }
+
   onMapSelected(cb) {
     this._onMapSelected = cb;
   }
