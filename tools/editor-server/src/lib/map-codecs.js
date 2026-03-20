@@ -1,6 +1,6 @@
-import { MapSerializer } from "../../../../src/editor/document/MapSerializer.js";
-import { RuntimeMapImporter } from "../../../../src/editor/document/RuntimeMapImporter.js";
-import { RuntimeMapBridge } from "../../../../src/editor/runtime/RuntimeMapBridge.js";
+import { MapSerializer } from "../../../../src/editor/workspaces/map/document/MapSerializer.js";
+import { RuntimeMapImporter } from "../../../../src/editor/workspaces/map/document/RuntimeMapImporter.js";
+import { RuntimeMapBridge } from "../../../../src/editor/workspaces/map/runtime/RuntimeMapBridge.js";
 
 // Validates the minimum authored map contract before anything touches disk.
 export function validateAuthoredPayload(payload) {

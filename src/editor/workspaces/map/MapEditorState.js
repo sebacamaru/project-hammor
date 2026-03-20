@@ -1,7 +1,7 @@
 /**
  * Holds the current editor state: selected tool, tile, layer, etc.
  */
-export class EditorState {
+export class MapEditorState {
   constructor() {
     this.state = {
       mode: "terrain",

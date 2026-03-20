@@ -1,12 +1,12 @@
-import { Renderer } from "../shared/render/Renderer.js";
-import { SceneManager } from "../shared/scene/SceneManager.js";
-import { GameLoop } from "../shared/core/GameLoop.js";
-import { DebugOverlay } from "../shared/render/DebugOverlay.js";
-import { AssetManager } from "../shared/assets/AssetsManager.js";
-import { Input } from "../shared/input/Input.js";
+import { Renderer } from "../../../shared/render/Renderer.js";
+import { SceneManager } from "../../../shared/scene/SceneManager.js";
+import { GameLoop } from "../../../shared/core/GameLoop.js";
+import { DebugOverlay } from "../../../shared/render/DebugOverlay.js";
+import { AssetManager } from "../../../shared/assets/AssetsManager.js";
+import { Input } from "../../../shared/input/Input.js";
 
-import { EditorShell } from "./EditorShell.js";
-import { EditorState } from "./EditorState.js";
+import { MapEditorLayout } from "./MapEditorLayout.js";
+import { MapEditorState } from "./MapEditorState.js";
 import { ToolManager } from "./tools/ToolManager.js";
 import { PanTool } from "./tools/PanTool.js";
 import { PencilTool } from "./tools/PencilTool.js";
@@ -20,16 +20,18 @@ import { StatusBarPanel } from "./panels/StatusBarPanel.js";
 import { TilesPanel } from "./panels/TilesPanel.js";
 
 import { SceneEditor } from "./scenes/SceneEditor.js";
-import { EditorViewport } from "./EditorViewport.js";
+import { MapEditorViewport } from "./MapEditorViewport.js";
 import { MapSerializer } from "./document/MapSerializer.js";
 import { History } from "./history/History.js";
 import { RuntimeMapBridge } from "./runtime/RuntimeMapBridge.js";
-import { TilesetRegistry } from "../shared/data/loaders/TilesetRegistry.js";
-import { EDITOR_SERVER_ORIGIN } from "./EditorConfig.js";
+import { TilesetRegistry } from "../../../shared/data/loaders/TilesetRegistry.js";
+import { EDITOR_SERVER_ORIGIN } from "./MapEditorConfig.js";
 
-export class EditorApp {
-  constructor(root) {
-    this.root = root;
+import "./styles/map-editor.css";
+
+export class MapEditorApp {
+  constructor() {
+    this.host = null;
     this.currentMapId = "test_map";
     this.document = null;
     this.runtimeMap = null;
@@ -41,15 +43,17 @@ export class EditorApp {
     this.onKeyDown = this.onKeyDown.bind(this);
   }
 
-  async start() {
+  async mount(host) {
+    this.host = host;
+
     // Shell HTML del editor
-    this.shell = new EditorShell(this.root);
+    this.layout = new MapEditorLayout(this.host);
 
     // Estado central
-    this.state = new EditorState();
+    this.state = new MapEditorState();
 
     // Renderer montado dentro del viewport del shell
-    this.renderer = new Renderer(this.shell.viewportEl);
+    this.renderer = new Renderer(this.layout.viewportEl);
     await this.renderer.init();
 
     // Default editor scale = auto-computed scale for this screen
@@ -97,21 +101,21 @@ export class EditorApp {
     );
 
     // Panels
-    this.toolbar = new ToolbarPanel(this.shell.toolbarEl, this.state);
-    this.tilesPanel = new TilesPanel(this.shell.leftPanelEl, this.state);
-    this.layers = new LayersPanel(this.shell.rightPanelEl, this.state);
-    this.tools = new ToolsPanel(this.shell.toolsEl, this.state);
-    this.status = new StatusBarPanel(this.shell.statusBarEl, this.state);
+    this.toolbar = new ToolbarPanel(this.layout.toolbarEl, this.state);
+    this.tilesPanel = new TilesPanel(this.layout.leftPanelEl, this.state);
+    this.layers = new LayersPanel(this.layout.rightPanelEl, this.state);
+    this.tools = new ToolsPanel(this.layout.toolsEl, this.state);
+    this.status = new StatusBarPanel(this.layout.statusBarEl, this.state);
 
     // UI visibility toggle (via state subscription, not per-frame)
-    this._shellEl = this.root.querySelector(".editor-shell");
+    this._shellEl = this.host.querySelector(".editor-shell");
     this.state.subscribe((s) => {
       this._shellEl.classList.toggle("ui-hidden", !s.uiVisible);
     });
 
     // Viewport
-    this.viewport = new EditorViewport(
-      this.shell.viewportEl,
+    this.viewport = new MapEditorViewport(
+      this.layout.viewportEl,
       this.renderer,
       this.state,
       this.toolManager,
@@ -131,6 +135,22 @@ export class EditorApp {
 
     if (import.meta.env.DEV) {
       window.__editor = this;
+    }
+  }
+
+  unmount() {
+    this.loop?.stop();
+    window.removeEventListener("keydown", this.onKeyDown);
+    this.viewport?.destroy();
+    this.scenes?.current?.destroy();
+    this.documentUnsubscribe?.();
+    this.clearStatusResetTimeout();
+    this.input?.destroy?.();
+    this.renderer?.destroy?.();
+
+    if (this.host) {
+      this.host.innerHTML = "";
+      this.host = null;
     }
   }
 
@@ -177,6 +197,22 @@ export class EditorApp {
   render(alpha) {
     this.scenes.render(alpha);
     this.debug.update(this.loop.lastFrameTime ?? 16);
+  }
+
+  resize(width, height) {
+    // Renderer handles resize internally via ResizeObserver
+  }
+
+  async save() {
+    return this.saveMap();
+  }
+
+  canSave() {
+    return !!this.document;
+  }
+
+  getTitle() {
+    return "Map Editor";
   }
 
   handleDocumentTilesChanged(event) {
@@ -337,7 +373,6 @@ export class EditorApp {
   }
 
   async fetchMapDocument(mapId) {
-    // Primary load path: ask the local editor-server for the authored document.
     let response;
 
     try {
@@ -365,7 +400,6 @@ export class EditorApp {
   }
 
   async putMapDocument(mapId, payload) {
-    // Primary save path: persist the authored document through the local editor-server.
     let response;
 
     try {
@@ -490,14 +524,6 @@ export class EditorApp {
     if (e.code === "KeyY") {
       e.preventDefault();
       this.history.redo();
-      return;
-    }
-
-    if (e.code === "KeyS") {
-      e.preventDefault();
-      void this.saveMap().catch((error) => {
-        console.error("Save failed", error);
-      });
       return;
     }
 

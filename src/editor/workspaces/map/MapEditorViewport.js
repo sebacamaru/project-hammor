@@ -2,10 +2,10 @@ import {
   EDITOR_MIN_ZOOM,
   EDITOR_MAX_ZOOM,
   EDITOR_ZOOM_WHEEL_THRESHOLD,
-} from "./EditorConfig.js";
+} from "./MapEditorConfig.js";
 import { waitFrames } from "./utils/waitFrames.js";
 
-export class EditorViewport {
+export class MapEditorViewport {
   constructor(container, renderer, state, toolManager, input) {
     this.container = container;
     this.renderer = renderer;

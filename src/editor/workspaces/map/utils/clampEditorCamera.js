@@ -5,7 +5,7 @@
  * @param {{ x: number, y: number }} camera  State camera object (mutated in place)
  * @param {number} mapWidthPx   Map width in world pixels
  * @param {number} mapHeightPx  Map height in world pixels
- * @param {import('../../shared/render/ViewportState.js').ViewportState} viewport
+ * @param {import('../../../../shared/render/ViewportState.js').ViewportState} viewport
  */
 export function clampEditorCamera(camera, mapWidthPx, mapHeightPx, viewport) {
   const viewW = viewport.widthPx;

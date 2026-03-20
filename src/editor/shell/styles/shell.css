@@ -1,0 +1,44 @@
+.shell-topbar {
+  position: relative;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+}
+
+.shell-tabs {
+  display: flex;
+  gap: 0;
+  height: 100%;
+  padding: 0 8px;
+}
+
+.shell-tab {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0 16px;
+  font-size: 13px;
+  font-family: "Google Sans Code", monospace;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.shell-tab:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.shell-tab.is-active {
+  color: white;
+  border-bottom-color: #4fc3f7;
+}
+
+.shell-workspace-host {
+  position: relative;
+  width: 100%;
+  height: calc(100% - 36px);
+  overflow: hidden;
+}

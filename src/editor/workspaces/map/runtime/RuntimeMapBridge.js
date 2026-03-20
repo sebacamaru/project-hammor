@@ -1,4 +1,4 @@
-import { MapData } from "../../shared/data/models/MapData.js";
+import { MapData } from "../../../../shared/data/models/MapData.js";
 import { MapDocument } from "../document/MapDocument.js";
 
 export class RuntimeMapBridge {

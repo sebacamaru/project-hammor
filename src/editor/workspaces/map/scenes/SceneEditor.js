@@ -1,10 +1,10 @@
 import { Container, Graphics, Sprite } from "pixi.js";
-import { Scene } from "../../shared/scene/Scene.js";
-import { Camera } from "../../shared/render/Camera.js";
-import { GameMap } from "../../shared/data/models/GameMap.js";
-import { MapChunkRenderer } from "../../shared/render/MapChunkRenderer.js";
-import { TileLayerDebugOverlay } from "../../client/render/TileLayerDebugOverlay.js";
-import { ChunkDebugOverlay } from "../../client/render/ChunkDebugOverlay.js";
+import { Scene } from "../../../../shared/scene/Scene.js";
+import { Camera } from "../../../../shared/render/Camera.js";
+import { GameMap } from "../../../../shared/data/models/GameMap.js";
+import { MapChunkRenderer } from "../../../../shared/render/MapChunkRenderer.js";
+import { TileLayerDebugOverlay } from "../../../../client/render/TileLayerDebugOverlay.js";
+import { ChunkDebugOverlay } from "../../../../client/render/ChunkDebugOverlay.js";
 import { clampEditorCamera } from "../utils/clampEditorCamera.js";
 
 export class SceneEditor extends Scene {

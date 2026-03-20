@@ -1,4 +1,4 @@
-export class EditorShell {
+export class MapEditorLayout {
   constructor(root) {
     this.root = root;
 
