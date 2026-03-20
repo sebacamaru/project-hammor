@@ -25,24 +25,24 @@ export class WorldEditorApp {
     this._onKeyDown = null;
     this._onRootPointerDown = null;
 
+    this.worlds = [];
+    this.activeWorldId = null;
+    this._worldCounter = 0;
+
     this.statusMessage = "";
     this._statusVersion = 0;
     this._statusTimeout = null;
     this._statusEl = null;
   }
 
-  async mount(host) {
+  async mount(host, editor) {
     this.host = host;
+    this.editor = editor || null;
 
-    this.document = new WorldDocument({
-      id: "main_world",
-      name: "Main World",
-      version: 1,
-      cells: {
-        "0,0": { mapId: "town" },
-        "1,0": { mapId: "forest_west" },
-      },
-    });
+    const defaultWorld = this._createWorldData({ id: "main_world", name: "Main World" });
+    this.worlds = [defaultWorld];
+    this.activeWorldId = defaultWorld.id;
+    this.document = new WorldDocument(defaultWorld);
 
     this.state = new WorldEditorState();
     this.history = new WorldHistory();
@@ -52,7 +52,7 @@ export class WorldEditorApp {
     this.root.className = "world-editor";
     this.root.innerHTML = `
       <aside class="world-panel world-panel-library">
-        <div class="world-panel-header">Maps</div>
+        <div class="world-panel-header">Library</div>
         <div class="world-panel-body" data-slot="library"></div>
       </aside>
       <main class="world-panel world-panel-grid">
@@ -128,6 +128,11 @@ export class WorldEditorApp {
     // Library panel
     this.libraryPanel = new WorldLibraryPanel({ el: librarySlot });
     this.libraryPanel.setMaps(["town", "forest", "dungeon"]);
+    this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
+
+    this.libraryPanel.onWorldSelected((worldId) => this._loadWorld(worldId));
+    this.libraryPanel.onCreateWorld(() => this._createWorld());
+    this.libraryPanel.onDeleteWorld(() => this._deleteActiveWorld());
 
     this.libraryPanel.onMapSelected((mapId) => {
       this.state.selectedMapId = mapId;
@@ -211,6 +216,23 @@ export class WorldEditorApp {
         console.log("[WorldEditor] Open map:", cell.mapId);
         this._setStatus(`Open map: ${cell.mapId} (not yet integrated)`);
       }
+    });
+
+    this.inspectorPanel.onNameChanged((name) => {
+      this.document.setName(name);
+      this.isDirty = true;
+      this._saveActiveWorldState();
+      this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
+      this._setStatus("World name updated");
+    });
+
+    this.inspectorPanel.onMapSizeChanged(({ width, height }) => {
+      const accepted = this.document.setMapSize(width, height);
+      if (!accepted) return;
+      this.isDirty = true;
+      this._saveActiveWorldState();
+      this._renderAll();
+      this._setStatus("Map size updated");
     });
 
     // Center button
@@ -307,6 +329,7 @@ export class WorldEditorApp {
     }
     this.root = null;
     this.host = null;
+    this.editor = null;
     this.document = null;
     this.state = null;
   }
@@ -327,6 +350,85 @@ export class WorldEditorApp {
 
   getTitle() {
     return "World";
+  }
+
+  // --- world management ---
+
+  _createWorldData(overrides = {}) {
+    this._worldCounter++;
+    return {
+      id: `world_${this._worldCounter}`,
+      name: `World ${this._worldCounter}`,
+      version: 1,
+      mapSize: { width: 128, height: 128 },
+      cells: {},
+      ...overrides,
+    };
+  }
+
+  _saveActiveWorldState() {
+    const idx = this.worlds.findIndex(w => w.id === this.activeWorldId);
+    if (idx >= 0) {
+      this.worlds[idx] = this.document.toJSON();
+    }
+  }
+
+  _loadWorld(worldId) {
+    if (worldId === this.activeWorldId) return;
+    const worldData = this.worlds.find(w => w.id === worldId);
+    if (!worldData) return;
+
+    if (this.activeWorldId) this._saveActiveWorldState();
+
+    this.activeWorldId = worldId;
+    this.document = new WorldDocument(worldData);
+    this.state.selectedCell = null;
+    this.state.hoverCell = null;
+    this.state.selectedMapId = null;
+    this.history.clear();
+    this.isDirty = false;
+
+    this.gridView.setDocument(this.document);
+    this._renderAll();
+    this._syncHistoryButtons();
+    this.gridView.centerOnContent();
+    this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
+    this.libraryPanel.setSelectedMapId(null);
+    this._setStatus("World loaded");
+  }
+
+  _createWorld() {
+    if (this.activeWorldId) this._saveActiveWorldState();
+    const data = this._createWorldData();
+    this.worlds.push(data);
+    this.activeWorldId = null; // prevent double-save in _loadWorld
+    this._loadWorld(data.id);
+    this._setStatus("World created");
+  }
+
+  async _deleteActiveWorld() {
+    const name = this.document.name || this.document.id || "this world";
+    const ok = await this.editor.confirm({
+      title: "Delete World",
+      message: `Delete "${name}"? This will not delete its maps.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!ok) return;
+
+    const idx = this.worlds.findIndex(w => w.id === this.activeWorldId);
+    this.worlds.splice(idx, 1);
+
+    if (this.worlds.length === 0) {
+      const data = this._createWorldData();
+      this.worlds.push(data);
+    }
+
+    const nextIdx = Math.min(idx, this.worlds.length - 1);
+    this.activeWorldId = null; // prevent _saveActiveWorldState in _loadWorld
+    this._loadWorld(this.worlds[nextIdx].id);
+    this._setStatus("World deleted");
   }
 
   // --- document mutations ---

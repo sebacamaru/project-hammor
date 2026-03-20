@@ -9,6 +9,8 @@ export class WorldInspectorPanel {
     this._onReplaceRequested = null;
     this._onCreateMapRequested = null;
     this._onOpenMapRequested = null;
+    this._onNameChanged = null;
+    this._onMapSizeChanged = null;
 
     this._build();
   }
@@ -33,19 +35,66 @@ export class WorldInspectorPanel {
     this._onOpenMapRequested = cb;
   }
 
+  onNameChanged(cb) {
+    this._onNameChanged = cb;
+  }
+
+  onMapSizeChanged(cb) {
+    this._onMapSizeChanged = cb;
+  }
+
   renderWorldInfo(worldDoc) {
     const bounds = worldDoc.getBounds();
     const boundsText = bounds
       ? `X[${bounds.minRx}..${bounds.maxRx}] Y[${bounds.minRy}..${bounds.maxRy}]`
       : "—";
 
+    const mapSize = worldDoc.getMapSize();
+    const cellCount = worldDoc.getCellCount();
+    const sizeLocked = cellCount > 0;
+    const disabledAttr = sizeLocked ? "disabled" : "";
+
     this._worldSection.innerHTML = `
-      <div class="inspector-section-title">World</div>
+      <div class="inspector-section-title">World Properties</div>
       <div class="info-row"><span class="info-label">ID</span><span class="info-value">${worldDoc.id}</span></div>
-      <div class="info-row"><span class="info-label">Name</span><span class="info-value">${worldDoc.name}</span></div>
-      <div class="info-row"><span class="info-label">Cells</span><span class="info-value">${worldDoc.getCellCount()}</span></div>
+      <div class="info-row"><span class="info-label">Name</span></div>
+      <input type="text" class="inspector-input" data-field="name" value="${worldDoc.getName().replace(/"/g, '&quot;')}">
+      <div class="info-row" style="margin-top:6px"><span class="info-label">Map Width</span></div>
+      <input type="number" class="inspector-input" data-field="width" min="1" value="${mapSize.width}" ${disabledAttr}>
+      <div class="info-row" style="margin-top:6px"><span class="info-label">Map Height</span></div>
+      <input type="number" class="inspector-input" data-field="height" min="1" value="${mapSize.height}" ${disabledAttr}>
+      ${sizeLocked ? '<div class="inspector-lock-msg">Map size is locked because this world contains maps.</div>' : ""}
+      <div class="info-row" style="margin-top:6px"><span class="info-label">Cells</span><span class="info-value">${cellCount}</span></div>
       <div class="info-row"><span class="info-label">Bounds</span><span class="info-value">${boundsText}</span></div>
     `;
+
+    // Name change listener
+    const nameInput = this._worldSection.querySelector('[data-field="name"]');
+    nameInput.addEventListener("change", () => {
+      const trimmed = nameInput.value.trim();
+      if (!trimmed || trimmed === worldDoc.getName()) {
+        nameInput.value = worldDoc.getName();
+        return;
+      }
+      this._onNameChanged?.(trimmed);
+    });
+
+    // Map size change listeners
+    const widthInput = this._worldSection.querySelector('[data-field="width"]');
+    const heightInput = this._worldSection.querySelector('[data-field="height"]');
+
+    const handleSizeChange = () => {
+      const w = parseInt(widthInput.value, 10);
+      const h = parseInt(heightInput.value, 10);
+      const currentSize = worldDoc.getMapSize();
+      if (!Number.isFinite(w) || w <= 0) { widthInput.value = currentSize.width; return; }
+      if (!Number.isFinite(h) || h <= 0) { heightInput.value = currentSize.height; return; }
+      if (w === currentSize.width && h === currentSize.height) return;
+      this._onMapSizeChanged?.({ width: w, height: h });
+    };
+
+    widthInput.addEventListener("change", handleSizeChange);
+    heightInput.addEventListener("change", handleSizeChange);
   }
 
   renderCellInfo({ selectedCell, hoverCell, document, selectedMapId }) {

@@ -1,5 +1,8 @@
+import "./styles/dialogs.css";
+
 import { ShellState } from "./ShellState.js";
 import { WorkspaceRegistry } from "./WorkspaceRegistry.js";
+import { DialogHost } from "./DialogHost.js";
 
 export class EditorShell {
   constructor(root) {
@@ -14,10 +17,14 @@ export class EditorShell {
         <div class="shell-tabs"></div>
       </div>
       <div class="shell-workspace-host"></div>
+      <div class="editor-dialog-layer"></div>
     `;
 
     this.tabsEl = this.root.querySelector(".shell-tabs");
     this.workspaceHost = this.root.querySelector(".shell-workspace-host");
+
+    this.dialogHost = new DialogHost();
+    this.dialogHost.mount(this.root.querySelector(".editor-dialog-layer"));
 
     this.onKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.onKeyDown);
@@ -55,7 +62,8 @@ export class EditorShell {
     const workspace = this.registry.create(id);
     this.activeWorkspace = workspace;
 
-    await workspace.mount(this.workspaceHost);
+    const editorApi = { confirm: this.confirm.bind(this) };
+    await workspace.mount(this.workspaceHost, editorApi);
 
     // Update state and tabs
     this.state.patch({ activeWorkspaceId: id });
@@ -66,6 +74,10 @@ export class EditorShell {
     for (const [id, btn] of this.tabs) {
       btn.classList.toggle("is-active", id === activeId);
     }
+  }
+
+  confirm(options) {
+    return this.dialogHost.confirm(options);
   }
 
   onKeyDown(e) {
@@ -91,6 +103,7 @@ export class EditorShell {
 
   unmount() {
     window.removeEventListener("keydown", this.onKeyDown);
+    this.dialogHost.unmount();
     if (this.activeWorkspace) {
       this.activeWorkspace.unmount();
       this.activeWorkspace = null;

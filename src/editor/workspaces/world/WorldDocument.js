@@ -10,6 +10,7 @@ export class WorldDocument {
     this.id = data.id ?? 'untitled';
     this.name = data.name ?? 'Untitled World';
     this.version = data.version ?? 1;
+    this.mapSize = data.mapSize ?? { width: 128, height: 128 };
 
     /** @type {Map<string, { mapId: string }>} */
     this._cells = new Map();
@@ -66,6 +67,32 @@ export class WorldDocument {
    */
   removeCell(rx, ry) {
     this._cells.delete(makeWorldKey(rx, ry));
+  }
+
+  /** @returns {string} */
+  getName() {
+    return this.name;
+  }
+
+  /** @param {string} name */
+  setName(name) {
+    this.name = name;
+  }
+
+  /** @returns {{ width: number, height: number }} */
+  getMapSize() {
+    return { ...this.mapSize };
+  }
+
+  /**
+   * @param {number} width
+   * @param {number} height
+   * @returns {boolean} false if locked (cells exist)
+   */
+  setMapSize(width, height) {
+    if (this._cells.size > 0) return false;
+    this.mapSize = { width, height };
+    return true;
   }
 
   /** @returns {boolean} */
@@ -149,6 +176,7 @@ export class WorldDocument {
       id: this.id,
       name: this.name,
       version: this.version,
+      mapSize: { ...this.mapSize },
       cells,
     };
   }

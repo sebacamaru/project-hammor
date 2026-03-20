@@ -42,6 +42,10 @@ export class WorldGridView {
     this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
   }
 
+  setDocument(doc) {
+    this.document = doc;
+  }
+
   mount(host) {
     this.host = host;
     host.appendChild(this.canvas);

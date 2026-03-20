@@ -72,7 +72,68 @@
     cursor: crosshair;
 }
 
-/* Library panel */
+/* World list section */
+
+.world-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.world-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.world-list-item {
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.world-list-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.world-list-item.is-active {
+    background-color: rgba(80, 200, 130, 0.3);
+    color: white;
+}
+
+.world-list-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.world-list-btn {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.world-list-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.world-section-separator {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin: 10px 0;
+}
+
+/* Library panel — maps */
 
 .world-library-list {
     display: flex;
@@ -147,6 +208,37 @@
 .inspector-action:disabled {
     opacity: 0.3;
     cursor: default;
+}
+
+/* Inspector inline inputs */
+
+.inspector-input {
+    width: 100%;
+    padding: 3px 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.inspector-input:focus {
+    border-color: rgba(255, 255, 255, 0.35);
+    outline: none;
+}
+
+.inspector-input:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.inspector-lock-msg {
+    font-size: 10px;
+    color: rgba(255, 200, 80, 0.6);
+    font-style: italic;
+    margin-top: 4px;
 }
 
 /* Library used marker */

@@ -134,10 +134,13 @@ src/
 │   ├── shared/styles/
 │   │   └── global.css       Global fonts, resets, root layout
 │   ├── shell/
-│   │   ├── EditorShell.js   Top-level shell (tabs, workspace lifecycle, Ctrl+S delegation)
+│   │   ├── EditorShell.js   Top-level shell (tabs, workspace lifecycle, Ctrl+S delegation, confirm dialogs)
+│   │   ├── DialogHost.js    Promise-based confirm dialog (mounted in .editor-dialog-layer)
 │   │   ├── ShellState.js    Active workspace ID, pub-sub
 │   │   ├── WorkspaceRegistry.js  Factory registry for workspace creation
-│   │   └── styles/shell.css Topbar + tabs styling
+│   │   └── styles/
+│   │       ├── shell.css    Topbar + tabs styling
+│   │       └── dialogs.css  Confirm dialog overlay + card styling
 │   └── workspaces/
 │       ├── map/                        Map editor workspace (PixiJS-based tile editor)
 │       │   ├── MapEditorApp.js         Workspace orchestrator (Renderer + Tools + Panels)
@@ -288,7 +291,9 @@ tools/
 EditorShell (top-level) — src/editor/shell/EditorShell.js
 ├── ShellState        — active workspace ID, pub-sub
 ├── WorkspaceRegistry — factory map, creates workspace on tab switch
+├── DialogHost        — Promise-based confirm dialog (shell-level, .editor-dialog-layer)
 ├── Ctrl+S delegation — routes to active workspace's save() if canSave()
+├── Editor API        — { confirm } passed to workspaces on mount (not the full shell)
 └── Workspaces:
     ├── MapEditorApp (map workspace) — src/editor/workspaces/map/MapEditorApp.js
     │   ├── MapEditorLayout   — HTML layout (viewport, toolbar, panels, status bar)

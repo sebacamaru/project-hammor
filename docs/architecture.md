@@ -189,11 +189,15 @@ The editor uses a **shell + workspaces** pattern. `EditorShell` manages tabs and
 EditorShell — src/editor/shell/EditorShell.js
 ├── ShellState         — active workspace ID, pub-sub
 ├── WorkspaceRegistry  — factory map for workspace creation
+├── DialogHost         — Promise-based confirm dialog (.editor-dialog-layer)
 ├── Tab bar            — one tab per registered workspace
-└── Ctrl+S delegation  — routes to active workspace's save() if canSave()
+├── Ctrl+S delegation  — routes to active workspace's save() if canSave()
+└── Editor API         — { confirm } passed to workspaces on mount
 ```
 
-**Workspace interface**: `mount(host)`, `unmount()`, `resize()`, `update(dt)`, `canSave()`, `save()`, `getTitle()`
+**Workspace interface**: `mount(host, editorApi)`, `unmount()`, `resize()`, `update(dt)`, `canSave()`, `save()`, `getTitle()`
+
+**Editor API** (passed as second arg to `mount`): `{ confirm(options) → Promise<boolean> }` — small API object, not the full shell. Workspaces use `this.editor.confirm(...)` for confirmation dialogs.
 
 ### Map workspace (MapEditorApp)
 ```
