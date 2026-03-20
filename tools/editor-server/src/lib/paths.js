@@ -50,3 +50,25 @@ export function getRuntimeMapPath(id) {
 export function getTilesetPath(id) {
   return path.join(getTilesetsDir(), `${validateMapId(id)}_tileset.json`);
 }
+
+export function getWorldsDir() {
+  return path.join(repoRoot, "content", "worlds");
+}
+
+export function validateWorldId(id) {
+  if (typeof id !== "string" || !VALID_ID_PATTERN.test(id)) {
+    const error = new Error(`Invalid world id "${id}". Expected letters, numbers, "_" or "-".`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return id;
+}
+
+export function getWorldPath(id) {
+  return path.join(getWorldsDir(), `${validateWorldId(id)}.json`);
+}
+
+export function getProjectPath() {
+  return path.join(repoRoot, "content", "project.json");
+}

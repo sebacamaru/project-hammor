@@ -1,0 +1,14 @@
+{
+  "id": "main_world",
+  "name": "Main World",
+  "version": 1,
+  "mapSize": {
+    "width": 192,
+    "height": 192
+  },
+  "cells": {
+    "0,0": {
+      "mapId": "test_map"
+    }
+  }
+}

@@ -11,6 +11,7 @@ export class EditorShell {
     this.registry = new WorkspaceRegistry();
     this.activeWorkspace = null;
     this.tabs = new Map();
+    this._pendingMapId = null;
 
     this.root.innerHTML = `
       <div class="shell-topbar">
@@ -62,7 +63,11 @@ export class EditorShell {
     const workspace = this.registry.create(id);
     this.activeWorkspace = workspace;
 
-    const editorApi = { confirm: this.confirm.bind(this) };
+    const editorApi = {
+      confirm: this.confirm.bind(this),
+      openMap: this.openMap.bind(this),
+      initialMapId: this._pendingMapId || null,
+    };
     await workspace.mount(this.workspaceHost, editorApi);
 
     // Update state and tabs
@@ -73,6 +78,16 @@ export class EditorShell {
   syncTabs(activeId) {
     for (const [id, btn] of this.tabs) {
       btn.classList.toggle("is-active", id === activeId);
+    }
+  }
+
+  async openMap(mapId) {
+    if (!mapId) return;
+    this._pendingMapId = mapId;
+    try {
+      await this.switchTo("map");
+    } finally {
+      this._pendingMapId = null;
     }
   }
 

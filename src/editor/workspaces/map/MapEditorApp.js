@@ -43,8 +43,9 @@ export class MapEditorApp {
     this.onKeyDown = this.onKeyDown.bind(this);
   }
 
-  async mount(host) {
+  async mount(host, editor) {
     this.host = host;
+    this.editor = editor || null;
 
     // Shell HTML del editor
     this.layout = new MapEditorLayout(this.host);
@@ -124,7 +125,8 @@ export class MapEditorApp {
 
     window.addEventListener("keydown", this.onKeyDown);
 
-    await this.loadMap(this.currentMapId);
+    const initialMapId = this.editor?.initialMapId || this.currentMapId;
+    await this.loadMap(initialMapId);
 
     // Escena del editor
     await this.scenes.goto(new SceneEditor(this.state, this.toolManager));

@@ -28,7 +28,7 @@ export class WorldEditorApp {
 
     this.worlds = [];
     this.activeWorldId = null;
-    this._worldCounter = 0;
+    this._loadVersion = 0;
     this._mapCatalog = [];
     this._isMounted = false;
 
@@ -43,11 +43,7 @@ export class WorldEditorApp {
     this.host = host;
     this.editor = editor || null;
 
-    const defaultWorld = this._createWorldData({ id: "main_world", name: "Main World" });
-    this.worlds = [defaultWorld];
-    this.activeWorldId = defaultWorld.id;
-    this.document = new WorldDocument(defaultWorld);
-
+    this.document = new WorldDocument();
     this.state = new WorldEditorState();
     this.history = new WorldHistory();
 
@@ -236,7 +232,8 @@ export class WorldEditorApp {
     this.inspectorPanel.onNameChanged((name) => {
       this.document.setName(name);
       this.isDirty = true;
-      this._saveActiveWorldState();
+      const idx = this.worlds.findIndex((w) => w.id === this.activeWorldId);
+      if (idx >= 0) this.worlds[idx].name = name;
       this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
       this._setStatus("World name updated");
     });
@@ -245,7 +242,6 @@ export class WorldEditorApp {
       const accepted = this.document.setMapSize(width, height);
       if (!accepted) return;
       this.isDirty = true;
-      this._saveActiveWorldState();
       this.libraryPanel.setMaps(this._getLibraryMaps());
       this._renderAll();
       this._setStatus("Map size updated");
@@ -307,8 +303,8 @@ export class WorldEditorApp {
     this._syncLibraryUsed();
     this._syncHistoryButtons();
 
-    // Center view on content
-    this.gridView.centerOnContent();
+    // Load worlds from server (or create default)
+    await this._initWorlds();
   }
 
   unmount() {
@@ -357,9 +353,7 @@ export class WorldEditorApp {
   update(dt) {}
 
   async save() {
-    console.log("[WorldEditorApp.save]", this.document.toJSON());
-    this.isDirty = false;
-    this._setStatus("World saved (mock)");
+    await this._saveWorldToServer();
   }
 
   canSave() {
@@ -372,62 +366,209 @@ export class WorldEditorApp {
 
   // --- world management ---
 
-  _createWorldData(overrides = {}) {
-    this._worldCounter++;
-    return {
-      id: `world_${this._worldCounter}`,
-      name: `World ${this._worldCounter}`,
+  async _initWorlds() {
+    this.worlds = await this._fetchWorldList();
+
+    if (this.worlds.length > 0) {
+      await this._loadWorldFromServer(this.worlds[0].id);
+    } else {
+      await this._createAndSaveDefaultWorld();
+    }
+
+    this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
+  }
+
+  async _createAndSaveDefaultWorld() {
+    const data = {
+      id: "main_world",
+      name: "Main World",
       version: 1,
       mapSize: { width: 128, height: 128 },
       cells: {},
-      ...overrides,
     };
+
+    try {
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/worlds/${data.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error("[WorldEditor] Failed to create default world:", err);
+      this._setStatus("Failed to create default world");
+    }
+
+    this._updateWorldMeta(data);
+    await this._loadWorldFromServer(data.id);
   }
 
-  _saveActiveWorldState() {
-    const idx = this.worlds.findIndex(w => w.id === this.activeWorldId);
-    if (idx >= 0) {
-      this.worlds[idx] = this.document.toJSON();
+  async _fetchWorldList() {
+    try {
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/worlds`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error("[WorldEditor] Failed to fetch world list:", err);
+      this._setStatus("Failed to load worlds");
+      return [];
     }
   }
 
-  _loadWorld(worldId) {
+  async _loadWorldFromServer(worldId) {
+    const version = ++this._loadVersion;
+
+    try {
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/worlds/${worldId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (!this._isMounted) return;
+      if (version !== this._loadVersion) return; // stale load, discard
+
+      this.activeWorldId = worldId;
+      this.document = new WorldDocument(data);
+      this.state.selectedCell = null;
+      this.state.hoverCell = null;
+      this.state.selectedMapId = null;
+      this.history.clear();
+      this.isDirty = false;
+
+      this.gridView.setDocument(this.document);
+      this.libraryPanel.setMaps(this._getLibraryMaps());
+      this.inspectorPanel.renderMapInfo(null);
+      this._renderAll();
+      this._syncHistoryButtons();
+      this.gridView.centerOnContent();
+      this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
+      this.libraryPanel.setSelectedMapId(null);
+    } catch (err) {
+      if (!this._isMounted) return;
+      if (version !== this._loadVersion) return;
+      console.error("[WorldEditor] Failed to load world:", err);
+      this._setStatus("Failed to load world");
+    }
+  }
+
+  async _saveWorldToServer() {
+    if (!this.document) return;
+
+    const json = this.document.toJSON();
+    try {
+      this._setStatus("Saving...");
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/worlds/${json.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(json),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      this.isDirty = false;
+      this._updateWorldMeta(json);
+      this._setStatus("World saved");
+    } catch (err) {
+      console.error("[WorldEditor] Save failed:", err);
+      this._setStatus("Save failed");
+    }
+  }
+
+  async _deleteWorldFromServer(worldId) {
+    try {
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/worlds/${worldId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return true;
+    } catch (err) {
+      console.error("[WorldEditor] Delete failed:", err);
+      this._setStatus("Delete failed");
+      return false;
+    }
+  }
+
+  _updateWorldMeta(json) {
+    const meta = {
+      id: json.id,
+      name: json.name,
+      version: json.version,
+      mapSize: json.mapSize,
+      cellCount: Object.keys(json.cells ?? {}).length,
+    };
+    const idx = this.worlds.findIndex((w) => w.id === json.id);
+    if (idx >= 0) {
+      this.worlds[idx] = meta;
+    } else {
+      this.worlds.push(meta);
+    }
+  }
+
+  _generateWorldId() {
+    let i = 1;
+    while (this.worlds.some((w) => w.id === `world_${i}`)) {
+      i++;
+    }
+    return `world_${i}`;
+  }
+
+  async _confirmUnsavedChanges() {
+    if (!this.isDirty) return true;
+    const name = this.document?.getName() || this.activeWorldId || "this world";
+    const shouldSave = await this.editor.confirm({
+      title: "Unsaved Changes",
+      message: `"${name}" has unsaved changes. Save and continue?`,
+      confirmLabel: "Save & Continue",
+      cancelLabel: "Cancel",
+    });
+    if (!shouldSave) return false;
+    await this._saveWorldToServer();
+    return true;
+  }
+
+  async _loadWorld(worldId) {
     if (worldId === this.activeWorldId) return;
-    const worldData = this.worlds.find(w => w.id === worldId);
-    if (!worldData) return;
-
-    if (this.activeWorldId) this._saveActiveWorldState();
-
-    this.activeWorldId = worldId;
-    this.document = new WorldDocument(worldData);
-    this.state.selectedCell = null;
-    this.state.hoverCell = null;
-    this.state.selectedMapId = null;
-    this.history.clear();
-    this.isDirty = false;
-
-    this.gridView.setDocument(this.document);
-    this.libraryPanel.setMaps(this._getLibraryMaps());
-    this.inspectorPanel.renderMapInfo(null);
-    this._renderAll();
-    this._syncHistoryButtons();
-    this.gridView.centerOnContent();
-    this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
-    this.libraryPanel.setSelectedMapId(null);
+    if (!(await this._confirmUnsavedChanges())) return;
+    await this._loadWorldFromServer(worldId);
     this._setStatus("World loaded");
   }
 
-  _createWorld() {
-    if (this.activeWorldId) this._saveActiveWorldState();
-    const data = this._createWorldData();
-    this.worlds.push(data);
-    this.activeWorldId = null; // prevent double-save in _loadWorld
-    this._loadWorld(data.id);
+  async _createWorld() {
+    if (!(await this._confirmUnsavedChanges())) return;
+
+    const id = this._generateWorldId();
+    const data = {
+      id,
+      name: `World ${id.replace("world_", "")}`,
+      version: 1,
+      mapSize: { width: 128, height: 128 },
+      cells: {},
+    };
+
+    try {
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/worlds/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error("[WorldEditor] Create failed:", err);
+      this._setStatus("Failed to create world");
+      return;
+    }
+
+    this._updateWorldMeta(data);
+    await this._loadWorldFromServer(id);
     this._setStatus("World created");
   }
 
   async _deleteActiveWorld() {
-    const name = this.document.name || this.document.id || "this world";
+    const name = this.document?.getName() || this.document?.id || "this world";
     const ok = await this.editor.confirm({
       title: "Delete World",
       message: `Delete "${name}"? This will not delete its maps.`,
@@ -437,17 +578,23 @@ export class WorldEditorApp {
     });
     if (!ok) return;
 
-    const idx = this.worlds.findIndex(w => w.id === this.activeWorldId);
-    this.worlds.splice(idx, 1);
+    const deletedId = this.activeWorldId;
+    const success = await this._deleteWorldFromServer(deletedId);
+    if (!success) return;
+
+    const idx = this.worlds.findIndex((w) => w.id === deletedId);
+    if (idx >= 0) this.worlds.splice(idx, 1);
 
     if (this.worlds.length === 0) {
-      const data = this._createWorldData();
-      this.worlds.push(data);
+      this.activeWorldId = null;
+      await this._createAndSaveDefaultWorld();
+    } else {
+      const nextIdx = Math.min(idx, this.worlds.length - 1);
+      this.activeWorldId = null;
+      await this._loadWorldFromServer(this.worlds[nextIdx].id);
     }
 
-    const nextIdx = Math.min(idx, this.worlds.length - 1);
-    this.activeWorldId = null; // prevent _saveActiveWorldState in _loadWorld
-    this._loadWorld(this.worlds[nextIdx].id);
+    this.libraryPanel.renderWorldList(this.worlds, this.activeWorldId);
     this._setStatus("World deleted");
   }
 
