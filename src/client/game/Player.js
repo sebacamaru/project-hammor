@@ -1,5 +1,4 @@
 import { Entity } from "../../shared/data/models/Entity.js";
-import { TileCollision } from "../../shared/data/TileCollision.js";
 
 export class Player extends Entity {
   constructor(x, y) {
@@ -10,7 +9,7 @@ export class Player extends Entity {
     this.hitbox = { offsetX: 4, offsetY: 12, width: 8, height: 4 };
   }
 
-  update(dt, input, map) {
+  update(dt, input, collides) {
     super.update(dt);
 
     let dx = 0;
@@ -42,19 +41,21 @@ export class Player extends Entity {
 
     this.moving = dx !== 0 || dy !== 0;
 
-    const oldX = this.x;
-    const oldY = this.y;
+    const oldX = this.worldX;
+    const oldY = this.worldY;
 
     // Resolve X
-    this.x += dx * this.speed;
-    if (TileCollision.collidesWithLayer(map, "collision", this.x, this.y, this.hitbox)) {
-      this.x = oldX;
+    this.worldX += dx * this.speed;
+    if (collides(this.worldX, this.worldY, this.hitbox)) {
+      this.worldX = oldX;
     }
 
     // Resolve Y
-    this.y += dy * this.speed;
-    if (TileCollision.collidesWithLayer(map, "collision", this.x, this.y, this.hitbox)) {
-      this.y = oldY;
+    this.worldY += dy * this.speed;
+    if (collides(this.worldX, this.worldY, this.hitbox)) {
+      this.worldY = oldY;
     }
+
+    this.syncLocalFromWorld();
   }
 }

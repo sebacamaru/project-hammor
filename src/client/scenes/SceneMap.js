@@ -2,7 +2,6 @@ import { Container } from "pixi.js";
 import { Scene } from "../../shared/scene/Scene.js";
 import { Camera } from "../../shared/render/Camera.js";
 import { GameMap } from "../../shared/data/models/GameMap.js";
-import { MapChunkRenderer } from "../../shared/render/MapChunkRenderer.js";
 import { TILE_SIZE } from "../../shared/core/Config.js";
 import { EntityManager } from "../../shared/data/models/EntityManager.js";
 import { EntityRenderer } from "../../shared/render/EntityRenderer.js";
@@ -11,6 +10,10 @@ import { PlayerView } from "../game/PlayerView.js";
 import { ChunkDebugOverlay } from "../render/ChunkDebugOverlay.js";
 import { TileLayerDebugOverlay } from "../render/TileLayerDebugOverlay.js";
 import { HitboxDebugOverlay } from "../render/HitboxDebugOverlay.js";
+import { WorldData } from "../world/WorldData.js";
+import { LoadedRegion } from "../world/LoadedRegion.js";
+import { TileCollision } from "../../shared/data/TileCollision.js";
+import { makeRegionKey, worldToRegion, regionToWorldOffset } from "../../shared/world/WorldMath.js";
 
 export class SceneMap extends Scene {
   constructor(gameStart = {}) {
@@ -23,49 +26,95 @@ export class SceneMap extends Scene {
     this.root = new Container();
     engine.renderer.stage.addChild(this.root);
 
-    const viewport = engine.renderer.viewport;
+    this.viewport = engine.renderer.viewport;
 
-    // World data
-    const DEFAULT_MAP = "test_map";
-    const mapId = this.gameStart.mapId || DEFAULT_MAP;
-    try {
-      this.map = await GameMap.load(`/content/maps/${mapId}.json`);
-    } catch (err) {
-      console.warn(`[SceneMap] Failed to load map "${mapId}", falling back to "${DEFAULT_MAP}":`, err.message);
-      this.map = await GameMap.load(`/content/maps/${DEFAULT_MAP}.json`);
+    // World metadata (optional)
+    this.worldData = null;
+    this.regionPixelWidth = null;
+    this.regionPixelHeight = null;
+
+    if (this.gameStart.worldId) {
+      this.worldData = await WorldData.load(`/content/worlds/${this.gameStart.worldId}.json`);
+      this.regionPixelWidth = this.worldData.regionWidth * TILE_SIZE;
+      this.regionPixelHeight = this.worldData.regionHeight * TILE_SIZE;
     }
 
-    // Camera
-    this.camera = new Camera(viewport);
-    this.camera.setBounds(this.map.width, this.map.height);
+    // Global layer groups for multi-region z-order
+    this.groundLayer = new Container();
+    this.groundDetailLayer = new Container();
+    this.entityLayer = new Container();
+    this.fringeLayer = new Container();
 
-    // Chunk-based tilemap rendering
-    this.chunkRenderer = new MapChunkRenderer(this.map, viewport, [
-      "ground",
-      "ground_detail",
-      "fringe",
-    ]);
-    this.root.addChild(this.chunkRenderer.getLayerContainer("ground"));
-    this.root.addChild(this.chunkRenderer.getLayerContainer("ground_detail"));
+    this.root.addChild(this.groundLayer);
+    this.root.addChild(this.groundDetailLayer);
+    this.root.addChild(this.entityLayer);
+    this.root.addChild(this.fringeLayer);
+
+    // Region loading state
+    this.loadedRegions = new Map();
+    this._loadingKeys = new Set();
+    this._currentRegionRx = 0;
+    this._currentRegionRy = 0;
+
+    // Load initial map and regions
+    const DEFAULT_MAP = "test_map";
+    const mapId = this.gameStart.mapId || DEFAULT_MAP;
+
+    if (this.worldData) {
+      const startEntry = this.worldData.getMapEntry(mapId);
+      this._currentRegionRx = startEntry?.rx ?? 0;
+      this._currentRegionRy = startEntry?.ry ?? 0;
+
+      const surroundings = this._getSurroundingRegionCoords(this._currentRegionRx, this._currentRegionRy);
+      await Promise.all(surroundings.map(({ rx, ry }) => this._ensureRegionLoaded(rx, ry)));
+    } else {
+      // No world data — load single map as direct region at (0,0)
+      let map;
+      try {
+        map = await GameMap.load(`/content/maps/${mapId}.json`);
+      } catch (err) {
+        console.warn(`[SceneMap] Failed to load map "${mapId}", falling back to "${DEFAULT_MAP}":`, err.message);
+        map = await GameMap.load(`/content/maps/${DEFAULT_MAP}.json`);
+      }
+      const region = new LoadedRegion(0, 0, mapId, map, 0, 0, this.viewport);
+      this.loadedRegions.set(makeRegionKey(0, 0), region);
+      this._addRegionToLayers(region);
+    }
+
+    // Compatibility aliases — point to current region
+    this._updatePrimaryRegion();
+
+    // Camera
+    this.camera = new Camera(this.viewport);
+    if (this.worldData) {
+      const wb = this._computeWorldBounds();
+      if (wb) {
+        this.camera.setWorldBounds(wb.left, wb.top, wb.right, wb.bottom);
+      } else {
+        this.camera.setBounds(this.map.width, this.map.height);
+      }
+    } else {
+      this.camera.setBounds(this.map.width, this.map.height);
+    }
+
+    // World-aware collision resolver
+    this._collides = (wx, wy, hb) => this._collidesAtWorld(wx, wy, hb);
 
     // Entities
     this.entityManager = new EntityManager();
-    this.entityRenderer = new EntityRenderer(this.root);
+    this.entityRenderer = new EntityRenderer(this.entityLayer);
 
     // Player — updated manually, not through EntityManager
     const spawnX = (this.gameStart.x ?? 12) * TILE_SIZE;
     const spawnY = (this.gameStart.y ?? 12) * TILE_SIZE;
     this.player = new Player(spawnX, spawnY);
-    this.playerView = new PlayerView(this.root);
+    this.playerView = new PlayerView(this.entityLayer);
     this.camera.follow(this.player);
-
-    // Fringe layer — renders above entities/player
-    this.root.addChild(this.chunkRenderer.getLayerContainer("fringe"));
 
     // Debug overlays (sync with debug mode)
     this.collisionDebug = new TileLayerDebugOverlay(
       this.map,
-      viewport,
+      this.viewport,
       "collision",
       0xff0000,
     );
@@ -74,14 +123,32 @@ export class SceneMap extends Scene {
     this.hitboxDebug = new HitboxDebugOverlay();
     this.root.addChild(this.hitboxDebug.container);
 
-    this.chunkDebug = new ChunkDebugOverlay(this.map, viewport);
+    this.chunkDebug = new ChunkDebugOverlay(this.map, this.viewport);
     this.chunkDebug.enabled = false;
     this.root.addChild(this.chunkDebug.container);
+
+    // Set initial debug overlay offset from the primary region
+    const primaryKey = makeRegionKey(this._currentRegionRx, this._currentRegionRy);
+    const primaryRegion = this.loadedRegions.get(primaryKey);
+    if (primaryRegion) {
+      this._updateDebugOverlayRegion(primaryRegion);
+    }
   }
 
   update(dt) {
-    this.player.update(dt, this.engine.input, this.map);
+    this.player.update(dt, this.engine.input, this._collides);
     this.entityManager.updateAll(dt, this.engine.input);
+
+    // Region sync — load desired 3x3, unload stale
+    if (this.worldData) {
+      const { rx, ry } = this._getPlayerRegion();
+      if (rx !== this._currentRegionRx || ry !== this._currentRegionRy) {
+        this._currentRegionRx = rx;
+        this._currentRegionRy = ry;
+        this._syncRegions(rx, ry);
+        this._updatePrimaryRegion();
+      }
+    }
 
     // Debug overlays
     this.collisionDebug.enabled = this.engine.debug.visible;
@@ -120,35 +187,38 @@ export class SceneMap extends Scene {
     const tileY = Math.floor((this.player.y + 8) / TILE_SIZE);
     const { cx, cy } = this.map.worldToChunk(tileX, tileY);
     d.set("chunk", `${cx}, ${cy}`);
+    const currentRegion = this.loadedRegions.get(makeRegionKey(this._currentRegionRx, this._currentRegionRy));
+    const regionMapId = currentRegion?.mapId ?? "?";
+    d.set("region", `${this._currentRegionRx}, ${this._currentRegionRy} (${regionMapId})`);
     d.set("entities", this.entityManager.entities.size);
     d.set("viewport", `${vp.tilesX}x${vp.tilesY} @${vp.scale}x`);
     d.set("canvas", `${vp.cssWidth}x${vp.cssHeight}`);
     const el = this.engine.renderer.rootElement;
     d.set("container", `${el.clientWidth}x${el.clientHeight}`);
 
-    if (this.engine.debug.visible && this.chunkRenderer) {
-      const ci = this.chunkRenderer.getDebugInfo();
-      const chunkPx = this.map.chunkSize * this.map.tileSize;
-      d.set("---chunks---", "");
-      d.set("chunk size", `${this.map.chunkSize} tiles`);
-      d.set("camera chunk", `${Math.floor(this.camera.x / chunkPx)},${Math.floor(this.camera.y / chunkPx)}`);
-      d.set("visible chunks", ci.visibleChunkCount);
-      d.set("views / chunks", `${ci.mountedViewCount}/${ci.visibleChunkCount}`);
-      d.set(
-        "entered",
-        ci.enteredChunkCount > 0 ? ci.enteredChunkKeys.join(" ") : "",
-      );
-      d.set("exited", ci.exitedChunkCount > 0 ? ci.exitedChunkKeys.join(" ") : "");
-      d.set("empty cached", ci.emptyKeyCount);
-      if (ci.visibleChunkCount > 0) {
-        const keys = ci.visibleChunkKeys.map(k => k.split(",").map(Number));
-        const minX = Math.min(...keys.map(([x]) => x));
-        const maxX = Math.max(...keys.map(([x]) => x));
-        const minY = Math.min(...keys.map(([_, y]) => y));
-        const maxY = Math.max(...keys.map(([_, y]) => y));
-        d.set("chunk bounds", `${minX}-${maxX}, ${minY}-${maxY}`);
-      }
-    }
+    // if (this.engine.debug.visible && this.chunkRenderer) {
+    //   const ci = this.chunkRenderer.getDebugInfo();
+    //   const chunkPx = this.map.chunkSize * this.map.tileSize;
+    //   d.set("---chunks---", "");
+    //   d.set("chunk size", `${this.map.chunkSize} tiles`);
+    //   d.set("camera chunk", `${Math.floor(this.camera.x / chunkPx)},${Math.floor(this.camera.y / chunkPx)}`);
+    //   d.set("visible chunks", ci.visibleChunkCount);
+    //   d.set("views / chunks", `${ci.mountedViewCount}/${ci.visibleChunkCount}`);
+    //   d.set(
+    //     "entered",
+    //     ci.enteredChunkCount > 0 ? ci.enteredChunkKeys.join(" ") : "",
+    //   );
+    //   d.set("exited", ci.exitedChunkCount > 0 ? ci.exitedChunkKeys.join(" ") : "");
+    //   d.set("empty cached", ci.emptyKeyCount);
+    //   if (ci.visibleChunkCount > 0) {
+    //     const keys = ci.visibleChunkKeys.map(k => k.split(",").map(Number));
+    //     const minX = Math.min(...keys.map(([x]) => x));
+    //     const maxX = Math.max(...keys.map(([x]) => x));
+    //     const minY = Math.min(...keys.map(([_, y]) => y));
+    //     const maxY = Math.max(...keys.map(([_, y]) => y));
+    //     d.set("chunk bounds", `${minX}-${maxX}, ${minY}-${maxY}`);
+    //   }
+    // }
   }
 
   render(alpha) {
@@ -157,7 +227,11 @@ export class SceneMap extends Scene {
     this.root.x = -this.camera.x;
     this.root.y = -this.camera.y;
 
-    this.chunkRenderer.update(this.camera);
+    // Update chunk visibility for all loaded regions
+    for (const region of this.loadedRegions.values()) {
+      region.updateVisibility(this.camera);
+    }
+
     this.collisionDebug.render(this.camera);
     this.chunkDebug.render(this.camera);
     this.entityRenderer.sync(this.entityManager.getAll(), alpha);
@@ -173,9 +247,168 @@ export class SceneMap extends Scene {
     this.collisionDebug.destroy();
     this.hitboxDebug.destroy();
     this.chunkDebug.destroy();
-    this.chunkRenderer.destroy();
+    for (const region of this.loadedRegions.values()) {
+      region.destroy();
+    }
+    this.loadedRegions.clear();
     this.entityRenderer.destroy();
     this.playerView.destroy();
     this.root.destroy({ children: true });
+  }
+
+  // --- Region helpers ---
+
+  _computeWorldBounds() {
+    if (!this.worldData.maps.length) return null;
+
+    let minRx = Infinity, maxRx = -Infinity;
+    let minRy = Infinity, maxRy = -Infinity;
+    for (const entry of this.worldData.maps) {
+      if (entry.rx < minRx) minRx = entry.rx;
+      if (entry.rx > maxRx) maxRx = entry.rx;
+      if (entry.ry < minRy) minRy = entry.ry;
+      if (entry.ry > maxRy) maxRy = entry.ry;
+    }
+    return {
+      left: minRx * this.regionPixelWidth,
+      top: minRy * this.regionPixelHeight,
+      right: (maxRx + 1) * this.regionPixelWidth,
+      bottom: (maxRy + 1) * this.regionPixelHeight,
+    };
+  }
+
+  _collidesAtWorld(worldX, worldY, hitbox) {
+    const left = worldX + hitbox.offsetX;
+    const top = worldY + hitbox.offsetY;
+    const right = left + hitbox.width - 1;
+    const bottom = top + hitbox.height - 1;
+
+    const corners = [
+      { x: left, y: top },
+      { x: right, y: top },
+      { x: left, y: bottom },
+      { x: right, y: bottom },
+    ];
+
+    const checked = new Set();
+    for (const corner of corners) {
+      const { rx, ry } = worldToRegion(corner.x, corner.y, this.regionPixelWidth, this.regionPixelHeight);
+      const key = makeRegionKey(rx, ry);
+      if (checked.has(key)) continue;
+      checked.add(key);
+
+      const region = this.loadedRegions.get(key);
+      if (!region) return true;
+
+      const local = region.worldToLocal(worldX, worldY);
+      if (TileCollision.collidesWithLayer(region.map, "collision", local.x, local.y, hitbox)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _getPlayerRegion() {
+    return worldToRegion(
+      this.player.worldX, this.player.worldY,
+      this.regionPixelWidth, this.regionPixelHeight,
+    );
+  }
+
+  _getSurroundingRegionCoords(rx, ry) {
+    const coords = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        coords.push({ rx: rx + dx, ry: ry + dy });
+      }
+    }
+    return coords;
+  }
+
+  /** Update this.map and this.chunkRenderer to the current region */
+  _updatePrimaryRegion() {
+    const key = makeRegionKey(this._currentRegionRx, this._currentRegionRy);
+    const region = this.loadedRegions.get(key);
+    if (region) {
+      this.map = region.map;
+      this.chunkRenderer = region.chunkRenderer;
+      this._updateDebugOverlayRegion(region);
+    }
+  }
+
+  _updateDebugOverlayRegion(region) {
+    if (!this.collisionDebug) return; // not yet created during enter()
+    this.collisionDebug.map = region.map;
+    this.collisionDebug.setOffset(region.offsetX, region.offsetY);
+    this.chunkDebug.map = region.map;
+    this.chunkDebug.setOffset(region.offsetX, region.offsetY);
+  }
+
+  _addRegionToLayers(region) {
+    this.groundLayer.addChild(region.getLayerContainer("ground"));
+    this.groundDetailLayer.addChild(region.getLayerContainer("ground_detail"));
+    this.fringeLayer.addChild(region.getLayerContainer("fringe"));
+  }
+
+  _removeRegionFromLayers(region) {
+    const ground = region.getLayerContainer("ground");
+    const detail = region.getLayerContainer("ground_detail");
+    const fringe = region.getLayerContainer("fringe");
+
+    if (ground.parent === this.groundLayer) this.groundLayer.removeChild(ground);
+    if (detail.parent === this.groundDetailLayer) this.groundDetailLayer.removeChild(detail);
+    if (fringe.parent === this.fringeLayer) this.fringeLayer.removeChild(fringe);
+  }
+
+  _syncRegions(rx, ry) {
+    // Build desired key set
+    const desired = new Set();
+    const surroundings = this._getSurroundingRegionCoords(rx, ry);
+    for (const coord of surroundings) {
+      desired.add(makeRegionKey(coord.rx, coord.ry));
+    }
+
+    // Load desired first
+    for (const coord of surroundings) {
+      this._ensureRegionLoaded(coord.rx, coord.ry);
+    }
+
+    // Unload stale — skip regions still being loaded
+    for (const key of [...this.loadedRegions.keys()]) {
+      if (!desired.has(key) && !this._loadingKeys.has(key)) {
+        this._unloadRegion(key);
+      }
+    }
+  }
+
+  _unloadRegion(key) {
+    const region = this.loadedRegions.get(key);
+    if (!region) return;
+
+    this._removeRegionFromLayers(region);
+    region.destroy();
+    this.loadedRegions.delete(key);
+  }
+
+  async _ensureRegionLoaded(rx, ry) {
+    const key = makeRegionKey(rx, ry);
+    if (this.loadedRegions.has(key) || this._loadingKeys.has(key)) return;
+
+    const entry = this.worldData?.getEntry(rx, ry);
+    if (!entry) return;
+
+    this._loadingKeys.add(key);
+    try {
+      const map = await GameMap.load(`/content/maps/${entry.mapId}.json`);
+      const offset = regionToWorldOffset(rx, ry, this.regionPixelWidth, this.regionPixelHeight);
+      const region = new LoadedRegion(rx, ry, entry.mapId, map, offset.x, offset.y, this.viewport);
+
+      this.loadedRegions.set(key, region);
+      this._addRegionToLayers(region);
+    } catch (err) {
+      console.warn(`[SceneMap] Failed to load region (${rx},${ry}):`, err.message);
+    } finally {
+      this._loadingKeys.delete(key);
+    }
   }
 }

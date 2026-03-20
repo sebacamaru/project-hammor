@@ -1,14 +1,32 @@
 {
   "id": "main_world",
-  "name": "Main World",
-  "version": 1,
-  "mapSize": {
-    "width": 192,
-    "height": 192
-  },
-  "cells": {
-    "0,0": {
-      "mapId": "test_map"
+  "regionWidth": 192,
+  "regionHeight": 192,
+  "maps": [
+    {
+      "mapId": "test_map_north",
+      "rx": 0,
+      "ry": -1
+    },
+    {
+      "mapId": "test_map_west",
+      "rx": -1,
+      "ry": 0
+    },
+    {
+      "mapId": "test_map",
+      "rx": 0,
+      "ry": 0
+    },
+    {
+      "mapId": "test_map_east",
+      "rx": 1,
+      "ry": 0
+    },
+    {
+      "mapId": "test_map_south",
+      "rx": 0,
+      "ry": 1
     }
-  }
+  ]
 }

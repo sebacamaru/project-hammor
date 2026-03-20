@@ -19,6 +19,7 @@ export class ProjectSettings {
     const rawY = gs?.y;
     return {
       gameStart: {
+        worldId: (typeof gs?.worldId === "string" && gs.worldId) || null,
         mapId: (typeof gs?.mapId === "string" && gs.mapId) || DEFAULT_GAME_START.mapId,
         x: Number.isFinite(rawX) ? Math.trunc(rawX) : DEFAULT_GAME_START.x,
         y: Number.isFinite(rawY) ? Math.trunc(rawY) : DEFAULT_GAME_START.y,

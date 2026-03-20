@@ -65,8 +65,20 @@ export function validateWorldId(id) {
   return id;
 }
 
+export function getAuthoredWorldsDir() {
+  return path.join(getWorldsDir(), ".authored");
+}
+
+export function getWorldBackupDir() {
+  return path.join(getWorldsDir(), ".backup");
+}
+
 export function getWorldPath(id) {
   return path.join(getWorldsDir(), `${validateWorldId(id)}.json`);
+}
+
+export function getAuthoredWorldPath(id) {
+  return path.join(getAuthoredWorldsDir(), `${validateWorldId(id)}.json`);
 }
 
 export function getProjectPath() {

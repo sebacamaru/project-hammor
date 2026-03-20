@@ -1,5 +1,6 @@
 {
   "gameStart": {
+    "worldId": "main_world",
     "mapId": "test_map",
     "x": 24,
     "y": 24

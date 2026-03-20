@@ -1,0 +1,26 @@
+{
+  "id": "main_world",
+  "name": "Main World",
+  "version": 1,
+  "mapSize": {
+    "width": 192,
+    "height": 192
+  },
+  "cells": {
+    "-1,0": {
+      "mapId": "test_map_west"
+    },
+    "0,-1": {
+      "mapId": "test_map_north"
+    },
+    "0,0": {
+      "mapId": "test_map"
+    },
+    "0,1": {
+      "mapId": "test_map_south"
+    },
+    "1,0": {
+      "mapId": "test_map_east"
+    }
+  }
+}

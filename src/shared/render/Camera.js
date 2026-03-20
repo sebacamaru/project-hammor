@@ -21,25 +21,49 @@ export class Camera {
   setBounds(mapWidth, mapHeight) {
     this.mapWidthPx = mapWidth * TILE_SIZE;
     this.mapHeightPx = mapHeight * TILE_SIZE;
+    this._worldLeft = null;
+    this._worldTop = null;
+    this._worldRight = null;
+    this._worldBottom = null;
+    this._recalcBounds();
+  }
+
+  setWorldBounds(left, top, right, bottom) {
+    this._worldLeft = left;
+    this._worldTop = top;
+    this._worldRight = right;
+    this._worldBottom = bottom;
+    this.mapWidthPx = null;
+    this.mapHeightPx = null;
     this._recalcBounds();
   }
 
   /** Recompute clamping bounds from current viewport size */
   _recalcBounds() {
-    if (this.mapWidthPx == null) return;
-    this.bounds = {
-      minX: 0,
-      minY: 0,
-      maxX: Math.max(0, this.mapWidthPx - this.viewport.widthPx),
-      maxY: Math.max(0, this.mapHeightPx - this.viewport.heightPx),
-    };
+    if (this._worldRight != null) {
+      this.bounds = {
+        minX: this._worldLeft,
+        minY: this._worldTop,
+        maxX: Math.max(this._worldLeft, this._worldRight - this.viewport.widthPx),
+        maxY: Math.max(this._worldTop, this._worldBottom - this.viewport.heightPx),
+      };
+    } else if (this.mapWidthPx != null) {
+      this.bounds = {
+        minX: 0,
+        minY: 0,
+        maxX: Math.max(0, this.mapWidthPx - this.viewport.widthPx),
+        maxY: Math.max(0, this.mapHeightPx - this.viewport.heightPx),
+      };
+    }
   }
 
   update() {
     if (!this.target) return;
 
-    this.x = this.target.x - this.viewport.widthPx / 2;
-    this.y = this.target.y - this.viewport.heightPx / 2;
+    const tx = this.target.worldX ?? this.target.x;
+    const ty = this.target.worldY ?? this.target.y;
+    this.x = tx - this.viewport.widthPx / 2;
+    this.y = ty - this.viewport.heightPx / 2;
 
     this._clamp();
   }
@@ -64,8 +88,12 @@ export class Camera {
     this._recalcBounds();
 
     // Interpolated target position — matches what sprites will render
-    const ix = target.prevX + (target.x - target.prevX) * alpha;
-    const iy = target.prevY + (target.y - target.prevY) * alpha;
+    const wx = target.worldX ?? target.x;
+    const wy = target.worldY ?? target.y;
+    const pwx = target.prevWorldX ?? target.prevX;
+    const pwy = target.prevWorldY ?? target.prevY;
+    const ix = pwx + (wx - pwx) * alpha;
+    const iy = pwy + (wy - pwy) * alpha;
 
     this.x = ix - this.viewport.widthPx / 2;
     this.y = iy - this.viewport.heightPx / 2;

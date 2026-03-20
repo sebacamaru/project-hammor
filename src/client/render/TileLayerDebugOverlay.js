@@ -8,9 +8,16 @@ export class TileLayerDebugOverlay {
     this.layerName = layerName;
     this.color = color;
     this.enabled = false;
+    this.offsetX = 0;
+    this.offsetY = 0;
     this.container = new Container();
     this.graphics = new Graphics();
     this.container.addChild(this.graphics);
+  }
+
+  setOffset(offsetX, offsetY) {
+    this.offsetX = offsetX;
+    this.offsetY = offsetY;
   }
 
   render(camera, zoom = 1) {
@@ -21,18 +28,20 @@ export class TileLayerDebugOverlay {
     }
     this.container.visible = true;
 
-    const startX = Math.floor(camera.x / TILE_SIZE) - 1;
-    const startY = Math.floor(camera.y / TILE_SIZE) - 1;
+    // Convert camera world-space to local tile coords for map queries
+    const localStartX = Math.floor((camera.x - this.offsetX) / TILE_SIZE) - 1;
+    const localStartY = Math.floor((camera.y - this.offsetY) / TILE_SIZE) - 1;
     const cols = Math.ceil(this.viewport.tilesX / zoom) + 2;
     const rows = Math.ceil(this.viewport.tilesY / zoom) + 2;
 
     for (let dy = 0; dy < rows; dy++) {
       for (let dx = 0; dx < cols; dx++) {
-        const tx = startX + dx;
-        const ty = startY + dy;
+        const tx = localStartX + dx;
+        const ty = localStartY + dy;
         const value = this.map.getTile(this.layerName, tx, ty);
         if (value < 0) continue;
-        this.graphics.rect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        // Draw in world-space
+        this.graphics.rect(this.offsetX + tx * TILE_SIZE, this.offsetY + ty * TILE_SIZE, TILE_SIZE, TILE_SIZE);
       }
     }
     this.graphics.fill({ color: this.color, alpha: 0.4 });
