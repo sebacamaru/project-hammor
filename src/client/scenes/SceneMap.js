@@ -97,16 +97,25 @@ export class SceneMap extends Scene {
       this.camera.setBounds(this.map.width, this.map.height);
     }
 
-    // World-aware collision resolver
-    this._collides = (wx, wy, hb) => this._collidesAtWorld(wx, wy, hb);
+    // Collision resolver: world-aware (multi-region) or simple local (single map)
+    if (this.worldData) {
+      this._collides = (wx, wy, hb) => this._collidesAtWorld(wx, wy, hb);
+    } else {
+      this._collides = (wx, wy, hb) => TileCollision.collidesWithLayer(this.map, "collision", wx, wy, hb);
+    }
 
     // Entities
     this.entityManager = new EntityManager();
     this.entityRenderer = new EntityRenderer(this.entityLayer);
 
     // Player — updated manually, not through EntityManager
-    const spawnX = (this.gameStart.x ?? 12) * TILE_SIZE;
-    const spawnY = (this.gameStart.y ?? 12) * TILE_SIZE;
+    // Spawn in world space: local tile coords + region world offset
+    let spawnX = (this.gameStart.x ?? 12) * TILE_SIZE;
+    let spawnY = (this.gameStart.y ?? 12) * TILE_SIZE;
+    if (this.worldData) {
+      spawnX += this._currentRegionRx * this.regionPixelWidth;
+      spawnY += this._currentRegionRy * this.regionPixelHeight;
+    }
     this.player = new Player(spawnX, spawnY);
     this.playerView = new PlayerView(this.entityLayer);
     this.camera.follow(this.player);
@@ -309,10 +318,10 @@ export class SceneMap extends Scene {
   }
 
   _getPlayerRegion() {
-    return worldToRegion(
-      this.player.worldX, this.player.worldY,
-      this.regionPixelWidth, this.regionPixelHeight,
-    );
+    const hb = this.player.hitbox;
+    const cx = this.player.worldX + hb.offsetX + hb.width / 2;
+    const cy = this.player.worldY + hb.offsetY + hb.height / 2;
+    return worldToRegion(cx, cy, this.regionPixelWidth, this.regionPixelHeight);
   }
 
   _getRegionCoordsInRadius(rx, ry, radius) {

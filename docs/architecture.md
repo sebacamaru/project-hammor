@@ -16,15 +16,17 @@ src/
 - `server/` → `shared/core/` and `shared/data/` ONLY (never `shared/render/` or `shared/assets/`)
 
 ## Init sequence (ClientApp.start)
-1. Renderer.init() — compute viewport, create Pixi app at dynamic resolution, append canvas, setup resize
-2. AssetManager.init() — register manifest
-3. AssetManager.loadBundle('core') — load textures
-4. new Input() — bind keyboard listeners
-5. new SceneManager() — empty stack
-6. new DebugOverlay() — attach to stage (starts hidden)
-7. new GameLoop(clientApp) — ready but not running
-8. SceneManager.goto(SceneMap) — enter first scene
-9. GameLoop.start() — begin RAF
+1. ProjectSettings.load() — fetch `/content/project.json` for gameStart config
+2. Renderer.init() — compute viewport, create Pixi app at dynamic resolution, append canvas, setup resize
+3. AssetManager.init() — register manifest
+4. AssetManager.loadBundle('core') — load textures
+5. new Input() — bind keyboard listeners
+6. new SceneManager() — empty stack
+7. new DebugOverlay() — attach to stage (starts hidden)
+8. new GameLoop(clientApp) — ready but not running
+9. If gameStart.worldId: WorldData.load() → fetch world JSON → index maps by region
+10. SceneManager.goto(SceneMap, { gameStart, worldData }) — enter first scene
+11. GameLoop.start() — begin RAF
 
 ## Data flow per frame
 ```
@@ -91,7 +93,7 @@ window resize → Renderer.resize()
 ## Entity system design
 
 ### Data layer (shared/data/models/)
-- **Entity**: pure data object (id, x, y, prevX, prevY, direction, speed, type). Auto-increment ID.
+- **Entity**: pure data object (id, x, y, prevX, prevY, worldX, worldY, direction, speed, type). Auto-increment ID. `syncLocalFromWorld()` copies world→local coords.
 - **EntityManager**: Map<id, Entity>, add/remove/get/getAll/updateAll
 - **EntityData**: serializable snapshot for network/persistence, with fromEntity()/toPlain()/fromPlain()
 - **PlayerAnimations**: animation name → { row, speed } mapping + DIRECTION_NAMES array
@@ -99,6 +101,7 @@ window resize → Renderer.resize()
 ### Client gameplay (client/game/)
 - **Player extends Entity**: adds input-driven movement, normalized diagonal, hitbox-based tile collision (per-axis resolve)
 - **Player.hitbox**: `{ offsetX: 4, offsetY: 12, width: 8, height: 4 }` — AABB relative to entity position
+- **Player.collisionResolver**: optional callback for world-aware collision (set by SceneMap when world streaming is active)
 - **PlayerView**: owns AnimatedSprite, animation map from spritesheet, updates from Player state
 
 ### Render layer (shared/render/)
@@ -168,6 +171,54 @@ window resize → Renderer.resize()
 - **ChunkLayerView**: Container of Sprites for one chunk's one layer. Positioned at world coords (cx * chunkSize * tileSize).
 - Z-order in SceneMap: ground container → ground_detail container → entities → fringe container
 
+## World streaming (client)
+
+### Bootstrap & config
+- `ProjectSettings` (`shared/data/loaders/ProjectSettings.js`): loads `/content/project.json`, provides `{ gameStart: { worldId?, mapId, x, y } }` with safe defaults
+- `WorldData` (`client/world/WorldData.js`): loads `/content/worlds/{id}.json`, indexes maps by region `_byRegion` and `_byMapId`
+- `WorldMath` (`shared/world/WorldMath.js`): `makeRegionKey(rx,ry)`, `worldToRegion(worldX, worldY, rw, rh)`, `regionToWorldOffset(rx, ry, rw, rh)`
+
+### Region management
+- `LoadedRegion` (`client/world/LoadedRegion.js`): wraps MapData + MapChunkRenderer with world offset
+  - `offsetX/Y` = region grid coords × regionPixelWidth/Height
+  - `worldToLocal(wx, wy)` for coordinate conversion
+  - `updateVisibility(camera)` syncs chunk renderer from world-space camera
+  - Layer containers positioned at offset so chunks render in world space
+
+### SceneMap region streaming
+```
+_syncRegions(rx, ry)
+├── Load set: _getRegionCoordsInRadius(rx, ry, 1) → 3×3
+├── Keep set: _getRegionCoordsInRadius(rx, ry, 2) → 5×5 (hysteresis)
+├── Load: _ensureRegionLoaded() for each in load set
+└── Unload: remove regions outside keep set (skip _loadingKeys)
+```
+- `_ensureRegionLoaded(rx, ry)`: async fetch map → create LoadedRegion → add to layers
+- `_loadingKeys` Set prevents duplicate loads and premature unloads
+- Layer containers per region added to shared ground/detail/fringe parent containers
+
+### World-aware collision
+- `_collidesAtWorld(worldX, worldY, hitbox)`: checks all affected regions
+- Hitbox corners → region grid → each region's collision layer
+- Unloaded regions = collision (fail-safe)
+
+### World-aware camera
+- `Camera.setWorldBounds(left, top, right, bottom)` for world-extent clamping
+- `_computeWorldBounds()` in SceneMap calculates from all worldData map entries
+
+### World JSON formats
+Runtime (`content/worlds/{id}.json`):
+```json
+{ "id": "main_world", "regionWidth": 192, "regionHeight": 192,
+  "maps": [{ "mapId": "test_map", "rx": 0, "ry": 0 }, ...] }
+```
+Authored (`content/worlds/.authored/{id}.json`):
+```json
+{ "id": "main_world", "name": "...", "version": 1,
+  "mapSize": { "width": 192, "height": 192 },
+  "cells": { "0,0": { "mapId": "test_map" }, ... } }
+```
+
 ## Debug overlays (client/render/)
 - **ChunkDebugOverlay**: blue tile grid lines + red chunk boundary lines (2px). Uses Graphics.rect + fill.
 - **TileLayerDebugOverlay**: highlights tiles in a named layer (used for collision). Configurable color.
@@ -232,7 +283,11 @@ MapEditorApp — src/editor/workspaces/map/MapEditorApp.js
 
 #### Map editor persistence (editor-server)
 - **editor-server** (`tools/editor-server/`): Fastify on port 3032 (localhost only, CORS for local dev origins)
-- **Routes**: `GET /api/maps` (list), `GET /api/maps/:id` (load), `PUT /api/maps/:id` (save), `GET /api/tilesets/:id`
+- **Routes**:
+  - Maps: `GET /api/maps` (list), `GET /api/maps/:id` (load), `PUT /api/maps/:id` (save)
+  - Tilesets: `GET /api/tilesets/:id`
+  - Worlds: `GET /api/worlds` (list), `GET /api/worlds/:id` (load), `PUT /api/worlds/:id` (save), `DELETE /api/worlds/:id`
+  - Project: `GET /api/project`, `PUT /api/project` (gameStart config)
 - **Save flow**: `MapEditorApp.saveMap()` → PUT authored JSON to editor-server → server writes both:
   - `content/maps/.authored/{id}.json` — editor-native format (flat Uint16Array layers)
   - `content/maps/{id}.json` — runtime format (chunk-based, for client/server consumption)

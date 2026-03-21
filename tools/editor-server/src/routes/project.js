@@ -1,8 +1,9 @@
 import { getProjectPath } from "../lib/paths.js";
 import { fileExists, readJsonFile, writeJsonFile } from "../lib/fs-utils.js";
+import { findWorldIdForMap } from "../lib/world-index.js";
 
 const DEFAULT_PROJECT = {
-  gameStart: { mapId: "", x: 0, y: 0 },
+  gameStart: { mapId: "", x: 0, y: 0, worldId: null },
 };
 
 function normalizeInt(value) {
@@ -18,14 +19,26 @@ function validateProjectPayload(body) {
 }
 
 export async function registerProjectRoutes(fastify) {
-  fastify.get("/api/project", async () => {
+  fastify.get("/api/project", async (request) => {
     const projectPath = getProjectPath();
 
     if (!(await fileExists(projectPath))) {
       return DEFAULT_PROJECT;
     }
 
-    return readJsonFile(projectPath);
+    const data = await readJsonFile(projectPath);
+
+    // Derive worldId if missing so the editor always sees it
+    const gs = data?.gameStart;
+    if (gs && typeof gs.mapId === "string" && gs.mapId && !gs.worldId) {
+      try {
+        gs.worldId = await findWorldIdForMap(gs.mapId);
+      } catch (err) {
+        request.log.warn(`Failed to derive worldId on GET: ${err.message}`);
+      }
+    }
+
+    return data;
   });
 
   fastify.put("/api/project", async (request, reply) => {
@@ -37,12 +50,21 @@ export async function registerProjectRoutes(fastify) {
       return { ok: false, error: validationError };
     }
 
+    const mapId = body.gameStart.mapId;
+    const x = normalizeInt(body.gameStart.x);
+    const y = normalizeInt(body.gameStart.y);
+
+    let worldId = null;
+    if (mapId) {
+      try {
+        worldId = await findWorldIdForMap(mapId);
+      } catch (err) {
+        request.log.warn(`Failed to derive worldId for "${mapId}": ${err.message}`);
+      }
+    }
+
     const normalized = {
-      gameStart: {
-        mapId: body.gameStart.mapId,
-        x: normalizeInt(body.gameStart.x),
-        y: normalizeInt(body.gameStart.y),
-      },
+      gameStart: { mapId, x, y, worldId },
     };
 
     await writeJsonFile(getProjectPath(), normalized);

@@ -23,11 +23,13 @@
 - See [architecture.md](architecture.md) for detailed subsystem docs
 
 ## Key files
-- `src/client/ClientApp.js` — orchestrator (was Engine.js), init order matters
+- `src/client/ClientApp.js` — orchestrator, loads ProjectSettings, passes gameStart to SceneMap
 - `src/client/main.js` — entry point
-- `src/client/game/Player.js` — player movement with WASD/arrows + tile collision
+- `src/client/game/Player.js` — player movement with WASD/arrows + tile collision (world-aware via collisionResolver)
 - `src/client/game/PlayerView.js` — AnimatedSprite from spritesheet, floor-snapped positioning
-- `src/client/scenes/SceneMap.js` — main game scene, wires everything together
+- `src/client/scenes/SceneMap.js` — main game scene, world streaming, multi-region management
+- `src/client/world/WorldData.js` — loads world JSON, indexes maps by region and mapId
+- `src/client/world/LoadedRegion.js` — wraps MapData + MapChunkRenderer with world offset
 - `src/shared/input/Input.js` — keyboard polling (shared by client + editor)
 - `src/client/render/ChunkDebugOverlay.js` — tile grid + chunk boundary debug lines
 - `src/client/render/HitboxDebugOverlay.js` — entity hitbox debug rectangles
@@ -37,7 +39,7 @@
 - `src/shared/render/Renderer.js` — Pixi setup, owns ViewportState, resize logic
 - `src/shared/render/ResolutionManager.js` — pure function: computeViewport()
 - `src/shared/render/ViewportState.js` — plain data class (scale, tiles, dimensions, offsets)
-- `src/shared/render/Camera.js` — follows player, bounds clamping, debug free mode (IJKL)
+- `src/shared/render/Camera.js` — follows player, bounds clamping, debug free mode (IJKL), setWorldBounds()
 - `src/shared/render/MapChunkRenderer.js` — chunk-based tilemap rendering (Sprites from atlas, uses VisibleChunkTracker)
 - `src/shared/render/VisibleChunkTracker.js` — chunk enter/exit diff tracking per frame
 - `src/shared/render/ChunkLayerView.js` — single chunk+layer Sprite container
@@ -47,11 +49,13 @@
 - `src/shared/data/models/MapData.js` — chunk-based map data (width, height, chunks, dirty tracking)
 - `src/shared/data/models/ChunkData.js` — single chunk tile data (layers of Int16Array, filled with -1)
 - `src/shared/data/models/GameMap.js` — static loader facade
-- `src/shared/data/models/Entity.js` — base entity data (no PixiJS)
+- `src/shared/data/models/Entity.js` — base entity data (no PixiJS), has worldX/worldY + syncLocalFromWorld()
+- `src/shared/world/WorldMath.js` — makeRegionKey, worldToRegion, regionToWorldOffset
 - `src/shared/data/models/EntityManager.js` — entity registry
 - `src/shared/data/models/EntityData.js` — serializable entity snapshot
 - `src/shared/data/models/PlayerAnimations.js` — animation metadata
 - `src/shared/data/loaders/MapLoader.js` — fetch map + tileset JSON → MapData with chunks
+- `src/shared/data/loaders/ProjectSettings.js` — loads /content/project.json (gameStart config)
 - `src/shared/data/serializers/MapSerializer.js` — MapData ↔ JSON
 - `src/shared/data/validators/MapValidator.js` — validate map integrity
 - `src/shared/assets/AssetsManager.js` — PixiJS Assets wrapper
@@ -79,9 +83,12 @@
 - `tools/editor-server/src/server.js` — Fastify dev server (port 3032)
 - `tools/editor-server/src/routes/maps.js` — map list/load/save API
 - `tools/editor-server/src/routes/tilesets.js` — tileset API
-- `tools/editor-server/src/lib/map-codecs.js` — authored↔runtime conversion
-- `tools/editor-server/src/lib/paths.js` — content path resolution
+- `tools/editor-server/src/lib/map-codecs.js` — authored↔runtime map conversion
+- `tools/editor-server/src/lib/world-codecs.js` — authored↔runtime world conversion
+- `tools/editor-server/src/lib/paths.js` — content path resolution (maps, worlds, project)
 - `tools/editor-server/src/lib/fs-utils.js` — file I/O + backup helpers
+- `tools/editor-server/src/routes/worlds.js` — world list/load/save/delete API
+- `tools/editor-server/src/routes/project.js` — project.json GET/PUT API
 - `src/server/ServerApp.js` — headless tick loop (skeleton)
 
 ## PixiJS v8 gotchas
@@ -108,5 +115,9 @@
 - World editor: Canvas 2D grid editor for placing maps on a world grid (adjacency constraints, library, inspector)
 - Editor-server: Fastify dev server (port 3032) for save/load, dual-format persistence (authored + runtime), auto-backups
 - Empty tile is -1 (EMPTY_TILE), tile IDs are 0-indexed into atlas, Int16Array storage
+- World streaming: multi-region loading with 3×3 load radius, 5×5 keep radius (hysteresis)
+- World-aware collision across region boundaries
+- Bootstrap from project.json (gameStart: worldId, mapId, x, y)
+- Editor-server supports maps, worlds, tilesets, and project config CRUD
 - Server is stub, not functional
 - No networking yet

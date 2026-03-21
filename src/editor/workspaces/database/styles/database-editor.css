@@ -75,6 +75,14 @@
     outline: none;
 }
 
+.database-world-info {
+    display: block;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+    font-style: italic;
+    margin-top: 2px;
+}
+
 .database-save-btn {
     width: 100%;
     padding: 6px 10px;

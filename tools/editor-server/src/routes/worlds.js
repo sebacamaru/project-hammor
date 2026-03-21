@@ -21,6 +21,7 @@ import {
   runtimeToAuthoredJson,
   validateAuthoredWorldPayload,
 } from "../lib/world-codecs.js";
+import { invalidateWorldIndex } from "../lib/world-index.js";
 
 // Returns json file ids from a directory, ignoring hidden dirs and .runtime. files.
 async function listJsonFileIds(dirPath) {
@@ -59,7 +60,7 @@ function looksLikeAuthoredWorld(data) {
 
 // Reads lightweight metadata from a single world, preferring authored format.
 async function readWorldMeta(id) {
-  const fallback = { id, name: id, version: 1, mapSize: null, cellCount: 0 };
+  const fallback = { id, name: id, version: 1, mapSize: null, cellCount: 0, mapIds: [] };
   try {
     const authoredPath = getAuthoredWorldPath(id);
     const runtimePath = getWorldPath(id);
@@ -74,12 +75,20 @@ async function readWorldMeta(id) {
 
     if (!json) return fallback;
 
+    const cells = json.cells ?? {};
+    const mapIds = [...new Set(
+      Object.values(cells)
+        .map((c) => c?.mapId)
+        .filter((m) => typeof m === "string" && m),
+    )];
+
     return {
       id,
       name: typeof json.name === "string" ? json.name : id,
       version: typeof json.version === "number" ? json.version : 1,
       mapSize: json.mapSize ?? null,
-      cellCount: Object.keys(json.cells ?? {}).length,
+      cellCount: Object.keys(cells).length,
+      mapIds,
     };
   } catch {
     return fallback;
@@ -175,6 +184,8 @@ export async function registerWorldRoutes(fastify) {
     }
     await writeJsonFile(authoredPath, authoredJson);
 
+    invalidateWorldIndex();
+
     reply.code(200);
     return authoredJson;
   });
@@ -194,6 +205,8 @@ export async function registerWorldRoutes(fastify) {
 
     if (runtimeExists) await unlink(runtimePath);
     if (authoredExists) await unlink(authoredPath);
+
+    invalidateWorldIndex();
 
     reply.code(200);
     return { ok: true };

@@ -9,6 +9,7 @@ export class DatabaseEditorApp {
     this._isSaving = false;
 
     this._mapCatalog = [];
+    this._worldCatalog = null; // null = not loaded yet
     this._data = null;
 
     this._mapSelect = null;
@@ -16,6 +17,7 @@ export class DatabaseEditorApp {
     this._yInput = null;
     this._saveBtn = null;
     this._statusEl = null;
+    this._worldInfoEl = null;
     this._statusTimeout = null;
   }
 
@@ -36,6 +38,7 @@ export class DatabaseEditorApp {
             <select class="js-map-select">
               <option value="" disabled selected>Loading…</option>
             </select>
+            <span class="database-world-info js-world-info">World: loading…</span>
           </div>
 
           <div class="database-field">
@@ -61,12 +64,15 @@ export class DatabaseEditorApp {
     this._yInput = root.querySelector(".js-y-input");
     this._saveBtn = root.querySelector(".js-save-btn");
     this._statusEl = root.querySelector(".js-status");
+    this._worldInfoEl = root.querySelector(".js-world-info");
 
     this._saveBtn.addEventListener("click", () => this._onSave());
+    this._mapSelect.addEventListener("change", () => this._updateWorldInfo());
 
     host.appendChild(root);
 
     this._fetchMapCatalog();
+    this._fetchWorldCatalog();
     this._loadProject();
   }
 
@@ -86,7 +92,9 @@ export class DatabaseEditorApp {
     this._yInput = null;
     this._saveBtn = null;
     this._statusEl = null;
+    this._worldInfoEl = null;
     this._mapCatalog = [];
+    this._worldCatalog = null;
     this._data = null;
   }
 
@@ -119,6 +127,21 @@ export class DatabaseEditorApp {
       this._mapCatalog = [];
     }
     this._populateMapDropdown();
+    this._updateWorldInfo();
+  }
+
+  async _fetchWorldCatalog() {
+    try {
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/worlds`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!this._isMounted) return;
+      this._worldCatalog = Array.isArray(data) ? data : [];
+    } catch {
+      if (!this._isMounted) return;
+      this._worldCatalog = [];
+    }
+    this._updateWorldInfo();
   }
 
   async _loadProject() {
@@ -130,12 +153,13 @@ export class DatabaseEditorApp {
       this._data = data;
     } catch {
       if (!this._isMounted) return;
-      this._data = { gameStart: { mapId: "", x: 0, y: 0 } };
+      this._data = { gameStart: { mapId: "", x: 0, y: 0, worldId: null } };
       this._setStatus("Failed to load project settings");
     }
 
     this._applyDataToForm();
     this._populateMapDropdown();
+    this._updateWorldInfo();
   }
 
   _applyDataToForm() {
@@ -180,6 +204,30 @@ export class DatabaseEditorApp {
     if (mapId) {
       select.value = mapId;
     }
+  }
+
+  _updateWorldInfo() {
+    if (!this._worldInfoEl) return;
+
+    // Still loading world catalog
+    if (this._worldCatalog === null) {
+      this._worldInfoEl.textContent = "World: loading…";
+      return;
+    }
+
+    const mapId = this._mapSelect?.value;
+    if (!mapId) {
+      this._worldInfoEl.textContent = "";
+      return;
+    }
+
+    const world = this._worldCatalog.find(
+      (w) => w.mapIds && w.mapIds.includes(mapId),
+    );
+
+    this._worldInfoEl.textContent = world
+      ? `World: ${world.name || world.id}`
+      : "World: — (standalone)";
   }
 
   // -- Save ------------------------------------------------------------------
