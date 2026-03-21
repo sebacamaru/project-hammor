@@ -4,11 +4,6 @@
   "regionHeight": 192,
   "maps": [
     {
-      "mapId": "test_map_north",
-      "rx": 0,
-      "ry": -1
-    },
-    {
       "mapId": "test_map_west",
       "rx": -1,
       "ry": 0
@@ -22,6 +17,11 @@
       "mapId": "test_map_east",
       "rx": 1,
       "ry": 0
+    },
+    {
+      "mapId": "test_map_north",
+      "rx": -1,
+      "ry": 1
     },
     {
       "mapId": "test_map_south",

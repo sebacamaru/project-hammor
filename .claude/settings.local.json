@@ -28,7 +28,8 @@
       "Bash(git -C \"C:/Users/barduck/Desktop/project-hammor\" add src/shared/render/ChunkLayerView.js src/shared/render/MapChunkRenderer.js src/client/scenes/SceneMap.js)",
       "Bash(git -C:*)",
       "Bash(git -C \"C:/Users/barduck/Desktop/project-hammor\" push)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)"
     ]
   }
 }
