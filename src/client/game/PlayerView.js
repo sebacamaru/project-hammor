@@ -34,8 +34,10 @@ export class PlayerView {
   }
 
   updateFromEntity(player, alpha) {
-    this.sprite.x = Math.floor(player.prevX + (player.x - player.prevX) * alpha);
-    this.sprite.y = Math.floor(player.prevY + (player.y - player.prevY) * alpha);
+    const ix = Math.floor(player.prevX + (player.x - player.prevX) * alpha);
+    const iy = Math.floor(player.prevY + (player.y - player.prevY) * alpha);
+    this.sprite.x = ix - 8;   // center horizontally from feet
+    this.sprite.y = iy - 16;  // sprite above feet
 
     const dirName = DIRECTION_NAMES[player.direction];
     const animName = player.moving ? `walk_${dirName}` : `idle_${dirName}`;

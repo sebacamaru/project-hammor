@@ -1,3 +1,8 @@
+/**
+ * Server entrypoint.
+ * Creates config and GameServer, starts it, and handles graceful shutdown.
+ */
+
 import { createServerConfig } from "./config/ServerConfig.js";
 import { GameServer } from "./game/GameServer.js";
 
@@ -7,6 +12,11 @@ server.start();
 
 let isShuttingDown = false;
 
+/**
+ * Graceful shutdown handler. Guards against double invocation.
+ * Async-ready for future cleanup (DB, sockets, etc.).
+ * @param {string} signal - The signal that triggered shutdown (SIGINT, SIGTERM).
+ */
 async function shutdown(signal) {
   if (isShuttingDown) return;
   isShuttingDown = true;

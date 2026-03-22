@@ -14,6 +14,7 @@ import { WorldData } from "../world/WorldData.js";
 import { LoadedRegion } from "../world/LoadedRegion.js";
 import { TileCollision } from "../../shared/data/TileCollision.js";
 import { makeRegionKey, worldToRegion, regionToWorldOffset } from "../../shared/world/WorldMath.js";
+import { NetworkManager } from "../network/NetworkManager.js";
 
 export class SceneMap extends Scene {
   constructor(gameStart = {}) {
@@ -110,8 +111,8 @@ export class SceneMap extends Scene {
 
     // Player — updated manually, not through EntityManager
     // Spawn in world space: local tile coords + region world offset
-    let spawnX = (this.gameStart.x ?? 12) * TILE_SIZE;
-    let spawnY = (this.gameStart.y ?? 12) * TILE_SIZE;
+    let spawnX = (this.gameStart.x ?? 0) * TILE_SIZE + 8;   // feet: center of tile
+    let spawnY = (this.gameStart.y ?? 0) * TILE_SIZE + 16;  // feet: bottom of tile
     if (this.worldData) {
       spawnX += this._currentRegionRx * this.regionPixelWidth;
       spawnY += this._currentRegionRy * this.regionPixelHeight;
@@ -142,11 +143,43 @@ export class SceneMap extends Scene {
     if (primaryRegion) {
       this._updateDebugOverlayRegion(primaryRegion);
     }
+
+    // Network — connect to game server
+    this.serverId = null;
+    this._lastInput = { up: false, down: false, left: false, right: false };
+    this.network = new NetworkManager("ws://127.0.0.1:3001");
+
+    this.network.onWelcome = (msg) => {
+      this.serverId = msg.player.id;
+      console.log(`[SceneMap] Welcome — server player ${this.serverId} at (${msg.player.x}, ${msg.player.y})`);
+    };
+
+    this.network.onSnapshot = (msg) => {
+      if (!this.player || !this.serverId) return;
+      const self = msg.players.find(p => p.id === this.serverId);
+      if (self) this.player.applyServerState(self);
+    };
+
+    this.network.connect();
   }
 
   update(dt) {
-    this.player.update(dt, this.engine.input, this._collides);
+    this.player.update(dt);
     this.entityManager.updateAll(dt, this.engine.input);
+
+    // Send input to server when it changes
+    const inp = this.engine.input;
+    const current = {
+      up: inp.held("ArrowUp") || inp.held("KeyW"),
+      down: inp.held("ArrowDown") || inp.held("KeyS"),
+      left: inp.held("ArrowLeft") || inp.held("KeyA"),
+      right: inp.held("ArrowRight") || inp.held("KeyD"),
+    };
+    if (current.up !== this._lastInput.up || current.down !== this._lastInput.down ||
+        current.left !== this._lastInput.left || current.right !== this._lastInput.right) {
+      this.network.sendInput(current);
+      this._lastInput = current;
+    }
 
     // Region sync — load desired 3x3, unload stale
     if (this.worldData) {
@@ -189,7 +222,7 @@ export class SceneMap extends Scene {
     d.set("cam", `${Math.round(this.camera.x)}, ${Math.round(this.camera.y)}`);
     d.set(
       "player",
-      `${Math.round(this.player.x)}, ${Math.round(this.player.y)}`,
+      `${Math.round(this.player.x)}, ${Math.round(this.player.y)} (tile ${Math.floor(this.player.x / TILE_SIZE)}, ${Math.floor(this.player.y / TILE_SIZE)})`,
     );
     // Use sprite center (8px offset) for chunk calculation
     const tileX = Math.floor((this.player.x + 8) / TILE_SIZE);
@@ -253,6 +286,7 @@ export class SceneMap extends Scene {
   }
 
   destroy() {
+    this.network.disconnect();
     this.collisionDebug.destroy();
     this.hitboxDebug.destroy();
     this.chunkDebug.destroy();

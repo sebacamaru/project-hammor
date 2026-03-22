@@ -24,6 +24,13 @@ export class HitboxDebugOverlay {
       hb.height
     );
     this.graphics.fill({ color: 0x00ffff, alpha: 0.5 });
+
+    // Crosshair at exact authoritative position (x, y = top-left, where server checks collision)
+    const cx = Math.floor(entity.x);
+    const cy = Math.floor(entity.y);
+    this.graphics.rect(cx - 2, cy, 5, 1);
+    this.graphics.rect(cx, cy - 2, 1, 5);
+    this.graphics.fill({ color: 0xff00ff, alpha: 1 });
   }
 
   destroy() {

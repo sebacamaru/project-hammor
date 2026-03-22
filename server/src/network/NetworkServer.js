@@ -2,11 +2,27 @@ import { WebSocketServer } from "ws";
 import { ClientConnection } from "./ClientConnection.js";
 import { parseMessage } from "./protocols/messages.js";
 
+/**
+ * WebSocket server that accepts client connections.
+ * Parses incoming JSON messages and delegates to callbacks.
+ * Does not contain any game logic — purely networking.
+ *
+ * Callbacks (set by GameServer):
+ *   onConnection(conn)        — new client connected
+ *   onMessage(conn, message)  — valid JSON message received
+ *   onDisconnect(conn)        — client disconnected (not called during shutdown)
+ */
 export class NetworkServer {
+  /**
+   * @param {object} options
+   * @param {string} options.host - Bind address (e.g. "127.0.0.1").
+   * @param {number} options.port - Listen port.
+   */
   constructor({ host, port }) {
     this.host = host;
     this.port = port;
     this.wss = null;
+    /** @type {Map<string, ClientConnection>} */
     this.connections = new Map();
     this.nextId = 1;
     this.stopping = false;
@@ -16,6 +32,10 @@ export class NetworkServer {
     this.onDisconnect = null;
   }
 
+  /**
+   * Starts the WebSocket server and begins accepting connections.
+   * Resolves when the server is listening.
+   */
   async start() {
     return new Promise((resolve, reject) => {
       this.wss = new WebSocketServer({ host: this.host, port: this.port });
@@ -53,6 +73,19 @@ export class NetworkServer {
     });
   }
 
+  /**
+   * Returns a connection by its id, or undefined if not found.
+   * @param {string} connId
+   * @returns {ClientConnection|undefined}
+   */
+  getConnection(connId) {
+    return this.connections.get(connId);
+  }
+
+  /**
+   * Graceful shutdown: marks stopping, closes all connections, then closes the server.
+   * Skips onDisconnect callbacks during shutdown to avoid spurious events.
+   */
   async stop() {
     this.stopping = true;
 

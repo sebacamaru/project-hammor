@@ -1,5 +1,11 @@
 import { TICK_RATE, TICK_MS } from "../../../src/shared/core/Config.js";
 
+/**
+ * Creates the server configuration object.
+ * Imports tickRate/tickMs from shared Config (single source of truth).
+ * @param {object} [overrides] - Optional overrides for any config field.
+ * @returns {object} Server configuration.
+ */
 export function createServerConfig(overrides = {}) {
   return {
     tickRate: TICK_RATE,
@@ -7,9 +13,11 @@ export function createServerConfig(overrides = {}) {
     serverName: "MINIMMO",
     host: "127.0.0.1",
     port: 3001,
-    spawnX: 0,
-    spawnY: 0,
-    playerSpeed: 120,
+    startMapId: "test_map",
+    spawnX: 8, // center of tile 0,0
+    spawnY: 16, // center of tile 0,0
+    playerSpeed: 30, // pixels per second
+    snapshotInterval: 3, // ticks between snapshots (~150ms at 20 TPS)
     ...overrides,
   };
 }

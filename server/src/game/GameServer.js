@@ -8,8 +8,18 @@ import {
 import { SessionManager } from "./SessionManager.js";
 import { ServerPlayer } from "./entities/ServerPlayer.js";
 import { MovementSystem } from "./systems/MovementSystem.js";
+import { CollisionSystem } from "./systems/CollisionSystem.js";
+import { RuntimeMapManager } from "../runtime/RuntimeMapManager.js";
 
+/**
+ * Central game server orchestrator.
+ * Owns the tick loop, networking, sessions, players, movement, and runtime maps.
+ * Coordinates everything but delegates specifics to subsystems.
+ */
 export class GameServer {
+  /**
+   * @param {object} config - Server configuration from createServerConfig().
+   */
   constructor(config) {
     if (!config || !config.tickMs) {
       throw new Error("Invalid ServerConfig: tickMs is required");
@@ -33,12 +43,24 @@ export class GameServer {
     this.network.onDisconnect = (conn) => this.handleDisconnect(conn);
 
     this.sessions = new SessionManager();
+    /** @type {Map<string, ServerPlayer>} playerId → ServerPlayer */
     this.players = new Map();
     this.nextPlayerId = 1;
     this.movementSystem = new MovementSystem();
+    this.collisionSystem = new CollisionSystem();
+    this.runtimeMaps = new RuntimeMapManager();
   }
 
+  /**
+   * Starts the server: loads runtime map, opens WebSocket, starts tick loop.
+   * If map loading fails, nothing else starts.
+   */
   async start() {
+    const map = await this.runtimeMaps.loadMap(this.config.startMapId);
+    console.log(
+      `[${this.config.serverName}] Loaded map ${map.id} (${map.width}x${map.height})`,
+    );
+
     await this.network.start();
     console.log(
       `[${this.config.serverName}] WebSocket listening on ${this.config.host}:${this.config.port}`,
@@ -50,6 +72,9 @@ export class GameServer {
     );
   }
 
+  /**
+   * Stops the server: halts tick loop, then closes all connections and the WebSocket server.
+   */
   async stop() {
     this.loop.stop();
     await this.network.stop();
@@ -58,9 +83,17 @@ export class GameServer {
     );
   }
 
+  /**
+   * Main simulation tick. Runs movement for all players and periodic debug logging.
+   * @param {number} dt - Tick duration in milliseconds.
+   */
   update(dt) {
     this.tickCount++;
-    this.movementSystem.update(this.players, dt, this.config);
+    this.movementSystem.update(this.players, dt, this.config, this.runtimeMaps, this.collisionSystem);
+
+    if (this.tickCount % this.config.snapshotInterval === 0) {
+      this.broadcastSnapshots();
+    }
 
     if (this.tickCount > 0 && this.tickCount % 20 === 0) {
       const tag = `[${this.config.serverName}]`;
@@ -73,10 +106,15 @@ export class GameServer {
     }
   }
 
+  /** Called when a new WebSocket connection is established. */
   handleConnection(conn) {
     console.log(`[${this.config.serverName}] Client connected: ${conn.id}`);
   }
 
+  /**
+   * Called when a client disconnects. Cleans up session and player.
+   * Removes session first (cuts logical relation), then removes player entity.
+   */
   handleDisconnect(conn) {
     const session = this.sessions.getByConnection(conn.id);
     if (!session) {
@@ -94,9 +132,15 @@ export class GameServer {
     );
   }
 
+  /**
+   * Routes incoming messages by type.
+   * HELLO: creates session + player, sends welcome (or resends if duplicate).
+   * INPUT: validates and applies input to the player's state.
+   */
   handleMessage(conn, msg) {
     switch (msg.type) {
       case MSG_TYPES.HELLO: {
+        // Duplicate hello → resend existing welcome without creating new session
         const existing = this.sessions.getByConnection(conn.id);
         if (existing) {
           const player = this.players.get(existing.playerId);
@@ -107,6 +151,7 @@ export class GameServer {
         const playerId = `p${this.nextPlayerId++}`;
         const player = new ServerPlayer(
           playerId,
+          this.config.startMapId,
           this.config.spawnX,
           this.config.spawnY,
         );
@@ -117,7 +162,7 @@ export class GameServer {
         conn.send(this.buildWelcome(conn, session, player));
 
         console.log(
-          `[${this.config.serverName}] Session ${session.id} created — player ${playerId} spawned at (${player.x}, ${player.y})`,
+          `[${this.config.serverName}] Session ${session.id} created — player ${playerId} spawned in ${player.mapId} at (${player.x}, ${player.y})`,
         );
         break;
       }
@@ -147,6 +192,7 @@ export class GameServer {
           return;
         }
 
+        // Ignore stale or duplicate inputs
         if (msg.seq <= player.input.seq) return;
 
         player.input.apply(msg.seq, msg.input);
@@ -163,6 +209,29 @@ export class GameServer {
     }
   }
 
+  /**
+   * Sends a snapshot of all players to every connected session.
+   * Called every snapshotInterval ticks.
+   */
+  broadcastSnapshots() {
+    const players = [...this.players.values()].map(p => p.toData());
+    const msg = createMessage(MSG_TYPES.SNAPSHOT, {
+      tick: this.tickCount,
+      players,
+    });
+    for (const session of this.sessions.getAll()) {
+      const conn = this.network.getConnection(session.connectionId);
+      if (conn) conn.send(msg);
+    }
+  }
+
+  /**
+   * Builds a welcome message for a client. Used for both new and repeated hello.
+   * @param {ClientConnection} conn
+   * @param {object} session
+   * @param {ServerPlayer} player
+   * @returns {object} The welcome message object.
+   */
   buildWelcome(conn, session, player) {
     return createMessage(MSG_TYPES.WELCOME, {
       connectionId: conn.id,
