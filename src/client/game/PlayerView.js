@@ -36,17 +36,20 @@ export class PlayerView {
 
   updateFromEntity(player, alpha) {
     let ix, iy;
-    if (DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION) {
-      // Prediction ON: direct position, no interpolation.
-      // Prediction runs every tick — no gap to smooth over.
+    if (player.isRemote) {
+      // Remote players: always interpolate (lerp handles smoothing in update)
+      ix = Math.round(player.prevX + (player.x - player.prevX) * alpha);
+      iy = Math.round(player.prevY + (player.y - player.prevY) * alpha);
+    } else if (DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION) {
+      // Local player, prediction ON: direct position, no interpolation.
       ix = Math.round(player.x);
       iy = Math.round(player.y);
     } else if (DEBUG_FLAGS.NET_ENABLE_REMOTE_INTERPOLATION) {
-      // Prediction OFF + interp ON: interpolate between snapshots (~150ms)
+      // Local player, prediction OFF + interp ON: interpolate between snapshots
       ix = Math.round(player.prevX + (player.x - player.prevX) * alpha);
       iy = Math.round(player.prevY + (player.y - player.prevY) * alpha);
     } else {
-      // Prediction OFF + interp OFF: snap to last server position
+      // Local player, prediction OFF + interp OFF: snap to last server position
       ix = Math.round(player.x);
       iy = Math.round(player.y);
     }

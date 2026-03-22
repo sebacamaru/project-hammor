@@ -15,8 +15,15 @@ export class Player extends Entity {
     /** Hitbox relative to feet (x,y = center-bottom of sprite). */
     this.hitbox = { offsetX: -4, offsetY: -4, width: 8, height: 4 };
 
+    /** Whether this player is controlled remotely (snapshot-driven, no prediction). */
+    this.isRemote = false;
+
     /** Whether at least one server state has been received. */
     this.hasServerState = false;
+
+    /** Interpolation targets for remote players (set by applyRemoteState). */
+    this.targetX = x;
+    this.targetY = y;
 
     /** Buffer of inputs sent but not yet confirmed by the server. */
     this.pendingInputs = [];
@@ -24,11 +31,22 @@ export class Player extends Entity {
 
   /**
    * Saves prev positions for interpolation.
-   * Prediction is called externally by SceneMap with input + collides.
+   * For remote players, lerps toward the latest server position.
+   * For the local player, prediction is called externally by SceneMap.
    * @param {number} dt - Tick duration in milliseconds.
    */
   update(dt) {
     super.update(dt); // prevX = x, prevY = y
+
+    if (this.isRemote) {
+      if (!this.hasServerState) return;
+      const SMOOTH = 0.2;
+      this.worldX += (this.targetX - this.worldX) * SMOOTH;
+      this.worldY += (this.targetY - this.worldY) * SMOOTH;
+      this.syncLocalFromWorld();
+      return;
+    }
+
     this.syncLocalFromWorld();
   }
 
@@ -106,6 +124,27 @@ export class Player extends Entity {
     this.direction = FACING_TO_DIR[state.facing] ?? 0;
     this.moving = state.vx !== 0 || state.vy !== 0;
     this.syncLocalFromWorld();
+  }
+
+  /**
+   * Applies server state for a remote (non-local) player.
+   * Sets interpolation targets; on the first snapshot, snaps immediately.
+   * @param {{ x: number, y: number, vx: number, vy: number, facing: string }} state
+   */
+  applyRemoteState(state) {
+    this.targetX = state.x;
+    this.targetY = state.y;
+    this.direction = FACING_TO_DIR[state.facing] ?? 0;
+    this.moving = state.vx !== 0 || state.vy !== 0;
+
+    if (!this.hasServerState) {
+      this.worldX = state.x;
+      this.worldY = state.y;
+      this.syncLocalFromWorld();
+      this.prevX = this.x;
+      this.prevY = this.y;
+      this.hasServerState = true;
+    }
   }
 
   /**

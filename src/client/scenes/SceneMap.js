@@ -109,6 +109,9 @@ export class SceneMap extends Scene {
     this.entityManager = new EntityManager();
     this.entityRenderer = new EntityRenderer(this.entityLayer);
 
+    // Remote players: serverId → { player: Player, view: PlayerView }
+    this.remotePlayers = new Map();
+
     // Player — updated manually, not through EntityManager
     // Spawn in world space: local tile coords + region world offset
     let spawnX = (this.gameStart.x ?? 0) * TILE_SIZE + 8;   // feet: center of tile
@@ -155,8 +158,36 @@ export class SceneMap extends Scene {
 
     this.network.onSnapshot = (msg) => {
       if (!this.player || !this.serverId) return;
+
+      // Local player: reconcile with prediction
       const self = msg.players.find(p => p.id === this.serverId);
       if (self) this.player.reconcile(self, msg.lastProcessedSeq, this._collides);
+
+      // Remote players: spawn / update / despawn
+      const snapshotIds = new Set();
+      for (const p of msg.players) {
+        if (p.id === this.serverId) continue;
+        snapshotIds.add(p.id);
+
+        let entry = this.remotePlayers.get(p.id);
+        if (!entry) {
+          const player = new Player(p.x, p.y);
+          player.isRemote = true;
+          const view = new PlayerView(this.entityLayer);
+          entry = { player, view };
+          this.remotePlayers.set(p.id, entry);
+        }
+
+        entry.player.applyRemoteState(p);
+      }
+
+      // Remove players no longer in snapshot
+      for (const [id, entry] of this.remotePlayers) {
+        if (!snapshotIds.has(id)) {
+          entry.view.destroy();
+          this.remotePlayers.delete(id);
+        }
+      }
     };
 
     this.network.connect();
@@ -185,6 +216,11 @@ export class SceneMap extends Scene {
     }
 
     this.entityManager.updateAll(dt, this.engine.input);
+
+    // Update remote players (not in entityManager — managed separately)
+    for (const { player } of this.remotePlayers.values()) {
+      player.update(dt);
+    }
 
     // Region sync — load desired 3x3, unload stale
     if (this.worldData) {
@@ -286,6 +322,11 @@ export class SceneMap extends Scene {
     this.chunkDebug.render(this.camera);
     this.entityRenderer.sync(this.entityManager.getAll(), alpha);
     this.playerView.updateFromEntity(this.player, alpha);
+
+    // Sync remote player views
+    for (const { player, view } of this.remotePlayers.values()) {
+      view.updateFromEntity(player, alpha);
+    }
     this.hitboxDebug.render(this.player);
   }
 
@@ -302,6 +343,10 @@ export class SceneMap extends Scene {
       region.destroy();
     }
     this.loadedRegions.clear();
+    for (const { view } of this.remotePlayers.values()) {
+      view.destroy();
+    }
+    this.remotePlayers.clear();
     this.entityRenderer.destroy();
     this.playerView.destroy();
     this.root.destroy({ children: true });
