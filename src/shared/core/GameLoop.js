@@ -1,4 +1,4 @@
-import { TICK_MS } from "./Config.js";
+import { CLIENT_SIM_TICK_MS } from "./Config.js";
 
 export class GameLoop {
   constructor(engine) {
@@ -23,12 +23,12 @@ export class GameLoop {
     this.lastFrameTime = frameTime;
     this.accumulator += frameTime;
 
-    while (this.accumulator >= TICK_MS) {
-      this.engine.update(TICK_MS);
-      this.accumulator -= TICK_MS;
+    while (this.accumulator >= CLIENT_SIM_TICK_MS) {
+      this.engine.update(CLIENT_SIM_TICK_MS);
+      this.accumulator -= CLIENT_SIM_TICK_MS;
     }
 
-    const alpha = this.accumulator / TICK_MS;
+    const alpha = this.accumulator / CLIENT_SIM_TICK_MS;
     this.engine.render(alpha);
 
     requestAnimationFrame((t) => this._frame(t));

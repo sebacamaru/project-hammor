@@ -14,9 +14,18 @@ export const MAX_TILES_Y = 26;
 
 export const TARGET_FPS = 60;
 
-// Simulation tick rate (ticks per second) — match this to future server tick rate
-export const TICK_RATE = 60;
-export const TICK_MS = 1000 / TICK_RATE;
+// --- Tick rates ---
+export const SERVER_TICK_RATE = 20;
+export const SERVER_TICK_MS = 1000 / SERVER_TICK_RATE;
+
+export const CLIENT_SIM_TICK_RATE = 60;
+export const CLIENT_SIM_TICK_MS = 1000 / CLIENT_SIM_TICK_RATE;
+
+export const SNAPSHOT_RATE = 20;
+export const SNAPSHOT_INTERVAL_TICKS = Math.max(
+  1,
+  Math.floor(SERVER_TICK_RATE / SNAPSHOT_RATE),
+);
 
 export const EMPTY_TILE = -1;
 
