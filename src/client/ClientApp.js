@@ -6,6 +6,7 @@ import { SceneManager } from "../shared/scene/SceneManager.js";
 import { SceneMap } from "./scenes/SceneMap.js";
 import { DebugOverlay } from "../shared/render/DebugOverlay.js";
 import { ProjectSettings } from "../shared/data/loaders/ProjectSettings.js";
+import { DEBUG_FLAGS } from "../shared/core/Config.js";
 
 export class ClientApp {
   async start() {
@@ -38,6 +39,7 @@ export class ClientApp {
     // Debug: expose app in dev mode
     if (import.meta.env.DEV) {
       window.__engine = this;
+      window.__debugFlags = DEBUG_FLAGS;
       window.toggleChunkDebug = () => {
         const overlay = this.scenes.current?.chunkDebug;
         if (overlay) {

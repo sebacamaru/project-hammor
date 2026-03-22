@@ -1,4 +1,4 @@
-import { TICK_RATE, TICK_MS } from "../../../src/shared/core/Config.js";
+import { TICK_RATE, TICK_MS, PLAYER_SPEED } from "../../../src/shared/core/Config.js";
 
 /**
  * Creates the server configuration object.
@@ -16,7 +16,7 @@ export function createServerConfig(overrides = {}) {
     startMapId: "test_map",
     spawnX: 8, // center of tile 0,0
     spawnY: 16, // center of tile 0,0
-    playerSpeed: 30, // pixels per second
+    playerSpeed: PLAYER_SPEED,
     snapshotInterval: 3, // ticks between snapshots (~150ms at 20 TPS)
     ...overrides,
   };

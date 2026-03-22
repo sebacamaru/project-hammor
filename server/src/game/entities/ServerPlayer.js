@@ -24,6 +24,8 @@ export class ServerPlayer {
     /** Hitbox relative to feet (x,y = center-bottom of sprite). */
     this.hitbox = { offsetX: -4, offsetY: -4, width: 8, height: 4 };
     this.input = new PlayerInputState();
+    /** Last input sequence number processed by the server. */
+    this.lastProcessedSeq = -1;
   }
 
   /**

@@ -25,9 +25,10 @@
 ## Key files
 - `src/client/ClientApp.js` — orchestrator, loads ProjectSettings, passes gameStart to SceneMap
 - `src/client/main.js` — entry point
-- `src/client/game/Player.js` — player movement with WASD/arrows + tile collision (world-aware via collisionResolver)
-- `src/client/game/PlayerView.js` — AnimatedSprite from spritesheet, floor-snapped positioning
-- `src/client/scenes/SceneMap.js` — main game scene, world streaming, multi-region management
+- `src/client/game/Player.js` — server-driven player (applyServerState, feet convention, no local movement)
+- `src/client/game/PlayerView.js` — AnimatedSprite, renders with offset from feet (x-8, y-16)
+- `src/client/network/NetworkManager.js` — WebSocket client (hello, input, welcome, snapshot callbacks)
+- `src/client/scenes/SceneMap.js` — main game scene, world streaming, network integration
 - `src/client/world/WorldData.js` — loads world JSON, indexes maps by region and mapId
 - `src/client/world/LoadedRegion.js` — wraps MapData + MapChunkRenderer with world offset
 - `src/shared/input/Input.js` — keyboard polling (shared by client + editor)
@@ -89,7 +90,19 @@
 - `tools/editor-server/src/lib/fs-utils.js` — file I/O + backup helpers
 - `tools/editor-server/src/routes/worlds.js` — world list/load/save/delete API
 - `tools/editor-server/src/routes/project.js` — project.json GET/PUT API
-- `src/server/ServerApp.js` — headless tick loop (skeleton)
+- `server/src/index.js` — server entrypoint with graceful shutdown
+- `server/src/config/ServerConfig.js` — config factory (tick, spawn, speed, snapshotInterval)
+- `server/src/game/GameServer.js` — central orchestrator (loop, network, sessions, movement, collision, snapshots)
+- `server/src/game/ServerLoop.js` — fixed-timestep loop (setInterval)
+- `server/src/game/SessionManager.js` — session CRUD (byId + byConnectionId)
+- `server/src/game/entities/ServerPlayer.js` — server player (position, velocity, facing, hitbox, input)
+- `server/src/game/input/PlayerInputState.js` — last known input per player (seq dedup)
+- `server/src/game/systems/MovementSystem.js` — authoritative movement with per-axis collision
+- `server/src/game/systems/CollisionSystem.js` — hitbox-based AABB vs collision tiles
+- `server/src/network/NetworkServer.js` — WebSocket server (ws library)
+- `server/src/network/ClientConnection.js` — per-socket wrapper
+- `server/src/network/protocols/messages.js` — protocol types, parsing, validation
+- `server/src/runtime/RuntimeMapManager.js` — loads chunk-based maps from filesystem
 
 ## PixiJS v8 gotchas
 - No BaseTexture, no SCALE_MODES enum — use TextureSource + string literals
@@ -106,8 +119,11 @@
 - MapData dirty tracking: `dirtyChunks`, `setTile()` returns change metadata, `getTile()` returns -1 for out-of-bounds
 - Multi-layer tilemap: ground, ground_detail, fringe (above entities), collision
 - MapChunkRenderer: Sprite-based chunk rendering with VisibleChunkTracker (incremental enter/exit diff)
-- Tile collision: AABB hitbox vs collision layer, per-axis resolve in Player
-- Debug overlays: collision (red), hitbox (cyan), tile grid (blue), chunk boundaries (red), chunk streaming info
+- Tile collision: AABB hitbox vs collision layer, per-axis resolve (server-authoritative)
+- Coordinate convention: player.x/y = feet (center-bottom of sprite), not top-left
+- Server: authoritative movement, hitbox-based collision, WebSocket snapshots (JSON, 20 TPS)
+- Client networking: NetworkManager sends input, receives snapshots, applies server state
+- Debug overlays: collision (red), hitbox (cyan), crosshair at feet (magenta), tile grid (blue), chunk boundaries (red)
 - Player animated sprite from spritesheet (4x31 frames, 16x16)
 - Content structure: atlas/, maps/, tilesets/, sprites/, dialogue/, interactions/, items/, npcs/, objects/, skills/
 - Editor: shell + workspaces architecture (map, world, database placeholder)
@@ -119,5 +135,6 @@
 - World-aware collision across region boundaries
 - Bootstrap from project.json (gameStart: worldId, mapId, x, y)
 - Editor-server supports maps, worlds, tilesets, and project config CRUD
-- Server is stub, not functional
-- No networking yet
+- Server fully functional: WebSocket, sessions, authoritative movement, hitbox collision, snapshots
+- Client connected to server: sends input, receives snapshots, no local movement
+- JSDoc required on all public methods

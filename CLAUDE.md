@@ -64,12 +64,20 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `Entity.syncLocalFromWorld()` copies world coords to local (used after world-space collision).
 - `EntityManager` = collection in `shared/data/models/`.
 - `EntityRenderer` = syncs entity data → Pixi sprites in `shared/render/`.
-- `Player extends Entity` — in `client/game/`, reads input + tile collision in update().
-- `Player.hitbox` = `{ offsetX, offsetY, width, height }` for AABB collision.
-- `Player` collision can be delegated to a callback (`collisionResolver`) for world-aware multi-region collision.
-- `PlayerView` = in `client/game/`, owns AnimatedSprite.
+- `Player extends Entity` — in `client/game/`, server-driven (no local movement).
+- `Player.applyServerState(state)` — applies authoritative position from server snapshot.
+- `Player.update(dt)` — ONLY saves prev positions for interpolation. No movement logic.
+- `Player.hitbox` = `{ offsetX: -4, offsetY: -4, width: 8, height: 4 }` — AABB relative to **feet**.
+- `PlayerView` = in `client/game/`, owns AnimatedSprite, renders with offset from feet.
 - `PlayerAnimations` = animation metadata in `shared/data/models/`.
 - `EntityData` = serializable snapshot in `shared/data/models/`.
+
+### Coordinate convention ("feet")
+- **`player.x, player.y` = feet = center-bottom of sprite** (not top-left).
+- Server collision, client rendering, and debug all use this same reference point.
+- Sprite (16x16) drawn at `(x - 8, y - 16)` — offset from feet.
+- Hitbox relative to feet: `{ offsetX: -4, offsetY: -4, width: 8, height: 4 }`.
+- Server `facing` (string: "down"/"left"/"right"/"up") → client `direction` (number: 0/1/2/3).
 
 ### Tile ID convention
 - **`-1` = empty/invisible tile** (`EMPTY_TILE` in Config.js). Tile 0 is valid (first atlas tile).
@@ -103,8 +111,8 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 
 ### Pixel-perfect rendering pipeline
 - Game logic uses float positions (Entity.x/y)
-- Rendering converts to integers: `Math.floor` for sprite positions and camera
-- Camera and sprites use the **same** rounding function (`Math.floor`) to avoid 1px oscillation
+- Rendering converts to integers: `Math.round` for sprite positions and camera
+- Camera and sprites use the **same** rounding function (`Math.round`) to avoid 1px oscillation
 - `roundPixels: true` in PixiJS provides GPU-level safety net
 
 ### Key patterns
@@ -121,8 +129,10 @@ src/
 │   ├── main.js              Entry point
 │   ├── ClientApp.js          Orchestrator (loads ProjectSettings, passes gameStart to SceneMap)
 │   ├── game/
-│   │   ├── Player.js         Player entity (extends Entity, has hitbox + collision)
-│   │   └── PlayerView.js     Player sprite (AnimatedSprite)
+│   │   ├── Player.js         Player entity (server-driven, applyServerState, feet convention)
+│   │   └── PlayerView.js     Player sprite (AnimatedSprite, offset from feet)
+│   ├── network/
+│   │   └── NetworkManager.js Client WebSocket (hello, input, welcome, snapshot)
 │   ├── world/
 │   │   ├── WorldData.js      Loads world JSON, indexes maps by region and mapId
 │   │   └── LoadedRegion.js   Wraps MapData + MapChunkRenderer with world offset
@@ -195,10 +205,29 @@ src/
 │       │   └── styles/world-editor.css   3-column layout + grid styling
 │       └── database/
 │           └── DatabaseEditorApp.js      Placeholder workspace (coming soon)
-├── server/
-│   ├── ServerApp.js          Headless tick loop (no PixiJS)
-│   ├── world/WorldMap.js     Server map wrapper
-│   └── loaders/ServerMapLoader.js  Load maps from fs
+├── server/                   (under project root, NOT src/server/)
+│   └── src/
+│       ├── index.js              Server entrypoint with graceful shutdown
+│       ├── config/
+│       │   └── ServerConfig.js   Config factory (tickRate, spawn, speed, snapshotInterval)
+│       ├── game/
+│       │   ├── GameServer.js     Central orchestrator (loop, network, sessions, players)
+│       │   ├── ServerLoop.js     Fixed-timestep loop (setInterval)
+│       │   ├── SessionManager.js Session CRUD (dual Map: byId + byConnectionId)
+│       │   ├── entities/
+│       │   │   └── ServerPlayer.js  Server player (position, velocity, facing, hitbox, input)
+│       │   ├── input/
+│       │   │   └── PlayerInputState.js  Last known input per player (seq-based dedup)
+│       │   └── systems/
+│       │       ├── MovementSystem.js    Authoritative movement (diagonal norm, per-axis resolve)
+│       │       └── CollisionSystem.js   Hitbox-based collision against map tiles
+│       ├── network/
+│       │   ├── NetworkServer.js         WebSocket server (ws library)
+│       │   ├── ClientConnection.js      Individual socket wrapper
+│       │   └── protocols/
+│       │       └── messages.js          MSG_TYPES, parseMessage, validateInput, createMessage
+│       └── runtime/
+│           └── RuntimeMapManager.js     Loads chunk-based maps from filesystem
 └── shared/
     ├── core/
     │   ├── Config.js         All constants (TILE_SIZE, EMPTY_TILE, TICK_RATE, etc.)
@@ -288,8 +317,10 @@ tools/
 - Config.js holds all magic numbers as named exports.
 - Spanish comments are OK (original dev language).
 - Asset bundles are organized by scene/area, not by type.
-- Use `Math.floor` for all render-time position rounding (sprites AND camera). Never `Math.round`.
+- Use `Math.round` for all render-time position rounding (sprites AND camera). Never `Math.floor` (causes subpixel jitter).
 - Server code must NEVER import from `shared/render/` or `shared/assets/`.
+- **JSDoc on every method**: all public methods must have a JSDoc comment explaining what they do. If a method doesn't have one, add it. Include `@param` and `@returns` where applicable.
+- **Coordinate convention**: `player.x, player.y` = feet (center-bottom of sprite). All systems (server, client, debug) use this reference.
 
 ## Important PixiJS v8 notes
 - `Application.init()` is async — must await before using stage/canvas.
@@ -387,10 +418,56 @@ EditorShell (top-level) — src/editor/shell/EditorShell.js
 - `Camera.setWorldBounds(left, top, right, bottom)` clamps to total world extent
 - `_computeWorldBounds()` calculates from all map entries in worldData
 
+## Server architecture
+
+### Authoritative model
+- Server owns all game state. Client sends input intentions, server computes movement/collision.
+- Fixed 20 TPS tick loop (setInterval). Same `TICK_RATE`/`TICK_MS` as client (from shared Config.js).
+- JSON WebSocket protocol: `hello` → `welcome`, `input` → server processes, `snapshot` → broadcast.
+
+### Server subsystems
+```
+GameServer (orchestrator) — server/src/game/GameServer.js
+├── ServerLoop         — setInterval tick loop
+├── NetworkServer      — WebSocket server (ws library, port 3001)
+│   └── ClientConnection — per-socket wrapper (id, send, close)
+├── SessionManager     — session ↔ connection ↔ player mapping
+├── MovementSystem     — authoritative movement (speed, diagonal normalization, per-axis collision)
+├── CollisionSystem    — hitbox-based AABB vs collision layer tiles
+└── RuntimeMapManager  — loads chunk-based maps from filesystem (content/maps/)
+```
+
+### Protocol (messages.js)
+- `MSG_TYPES`: hello, welcome, input, snapshot, error
+- `parseMessage(raw)` — JSON parse + type validation
+- `validateInput(msg)` — seq (non-negative int), input (4 boolean flags)
+- `createMessage(type, data)` — factory
+
+### Snapshot system
+- Server broadcasts snapshots every `snapshotInterval` ticks (default 3 = ~150ms)
+- Snapshot: `{ type: "snapshot", tick, players: [{ id, x, y, vx, vy, facing, mapId }] }`
+- Client `NetworkManager` receives snapshot, finds self by `serverId`, calls `Player.applyServerState()`
+
+### Input flow
+- Client detects input change (compare with last sent) → `NetworkManager.sendInput({up,down,left,right})`
+- Server validates (seq-based dedup, all 4 flags boolean) → `PlayerInputState.apply()`
+- MovementSystem reads input each tick → computes movement → CollisionSystem validates
+
+### Collision (server)
+- Hitbox-based: checks all tiles covered by player hitbox (not just a point)
+- Per-axis resolution: try X first, then Y → allows wall sliding
+- OOB = blocked (out-of-bounds tiles are solid)
+- Uses shared `TILE_SIZE` from Config.js
+
+### Client networking
+- `NetworkManager` (`src/client/network/`): minimal WebSocket wrapper, callbacks for welcome/snapshot
+- `SceneMap` creates NetworkManager, wires callbacks, sends input changes
+- Player position comes EXCLUSIVELY from server snapshots (no local movement)
+
 ## Future systems (not yet implemented)
-- **Networking**: WebSocket connection, binary protocol. Client-side prediction + server reconciliation.
+- **Client-side prediction**: predict movement locally, reconcile with server snapshots.
 - **NPC/Monster entities**: Same entity system, different update logic.
-- **Server networking**: Real WebSocket server with Colyseus or custom.
+- **Binary protocol**: Replace JSON with binary for bandwidth efficiency.
 
 ## Debug
 - `Escape` toggles debug overlay (starts hidden). Shows: FPS, camera pos, player pos, chunk pos, entity count, viewport info, canvas size, container size.

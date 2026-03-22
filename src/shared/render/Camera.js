@@ -1,4 +1,4 @@
-import { TILE_SIZE } from "../core/Config.js";
+import { TILE_SIZE, DEBUG_FLAGS } from "../core/Config.js";
 
 export class Camera {
   /**
@@ -14,6 +14,7 @@ export class Camera {
     this.debugSpeed = 4;
   }
 
+  /** @param {object} entity - Entity to follow */
   follow(entity) {
     this.target = entity;
   }
@@ -80,29 +81,39 @@ export class Camera {
     this.y = Math.floor(this.y);
   }
 
+  /**
+   * Update camera position for rendering. Snaps to the integer ideal
+   * camera position derived from the target entity, matching the same
+   * position formula used by PlayerView to avoid desync.
+   * @param {object} target   - Entity to follow (needs prevX/prevY, x/y)
+   * @param {number} alpha    - Interpolation fraction (0–1)
+   */
   renderUpdate(target, alpha) {
     if (this.freeMode) return;
     if (!target) return;
 
-    // Recalc bounds in case viewport changed since last frame
     this._recalcBounds();
 
-    // Interpolated target position — matches what sprites will render
-    const wx = target.worldX ?? target.x;
-    const wy = target.worldY ?? target.y;
-    const pwx = target.prevWorldX ?? target.prevX;
-    const pwy = target.prevWorldY ?? target.prevY;
-    const ix = pwx + (wx - pwx) * alpha;
-    const iy = pwy + (wy - pwy) * alpha;
+    // Position formula must match PlayerView to avoid camera/sprite desync
+    let ix, iy;
+    if (DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION) {
+      // Prediction ON: direct position, no interpolation
+      ix = Math.round(target.x);
+      iy = Math.round(target.y);
+    } else if (DEBUG_FLAGS.NET_ENABLE_REMOTE_INTERPOLATION) {
+      // Prediction OFF + interp ON: interpolate between snapshots
+      ix = Math.round(target.prevX + (target.x - target.prevX) * alpha);
+      iy = Math.round(target.prevY + (target.y - target.prevY) * alpha);
+    } else {
+      // Prediction OFF + interp OFF: snap to last server position
+      ix = Math.round(target.x);
+      iy = Math.round(target.y);
+    }
 
-    this.x = ix - this.viewport.widthPx / 2;
-    this.y = iy - this.viewport.heightPx / 2;
+    this.x = ix - Math.round(this.viewport.widthPx / 2);
+    this.y = iy - Math.round(this.viewport.heightPx / 2);
 
     this._clamp();
-
-    // Snap to pixel grid — prevents sub-pixel jitter
-    this.x = Math.floor(this.x);
-    this.y = Math.floor(this.y);
   }
 
   _clamp() {

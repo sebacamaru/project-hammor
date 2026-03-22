@@ -1,6 +1,6 @@
-import { Container, Graphics } from "pixi.js";
+import { Container, Graphics, Sprite } from "pixi.js";
 import { AssetManager } from "../assets/AssetsManager.js";
-import { Sprite } from "pixi.js";
+import { DEBUG_FLAGS } from "../core/Config.js";
 
 export class EntityRenderer {
   constructor(parent) {
@@ -17,9 +17,13 @@ export class EntityRenderer {
         this.sprites.set(entity.id, sprite);
         this.container.addChild(sprite);
       }
-      // Interpolated position
-      sprite.x = Math.floor(entity.prevX + (entity.x - entity.prevX) * alpha);
-      sprite.y = Math.floor(entity.prevY + (entity.y - entity.prevY) * alpha);
+      if (DEBUG_FLAGS.NET_ENABLE_REMOTE_INTERPOLATION) {
+        sprite.x = Math.round(entity.prevX + (entity.x - entity.prevX) * alpha);
+        sprite.y = Math.round(entity.prevY + (entity.y - entity.prevY) * alpha);
+      } else {
+        sprite.x = Math.round(entity.x);
+        sprite.y = Math.round(entity.y);
+      }
     }
   }
 

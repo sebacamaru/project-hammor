@@ -196,6 +196,7 @@ export class GameServer {
         if (msg.seq <= player.input.seq) return;
 
         player.input.apply(msg.seq, msg.input);
+        player.lastProcessedSeq = msg.seq;
         break;
       }
 
@@ -215,13 +216,18 @@ export class GameServer {
    */
   broadcastSnapshots() {
     const players = [...this.players.values()].map(p => p.toData());
-    const msg = createMessage(MSG_TYPES.SNAPSHOT, {
-      tick: this.tickCount,
-      players,
-    });
+
     for (const session of this.sessions.getAll()) {
       const conn = this.network.getConnection(session.connectionId);
-      if (conn) conn.send(msg);
+      if (!conn) continue;
+
+      const player = this.players.get(session.playerId);
+      const msg = createMessage(MSG_TYPES.SNAPSHOT, {
+        tick: this.tickCount,
+        lastProcessedSeq: player ? player.lastProcessedSeq : -1,
+        players,
+      });
+      conn.send(msg);
     }
   }
 

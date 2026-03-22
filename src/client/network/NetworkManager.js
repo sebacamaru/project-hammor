@@ -54,8 +54,15 @@ export class NetworkManager {
    * Sends an input message with the current seq number.
    * @param {{ up: boolean, down: boolean, left: boolean, right: boolean }} input
    */
+  /**
+   * Sends an input message with the current seq number.
+   * @param {{ up: boolean, down: boolean, left: boolean, right: boolean }} input
+   * @returns {number} The seq number used for this input.
+   */
   sendInput(input) {
-    this.send({ type: "input", seq: this.seq++, input });
+    const seq = this.seq++;
+    this.send({ type: "input", seq, input });
+    return seq;
   }
 
   /**

@@ -2,6 +2,7 @@ import { AnimatedSprite } from "pixi.js";
 import { sliceSpriteSheet } from "../../shared/assets/SpriteSheetSlicer.js";
 import { PLAYER_ANIMATIONS, DIRECTION_NAMES } from "../../shared/data/models/PlayerAnimations.js";
 import { AssetManager } from "../../shared/assets/AssetsManager.js";
+import { DEBUG_FLAGS } from "../../shared/core/Config.js";
 
 export class PlayerView {
   constructor(parentContainer) {
@@ -34,8 +35,21 @@ export class PlayerView {
   }
 
   updateFromEntity(player, alpha) {
-    const ix = Math.floor(player.prevX + (player.x - player.prevX) * alpha);
-    const iy = Math.floor(player.prevY + (player.y - player.prevY) * alpha);
+    let ix, iy;
+    if (DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION) {
+      // Prediction ON: direct position, no interpolation.
+      // Prediction runs every tick — no gap to smooth over.
+      ix = Math.round(player.x);
+      iy = Math.round(player.y);
+    } else if (DEBUG_FLAGS.NET_ENABLE_REMOTE_INTERPOLATION) {
+      // Prediction OFF + interp ON: interpolate between snapshots (~150ms)
+      ix = Math.round(player.prevX + (player.x - player.prevX) * alpha);
+      iy = Math.round(player.prevY + (player.y - player.prevY) * alpha);
+    } else {
+      // Prediction OFF + interp OFF: snap to last server position
+      ix = Math.round(player.x);
+      iy = Math.round(player.y);
+    }
     this.sprite.x = ix - 8;   // center horizontally from feet
     this.sprite.y = iy - 16;  // sprite above feet
 

@@ -2,7 +2,7 @@ import { Container } from "pixi.js";
 import { Scene } from "../../shared/scene/Scene.js";
 import { Camera } from "../../shared/render/Camera.js";
 import { GameMap } from "../../shared/data/models/GameMap.js";
-import { TILE_SIZE } from "../../shared/core/Config.js";
+import { TILE_SIZE, DEBUG_FLAGS } from "../../shared/core/Config.js";
 import { EntityManager } from "../../shared/data/models/EntityManager.js";
 import { EntityRenderer } from "../../shared/render/EntityRenderer.js";
 import { Player } from "../game/Player.js";
@@ -146,7 +146,6 @@ export class SceneMap extends Scene {
 
     // Network — connect to game server
     this.serverId = null;
-    this._lastInput = { up: false, down: false, left: false, right: false };
     this.network = new NetworkManager("ws://127.0.0.1:3001");
 
     this.network.onWelcome = (msg) => {
@@ -157,17 +156,14 @@ export class SceneMap extends Scene {
     this.network.onSnapshot = (msg) => {
       if (!this.player || !this.serverId) return;
       const self = msg.players.find(p => p.id === this.serverId);
-      if (self) this.player.applyServerState(self);
+      if (self) this.player.reconcile(self, msg.lastProcessedSeq, this._collides);
     };
 
     this.network.connect();
   }
 
   update(dt) {
-    this.player.update(dt);
-    this.entityManager.updateAll(dt, this.engine.input);
-
-    // Send input to server when it changes
+    // Read input first — needed for prediction and network
     const inp = this.engine.input;
     const current = {
       up: inp.held("ArrowUp") || inp.held("KeyW"),
@@ -175,11 +171,20 @@ export class SceneMap extends Scene {
       left: inp.held("ArrowLeft") || inp.held("KeyA"),
       right: inp.held("ArrowRight") || inp.held("KeyD"),
     };
-    if (current.up !== this._lastInput.up || current.down !== this._lastInput.down ||
-        current.left !== this._lastInput.left || current.right !== this._lastInput.right) {
-      this.network.sendInput(current);
-      this._lastInput = current;
+
+    // Lifecycle: save prev positions for interpolation
+    this.player.update(dt);
+
+    // Always send input to server regardless of prediction flag
+    const seq = this.network.sendInput(current);
+
+    if (DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION) {
+      this.player.pushPendingInput(seq, current, dt);
+      this.player.predict(dt, current, this._collides);
+      this.player.syncLocalFromWorld();
     }
+
+    this.entityManager.updateAll(dt, this.engine.input);
 
     // Region sync — load desired 3x3, unload stale
     if (this.worldData) {
@@ -237,6 +242,9 @@ export class SceneMap extends Scene {
     d.set("canvas", `${vp.cssWidth}x${vp.cssHeight}`);
     const el = this.engine.renderer.rootElement;
     d.set("container", `${el.clientWidth}x${el.clientHeight}`);
+    d.set("prediction", DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION ? "ON" : "OFF");
+    d.set("reconciliation", DEBUG_FLAGS.NET_ENABLE_RECONCILIATION ? "ON" : "OFF");
+    d.set("remote interp", DEBUG_FLAGS.NET_ENABLE_REMOTE_INTERPOLATION ? "ON" : "OFF");
 
     // if (this.engine.debug.visible && this.chunkRenderer) {
     //   const ci = this.chunkRenderer.getDebugInfo();

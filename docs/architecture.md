@@ -36,7 +36,9 @@ RAF tick
 │   ├── Input.poll()
 │   ├── SceneManager.update(dt)
 │   │   └── SceneMap.update(dt)
-│   │       ├── Player.update(dt, input, map) — movement + tile collision
+│   │       ├── Player.update(dt) — saves prev positions (NO local movement)
+│   │       ├── Send input to server if changed (NetworkManager.sendInput)
+│   │       ├── [async] Snapshot arrives → Player.applyServerState() — sets x/y from server
 │   │       ├── EntityManager.updateAll(dt, input)
 │   │       ├── Camera debug mode check (IJKL → free, WASD → follow)
 │   │       └── Debug info update (cam, player, chunk, entities, viewport)
@@ -98,11 +100,19 @@ window resize → Renderer.resize()
 - **EntityData**: serializable snapshot for network/persistence, with fromEntity()/toPlain()/fromPlain()
 - **PlayerAnimations**: animation name → { row, speed } mapping + DIRECTION_NAMES array
 
+### Coordinate convention
+- **`player.x, player.y` = feet** (center-bottom of sprite, not top-left)
+- Sprite (16x16) rendered at `(x - 8, y - 16)` — visual offset from feet
+- Hitbox relative to feet: `{ offsetX: -4, offsetY: -4, width: 8, height: 4 }`
+- Server and client both use this same reference point for collision and rendering
+
 ### Client gameplay (client/game/)
-- **Player extends Entity**: adds input-driven movement, normalized diagonal, hitbox-based tile collision (per-axis resolve)
-- **Player.hitbox**: `{ offsetX: 4, offsetY: 12, width: 8, height: 4 }` — AABB relative to entity position
-- **Player.collisionResolver**: optional callback for world-aware collision (set by SceneMap when world streaming is active)
-- **PlayerView**: owns AnimatedSprite, animation map from spritesheet, updates from Player state
+- **Player extends Entity**: server-driven, no local movement
+- **Player.update(dt)**: ONLY saves prev positions for interpolation. No input, no collision.
+- **Player.applyServerState(state)**: applies authoritative position from server snapshot. Updates worldX/worldY, direction, moving flag. Skips micro-updates (epsilon check).
+- **Player.hitbox**: `{ offsetX: -4, offsetY: -4, width: 8, height: 4 }` — AABB relative to **feet**
+- **PlayerView**: owns AnimatedSprite, renders with offset from feet `(x-8, y-16)`, animation map from spritesheet
+- **NetworkManager** (`client/network/`): WebSocket wrapper, sends hello/input, receives welcome/snapshot via callbacks
 
 ### Render layer (shared/render/)
 - **EntityRenderer**: Map<id, Sprite>, creates sprites on first sync, interpolates with Math.floor
@@ -339,14 +349,46 @@ WorldEditorApp — src/editor/workspaces/world/WorldEditorApp.js
 ### Database workspace (placeholder)
 - `DatabaseEditorApp` — registered but shows "Coming soon"
 
-## Server architecture (skeleton)
-- **ServerApp**: setInterval-based tick loop (no RAF). Imports only shared/core/ and shared/data/.
-- **WorldMap**: wraps MapData, provides server-specific queries (isWalkable stub)
-- **ServerMapLoader**: reads JSON from filesystem via Node.js fs → MapSerializer.deserialize()
+## Server architecture (server/)
 
-## Future networking plan
-- Fixed 20Hz tick matches planned server tick rate
-- Entity IDs already assigned (auto-increment, will switch to server-assigned)
-- prevX/prevY interpolation works for both local prediction and server state
-- Plan: send input intents to server, apply client-side prediction, reconcile with server state
-- EntityData provides the serializable snapshot format for network messages
+### Authoritative model
+- Server owns all game state. Client sends input intentions, server computes movement/collision.
+- Fixed 20 TPS tick loop (setInterval), same TICK_RATE/TICK_MS from shared Config.js.
+- JSON WebSocket protocol on port 3001.
+
+### Subsystems
+```
+GameServer (orchestrator) — server/src/game/GameServer.js
+├── ServerLoop         — setInterval-based tick loop
+├── NetworkServer      — WebSocket server (ws library)
+│   └── ClientConnection — per-socket wrapper
+├── SessionManager     — session ↔ connection ↔ player (dual Map lookup)
+├── MovementSystem     — authoritative movement (per-axis collision resolve)
+├── CollisionSystem    — hitbox-based AABB vs collision layer tiles
+└── RuntimeMapManager  — loads chunk-based maps from filesystem
+```
+
+### Protocol
+- MSG_TYPES: hello, welcome, input, snapshot, error
+- Input: seq-based dedup (accept only if seq > player.input.seq, starts at -1)
+- Snapshots: broadcast every `snapshotInterval` ticks (default 3 = ~150ms)
+- Snapshot payload: `{ type: "snapshot", tick, players: [{ id, x, y, vx, vy, facing, mapId }] }`
+
+### Server player
+- `ServerPlayer`: id, mapId, x, y (feet convention), vx, vy, facing, hitbox, input state
+- `toData()` returns snapshot-ready plain object
+
+### Collision
+- Hitbox-based (not point-based): checks all tiles covered by hitbox
+- Per-axis resolution: try X then Y → wall sliding
+- OOB = blocked
+- Uses `TILE_SIZE` from shared Config.js
+
+### Config (ServerConfig.js)
+- tickRate, tickMs, serverName, host, port, startMapId, spawnX/Y, playerSpeed, snapshotInterval
+- Factory function with overrides support
+
+## Future systems
+- **Client-side prediction**: predict movement locally, reconcile with server snapshots
+- **NPC/Monster entities**: same entity system, different update logic
+- **Binary protocol**: replace JSON for bandwidth efficiency
