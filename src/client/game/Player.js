@@ -1,5 +1,10 @@
 import { Entity } from "../../shared/data/models/Entity.js";
-import { PLAYER_SPEED, DEBUG_FLAGS } from "../../shared/core/Config.js";
+import {
+  PLAYER_SPEED,
+  DEBUG_FLAGS,
+  REMOTE_INTERPOLATION_DELAY_MS,
+  MAX_REMOTE_SNAPSHOTS,
+} from "../../shared/core/Config.js";
 
 const FACING_TO_DIR = { down: 0, left: 1, right: 2, up: 3 };
 
@@ -21,9 +26,8 @@ export class Player extends Entity {
     /** Whether at least one server state has been received. */
     this.hasServerState = false;
 
-    /** Interpolation targets for remote players (set by applyRemoteState). */
-    this.targetX = x;
-    this.targetY = y;
+    /** Timestamped snapshot buffer for remote player interpolation. */
+    this.snapshotBuffer = [];
 
     /** Buffer of inputs sent but not yet confirmed by the server. */
     this.pendingInputs = [];
@@ -38,14 +42,7 @@ export class Player extends Entity {
   update(dt) {
     super.update(dt); // prevX = x, prevY = y
 
-    if (this.isRemote) {
-      if (!this.hasServerState) return;
-      const SMOOTH = 0.2;
-      this.worldX += (this.targetX - this.worldX) * SMOOTH;
-      this.worldY += (this.targetY - this.worldY) * SMOOTH;
-      this.syncLocalFromWorld();
-      return;
-    }
+    if (this.isRemote) return; // Interpolation handled by updateRemoteInterpolation()
 
     this.syncLocalFromWorld();
   }
@@ -127,15 +124,24 @@ export class Player extends Entity {
   }
 
   /**
-   * Applies server state for a remote (non-local) player.
-   * Sets interpolation targets; on the first snapshot, snaps immediately.
+   * Stores a snapshot for a remote player into the interpolation buffer.
+   * On the first snapshot, snaps position immediately so the player is visible.
    * @param {{ x: number, y: number, vx: number, vy: number, facing: string }} state
+   * @param {number} receivedAt - Timestamp from performance.now() when the snapshot arrived.
    */
-  applyRemoteState(state) {
-    this.targetX = state.x;
-    this.targetY = state.y;
-    this.direction = FACING_TO_DIR[state.facing] ?? 0;
-    this.moving = state.vx !== 0 || state.vy !== 0;
+  pushRemoteSnapshot(state, receivedAt) {
+    this.snapshotBuffer.push({
+      x: state.x,
+      y: state.y,
+      vx: state.vx,
+      vy: state.vy,
+      facing: state.facing,
+      time: receivedAt,
+    });
+
+    if (this.snapshotBuffer.length > MAX_REMOTE_SNAPSHOTS) {
+      this.snapshotBuffer.shift();
+    }
 
     if (!this.hasServerState) {
       this.worldX = state.x;
@@ -143,7 +149,73 @@ export class Player extends Entity {
       this.syncLocalFromWorld();
       this.prevX = this.x;
       this.prevY = this.y;
+      this.direction = FACING_TO_DIR[state.facing] ?? 0;
+      this.moving = state.vx !== 0 || state.vy !== 0;
       this.hasServerState = true;
+    }
+  }
+
+  /**
+   * Interpolates remote player position from the snapshot buffer.
+   * Renders with a deliberate delay so two bracketing snapshots are available
+   * for smooth linear interpolation. Called once per render frame.
+   * @param {number} now - Current timestamp from performance.now().
+   */
+  updateRemoteInterpolation(now) {
+    const buf = this.snapshotBuffer;
+    if (buf.length === 0) return;
+
+    const renderTime = now - REMOTE_INTERPOLATION_DELAY_MS;
+
+    // Find bracketing snapshots: from.time <= renderTime < to.time
+    let fromIdx = -1;
+    let toIdx = -1;
+    for (let i = 0; i < buf.length; i++) {
+      if (buf[i].time <= renderTime) {
+        fromIdx = i;
+      } else {
+        toIdx = i;
+        break;
+      }
+    }
+
+    let interpX, interpY, snap;
+
+    if (fromIdx >= 0 && toIdx >= 0) {
+      // Normal case: interpolate between two bracketing snapshots
+      const from = buf[fromIdx];
+      const to = buf[toIdx];
+      const range = to.time - from.time;
+      const t = range > 0 ? Math.max(0, Math.min(1, (renderTime - from.time) / range)) : 1;
+      interpX = from.x + (to.x - from.x) * t;
+      interpY = from.y + (to.y - from.y) * t;
+      snap = to;
+    } else if (fromIdx >= 0) {
+      // renderTime past newest snapshot — hold at last known position
+      snap = buf[fromIdx];
+      interpX = snap.x;
+      interpY = snap.y;
+    } else {
+      // renderTime before oldest snapshot — snap to oldest
+      snap = buf[toIdx];
+      interpX = snap.x;
+      interpY = snap.y;
+    }
+
+    // Save prev BEFORE updating position
+    this.prevX = this.x;
+    this.prevY = this.y;
+
+    this.worldX = interpX;
+    this.worldY = interpY;
+    this.syncLocalFromWorld();
+
+    this.direction = FACING_TO_DIR[snap.facing] ?? 0;
+    this.moving = snap.vx !== 0 || snap.vy !== 0;
+
+    // Prune consumed snapshots (keep fromIdx as oldest needed)
+    if (fromIdx > 0) {
+      this.snapshotBuffer.splice(0, fromIdx);
     }
   }
 
@@ -167,7 +239,10 @@ export class Player extends Entity {
     // 1. Snap to authoritative position
     this.setAuthoritativeState(state);
 
-    if (DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION && DEBUG_FLAGS.NET_ENABLE_RECONCILIATION) {
+    if (
+      DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION &&
+      DEBUG_FLAGS.NET_ENABLE_RECONCILIATION
+    ) {
       // 2. Discard inputs already confirmed by server
       this.pendingInputs = this.pendingInputs.filter(
         (entry) => entry.seq > lastProcessedSeq,

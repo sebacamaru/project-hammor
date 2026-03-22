@@ -31,6 +31,10 @@ export const EMPTY_TILE = -1;
 
 export const PLAYER_SPEED = 48; // pixels per second
 
+// --- Remote player interpolation ---
+export const REMOTE_INTERPOLATION_DELAY_MS = 100;
+export const MAX_REMOTE_SNAPSHOTS = 20;
+
 // --- Debug feature flags (jitter testing) ---
 // Toggle from browser console: __debugFlags.NET_ENABLE_CLIENT_PREDICTION = false
 export const DEBUG_FLAGS = {

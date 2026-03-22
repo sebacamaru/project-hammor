@@ -178,7 +178,7 @@ export class SceneMap extends Scene {
           this.remotePlayers.set(p.id, entry);
         }
 
-        entry.player.applyRemoteState(p);
+        entry.player.pushRemoteSnapshot(p, performance.now());
       }
 
       // Remove players no longer in snapshot
@@ -217,10 +217,7 @@ export class SceneMap extends Scene {
 
     this.entityManager.updateAll(dt, this.engine.input);
 
-    // Update remote players (not in entityManager — managed separately)
-    for (const { player } of this.remotePlayers.values()) {
-      player.update(dt);
-    }
+    // Remote players are interpolated in render() — no tick update needed
 
     // Region sync — load desired 3x3, unload stale
     if (this.worldData) {
@@ -323,8 +320,10 @@ export class SceneMap extends Scene {
     this.entityRenderer.sync(this.entityManager.getAll(), alpha);
     this.playerView.updateFromEntity(this.player, alpha);
 
-    // Sync remote player views
+    // Interpolate and sync remote player views
+    const now = performance.now();
     for (const { player, view } of this.remotePlayers.values()) {
+      player.updateRemoteInterpolation(now);
       view.updateFromEntity(player, alpha);
     }
     this.hitboxDebug.render(this.player);
