@@ -28,7 +28,6 @@
     padding: 20px;
 }
 
-.editor-toolbar,
 .editor-panel,
 .editor-tools,
 .editor-statusbar {
@@ -40,17 +39,9 @@
     color: white;
 }
 
-.editor-toolbar {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    right: 20px;
-    height: 80px;
-}
-
 .editor-panel-left {
     position: absolute;
-    top: 120px;
+    top: 20px;
     left: 20px;
     bottom: 90px;
     width: 280px;
@@ -58,7 +49,7 @@
 
 .editor-panel-right {
     position: absolute;
-    top: 120px;
+    top: 20px;
     right: 20px;
     bottom: 90px;
     width: 240px;
@@ -66,7 +57,7 @@
 
 .editor-panel-events {
     position: absolute;
-    top: 120px;
+    top: 20px;
     right: 20px;
     bottom: 90px;
     width: 240px;

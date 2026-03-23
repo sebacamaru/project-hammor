@@ -13,7 +13,7 @@ import { PencilTool } from "./tools/PencilTool.js";
 import { EraseTool } from "./tools/EraseTool.js";
 import { EyedropperTool } from "./tools/EyedropperTool.js";
 
-import { ToolbarPanel } from "./panels/ToolbarPanel.js";
+import { WorkspaceModesPanel } from "../../shell/WorkspaceModesPanel.js";
 import { LayersPanel } from "./panels/LayersPanel.js";
 import { ToolsPanel } from "./panels/ToolsPanel.js";
 import { StatusBarPanel } from "./panels/StatusBarPanel.js";
@@ -102,8 +102,17 @@ export class MapEditorApp {
       new EyedropperTool(this.state, () => this.document),
     );
 
+    // Mode tabs in shell topbar
+    if (editor?.modesEl) {
+      this.modesPanel = new WorkspaceModesPanel(editor.modesEl, this.state, [
+        { id: "terrain",    label: "Terrain"    },
+        { id: "collisions", label: "Collisions" },
+        { id: "events",     label: "Events"     },
+        { id: "lights",     label: "Lights"     },
+      ]);
+    }
+
     // Panels
-    this.toolbar = new ToolbarPanel(this.layout.toolbarEl, this.state);
     this.tilesPanel = new TilesPanel(this.layout.leftPanelEl, this.state);
     this.layers = new LayersPanel(this.layout.rightPanelEl, this.state);
     this.tools = new ToolsPanel(this.layout.toolsEl, this.state);
@@ -181,6 +190,7 @@ export class MapEditorApp {
 
   unmount() {
     this.loop?.stop();
+    this.modesPanel?.destroy();
     this.eventsPanel?.destroy();
     window.removeEventListener("keydown", this.onKeyDown);
     this.viewport?.destroy();

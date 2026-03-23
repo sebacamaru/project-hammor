@@ -36,6 +36,34 @@
   border-bottom-color: #4fc3f7;
 }
 
+.shell-modes {
+  display: flex;
+  height: 100%;
+  margin-left: auto;
+  padding: 0 8px;
+}
+
+.shell-mode-tab {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0 14px;
+  font-size: 13px;
+  font-family: "Google Sans Code", monospace;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.shell-mode-tab:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.shell-mode-tab.is-active {
+  color: white;
+  border-bottom-color: #ffb74d;
+}
+
 .shell-workspace-host {
   position: relative;
   width: 100%;

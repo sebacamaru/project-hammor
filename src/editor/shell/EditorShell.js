@@ -16,12 +16,14 @@ export class EditorShell {
     this.root.innerHTML = `
       <div class="shell-topbar">
         <div class="shell-tabs"></div>
+        <div class="shell-modes"></div>
       </div>
       <div class="shell-workspace-host"></div>
       <div class="editor-dialog-layer"></div>
     `;
 
     this.tabsEl = this.root.querySelector(".shell-tabs");
+    this.modesEl = this.root.querySelector(".shell-modes");
     this.workspaceHost = this.root.querySelector(".shell-workspace-host");
 
     this.dialogHost = new DialogHost();
@@ -56,8 +58,9 @@ export class EditorShell {
       this.activeWorkspace = null;
     }
 
-    // Clear host
+    // Clear host and modes slot
     this.workspaceHost.innerHTML = "";
+    this.modesEl.innerHTML = "";
 
     // Create and mount new workspace
     const workspace = this.registry.create(id);
@@ -67,6 +70,7 @@ export class EditorShell {
       confirm: this.confirm.bind(this),
       openMap: this.openMap.bind(this),
       initialMapId: this._pendingMapId || null,
+      modesEl: this.modesEl,
     };
     await workspace.mount(this.workspaceHost, editorApi);
 
