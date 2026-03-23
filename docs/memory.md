@@ -18,7 +18,7 @@
 - Scene stack with full lifecycle (enter/exit/update/render/destroy)
 - Shared viewport reference: Camera and MapChunkRenderer hold reference to Renderer's ViewportState
 - Overscan strategy: viewport uses Math.ceil for tile count (CSS "cover"), clipped by parent overflow:hidden
-- Pixel-perfect rounding: Math.floor everywhere in render path (never Math.round)
+- Pixel-perfect rounding: Math.round everywhere in render path (never Math.floor — causes subpixel jitter)
 - Chunk-based map data: MapData holds Map<string, ChunkData>, tiles accessed via worldToChunk()
 - See [architecture.md](architecture.md) for detailed subsystem docs
 
@@ -35,7 +35,7 @@
 - `src/client/render/ChunkDebugOverlay.js` — tile grid + chunk boundary debug lines
 - `src/client/render/HitboxDebugOverlay.js` — entity hitbox debug rectangles
 - `src/client/render/TileLayerDebugOverlay.js` — collision layer debug highlight
-- `src/shared/core/Config.js` — viewport constraints, tick rate
+- `src/shared/core/Config.js` — viewport constraints, tick rates, AOI, interpolation
 - `src/shared/core/GameLoop.js` — fixed timestep loop
 - `src/shared/render/Renderer.js` — Pixi setup, owns ViewportState, resize logic
 - `src/shared/render/ResolutionManager.js` — pure function: computeViewport()
@@ -103,6 +103,8 @@
 - `server/src/network/ClientConnection.js` — per-socket wrapper
 - `server/src/network/protocols/messages.js` — protocol types, parsing, validation
 - `server/src/runtime/RuntimeMapManager.js` — loads chunk-based maps from filesystem
+- `server/src/runtime/RuntimeWorldManager.js` — loads world definitions, region lookups, neighbor queries
+- `server/src/game/systems/MapTransitionSystem.js` — detects map border crossings, updates player.mapId
 
 ## PixiJS v8 gotchas
 - No BaseTexture, no SCALE_MODES enum — use TextureSource + string literals
@@ -137,4 +139,8 @@
 - Editor-server supports maps, worlds, tilesets, and project config CRUD
 - Server fully functional: WebSocket, sessions, authoritative movement, hitbox collision, snapshots
 - Client connected to server: sends input, receives snapshots, no local movement
+- Remote player interpolation: timestamped snapshot buffer (100ms delay, up to 20 snapshots)
+- Client-side prediction: local movement + server reconciliation (toggleable via DEBUG_FLAGS)
+- Configurable AOI: region/radius/region+radius modes (default: region = 3×3 grid)
+- Map transitions: server detects border crossings, updates player.mapId, world-aware movement
 - JSDoc required on all public methods

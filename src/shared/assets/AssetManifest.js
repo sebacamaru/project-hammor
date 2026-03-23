@@ -8,6 +8,10 @@ export const manifest = {
           src: "/content/sprites/characters/player_test.png",
         },
         {
+          alias: "npc_01",
+          src: "/content/sprites/npcs/npc_01.png",
+        },
+        {
           alias: "tileset_world",
           src: "/content/atlas/atlas_world.webp",
         },

@@ -29,7 +29,10 @@
       "Bash(git -C:*)",
       "Bash(git -C \"C:/Users/barduck/Desktop/project-hammor\" push)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(timeout 4 node server/src/index.js)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 18716 //F)"
     ]
   }
 }
