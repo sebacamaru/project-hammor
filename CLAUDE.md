@@ -59,7 +59,7 @@ ClientApp (orchestrator) — src/client/ClientApp.js
 ### Scene lifecycle
 Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit()` → `destroy()`
 
-### Entity system
+### Entity system (shared/client)
 - `Entity` = pure data in `shared/data/models/`. NO Pixi imports. Tracks `x/y` (local) and `worldX/worldY` (absolute).
 - `Entity.syncLocalFromWorld()` copies world coords to local (used after world-space collision).
 - `EntityManager` = collection in `shared/data/models/`.
@@ -71,6 +71,30 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `PlayerView` = in `client/game/`, owns AnimatedSprite, renders with offset from feet.
 - `PlayerAnimations` = animation metadata in `shared/data/models/`.
 - `EntityData` = serializable snapshot in `shared/data/models/`.
+- `RemoteEntity` = in `client/game/`, lightweight model for non-player entities from snapshots (id, kind, x, y, interactable).
+- `RemoteEntityView` = in `client/game/`, kind-based colored 16×16 placeholders (cyan=npc, yellow=object/sign, magenta=default).
+
+### Authored entity system (server)
+- **Prefabs**: reusable entity templates in `content/prefabs/entities/*.json`. Fields: id, kind, components, params.
+- **Map entities**: `entities[]` array in runtime map JSON. Fields: id, prefabId?, kind?, x, y, params?, components?.
+- **Merge**: prefab + instance → two-level shallow merge (params shallow, components shallow per key, each component shallow).
+- **Server runtime**:
+  - `GameEntity` = in `server/src/game/entities/`. Pure data: runtimeId, authoredId, mapId, kind, x, y, params, components.
+  - `GameEntity.toSnapshotData()` → minimal network payload (id, authoredId, kind, x, y, sprite?, interactable?).
+  - `GameEntity.toDebugData()` → full dump for logging.
+  - `ServerEntityManager` = in `server/src/runtime/`. Indexed by runtimeId, mapId, authoredId. Methods: register, remove, removeByMap, getByMap, getByAuthoredId.
+  - `PrefabRegistry` = in `server/src/runtime/`. Loads/caches prefabs from filesystem. Graceful on missing directory.
+  - `EntityFactory` = in `server/src/runtime/`. Pure functions: resolveEntity, validateInstance, validateResolved.
+- **Lifecycle**: `GameServer.spawnEntitiesForMap(mapId)` / `despawnEntitiesForMap(mapId)` — lifecycle-oriented, ready for dynamic region loading.
+- **Snapshots**: entities included in snapshot `entities[]` array, AOI-filtered same as players (respects AOI_MODE).
+
+### Interaction system
+- **Authored data**: `components.interaction = { trigger: "action", type: "text", text: "..." }`.
+- **Protocol**: `INTERACT` (client→server: targetId), `INTERACT_RESULT` (server→client: entityId, authoredId, interactionType, text).
+- **Server validation**: entity exists, map/world context relevant (`_isEntityRelevantToPlayer`), interaction component with trigger "action", range check (feet-to-feet ≤ `INTERACTION_RANGE` = 32px).
+- **Server resolver**: switch on `interaction.type` — currently only "text" supported.
+- **Client**: KeyE polls → 200ms cooldown → `_findNearestInteractable()` (feet distance) → send interact → receive result → `InteractionTextOverlay.show(text)`.
+- **InteractionTextOverlay**: screen-space PixiJS Text, bottom-center, auto-hides 3s, replaces on each show, E dismisses.
 
 ### Coordinate convention ("feet")
 - **`player.x, player.y` = feet = center-bottom of sprite** (not top-left).
@@ -130,16 +154,19 @@ src/
 │   ├── ClientApp.js          Orchestrator (loads ProjectSettings, passes gameStart to SceneMap)
 │   ├── game/
 │   │   ├── Player.js         Player entity (server-driven, applyServerState, feet convention)
-│   │   └── PlayerView.js     Player sprite (AnimatedSprite, offset from feet)
+│   │   ├── PlayerView.js     Player sprite (AnimatedSprite, offset from feet)
+│   │   ├── RemoteEntity.js   Non-player entity data from snapshots (id, kind, x, y, interactable)
+│   │   └── RemoteEntityView.js  Kind-based colored placeholder sprites
 │   ├── network/
-│   │   └── NetworkManager.js Client WebSocket (hello, input, welcome, snapshot)
+│   │   └── NetworkManager.js Client WebSocket (hello, input, welcome, snapshot, interact_result)
 │   ├── world/
 │   │   ├── WorldData.js      Loads world JSON, indexes maps by region and mapId
 │   │   └── LoadedRegion.js   Wraps MapData + MapChunkRenderer with world offset
 │   ├── render/
 │   │   ├── ChunkDebugOverlay.js    Tile grid + chunk boundary debug lines
 │   │   ├── HitboxDebugOverlay.js   Entity hitbox debug rectangles
-│   │   └── TileLayerDebugOverlay.js  Collision layer debug highlight
+│   │   ├── TileLayerDebugOverlay.js  Collision layer debug highlight
+│   │   └── InteractionTextOverlay.js  Screen-space interaction text (auto-hide, bottom-center)
 │   └── scenes/
 │       └── SceneMap.js       Main gameplay scene (world streaming, multi-region)
 ├── editor/
@@ -211,11 +238,12 @@ src/
 │       ├── config/
 │       │   └── ServerConfig.js   Config factory (tickRate, spawn, speed, snapshotInterval)
 │       ├── game/
-│       │   ├── GameServer.js     Central orchestrator (loop, network, sessions, players)
+│       │   ├── GameServer.js     Central orchestrator (loop, network, sessions, players, entities, interactions)
 │       │   ├── ServerLoop.js     Fixed-timestep loop (setInterval)
 │       │   ├── SessionManager.js Session CRUD (dual Map: byId + byConnectionId)
 │       │   ├── entities/
-│       │   │   └── ServerPlayer.js  Server player (position, velocity, facing, hitbox, input)
+│       │   │   ├── ServerPlayer.js  Server player (position, velocity, facing, hitbox, input)
+│       │   │   └── GameEntity.js    Server runtime entity (runtimeId, authoredId, kind, x, y, components)
 │       │   ├── input/
 │       │   │   └── PlayerInputState.js  Last known input per player (seq-based dedup)
 │       │   └── systems/
@@ -225,9 +253,13 @@ src/
 │       │   ├── NetworkServer.js         WebSocket server (ws library)
 │       │   ├── ClientConnection.js      Individual socket wrapper
 │       │   └── protocols/
-│       │       └── messages.js          MSG_TYPES, parseMessage, validateInput, createMessage
+│       │       └── messages.js          MSG_TYPES, parseMessage, validateInput, validateInteract, createMessage
 │       └── runtime/
-│           └── RuntimeMapManager.js     Loads chunk-based maps from filesystem
+│           ├── RuntimeMapManager.js     Loads chunk-based maps from filesystem (+ stashes entities[])
+│           ├── RuntimeWorldManager.js   Loads world definitions, region lookups, neighbor queries
+│           ├── PrefabRegistry.js        Loads/caches entity prefabs from content/prefabs/entities/
+│           ├── ServerEntityManager.js   Server entity registry (indexed by runtimeId, mapId, authoredId)
+│           └── EntityFactory.js         Resolves prefab + instance into runtime entity data
 └── shared/
     ├── core/
     │   ├── Config.js         All constants (TILE_SIZE, EMPTY_TILE, TICK_RATE, etc.)
@@ -274,7 +306,9 @@ src/
 content/
 ├── project.json    Bootstrap config (gameStart: worldId, mapId, x, y)
 ├── atlas/          Tileset atlas images (webp)
-├── maps/           Runtime map JSON files (generated by editor-server)
+├── prefabs/
+│   └── entities/   Entity prefab JSON files (id, kind, components, params)
+├── maps/           Runtime map JSON files (generated by editor-server, may contain entities[])
 │   ├── .authored/  Editor-authored map JSON (source of truth for editor)
 │   └── .backup/    Timestamped backups before each save
 ├── worlds/         Runtime world JSON files
@@ -422,7 +456,7 @@ EditorShell (top-level) — src/editor/shell/EditorShell.js
 
 ### Authoritative model
 - Server owns all game state. Client sends input intentions, server computes movement/collision.
-- Fixed 20 TPS tick loop (setInterval). Same `TICK_RATE`/`TICK_MS` as client (from shared Config.js).
+- Fixed 20 TPS tick loop (setInterval). `SERVER_TICK_RATE` (20) is separate from `CLIENT_SIM_TICK_RATE` (60).
 - JSON WebSocket protocol: `hello` → `welcome`, `input` → server processes, `snapshot` → broadcast.
 
 ### Server subsystems
@@ -434,19 +468,36 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 ├── SessionManager     — session ↔ connection ↔ player mapping
 ├── MovementSystem     — authoritative movement (speed, diagonal normalization, per-axis collision)
 ├── CollisionSystem    — hitbox-based AABB vs collision layer tiles
-└── RuntimeMapManager  — loads chunk-based maps from filesystem (content/maps/)
+├── MapTransitionSystem — detects map border crossings, updates player.mapId
+├── RuntimeMapManager  — loads chunk-based maps from filesystem (content/maps/)
+├── RuntimeWorldManager — loads world definitions, region lookups, neighbor queries
+├── PrefabRegistry     — loads entity prefabs from content/prefabs/entities/
+├── ServerEntityManager — runtime entity registry (indexed by runtimeId, mapId, authoredId)
+└── Entity lifecycle   — spawnEntitiesForMap() / despawnEntitiesForMap()
 ```
 
 ### Protocol (messages.js)
-- `MSG_TYPES`: hello, welcome, input, snapshot, error
+- `MSG_TYPES`: hello, welcome, input, snapshot, interact, interact_result, error
 - `parseMessage(raw)` — JSON parse + type validation
 - `validateInput(msg)` — seq (non-negative int), input (4 boolean flags)
+- `validateInteract(msg)` — targetId (non-empty string)
 - `createMessage(type, data)` — factory
 
 ### Snapshot system
-- Server broadcasts snapshots every `snapshotInterval` ticks (default 3 = ~150ms)
-- Snapshot: `{ type: "snapshot", tick, players: [{ id, x, y, vx, vy, facing, mapId }] }`
-- Client `NetworkManager` receives snapshot, finds self by `serverId`, calls `Player.applyServerState()`
+- Server broadcasts snapshots every `SNAPSHOT_INTERVAL_TICKS` ticks (default 1 = every tick at 20 TPS)
+- Snapshot: `{ type: "snapshot", tick, lastProcessedSeq, players: [...], entities: [...] }`
+- Players: `[{ id, x, y, vx, vy, facing, mapId }]` — self always first
+- Entities: `[{ id, authoredId, kind, x, y, sprite?, interactable? }]` — AOI-filtered non-player entities
+- Client `NetworkManager` receives snapshot → `Player.reconcile()` (local) / `Player.pushRemoteSnapshot()` (remote) + entity spawn/update/despawn
+
+### AOI filtering
+- Configurable via `AOI_MODE` in Config.js: `"region"` | `"radius"` | `"region+radius"` (default: `"region"`)
+- **Single-map mode** (no worldId): legacy filter — same mapId + radius (AOI_RADIUS = 160px)
+- **World-aware mode**:
+  - `"region"`: grid distance ≤ AOI_REGION_RADIUS (default 1 = 3×3 region grid)
+  - `"radius"`: world-space distance ≤ AOI_RADIUS (160px = 10 tiles)
+  - `"region+radius"`: both conditions (AND)
+- Pre-computed caches per broadcast tick: worldDataCache + cellCache
 
 ### Input flow
 - Client detects input change (compare with last sent) → `NetworkManager.sendInput({up,down,left,right})`
@@ -460,13 +511,14 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - Uses shared `TILE_SIZE` from Config.js
 
 ### Client networking
-- `NetworkManager` (`src/client/network/`): minimal WebSocket wrapper, callbacks for welcome/snapshot
-- `SceneMap` creates NetworkManager, wires callbacks, sends input changes
+- `NetworkManager` (`src/client/network/`): minimal WebSocket wrapper, callbacks for welcome/snapshot/interact_result
+- `SceneMap` creates NetworkManager, wires callbacks, sends input changes + interact requests
 - Player position comes EXCLUSIVELY from server snapshots (no local movement)
+- Non-player entities managed in `remoteEntities` Map (spawn/update/despawn from snapshots)
 
 ## Future systems (not yet implemented)
-- **Client-side prediction**: predict movement locally, reconcile with server snapshots.
-- **NPC/Monster entities**: Same entity system, different update logic.
+- **Dialogue trees**: branching conversation system (currently only simple text interactions).
+- **NPC AI/movement**: entity behavior, pathfinding.
 - **Binary protocol**: Replace JSON with binary for bandwidth efficiency.
 
 ## Debug

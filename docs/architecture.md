@@ -48,11 +48,11 @@ RAF tick
     ├── SceneManager.render(alpha)
     │   └── SceneMap.render(alpha)
     │       ├── Camera.renderUpdate(player, alpha) — interpolate + recalc bounds
-    │       ├── root.x/y = -camera (already floor-snapped)
+    │       ├── root.x/y = -camera (already round-snapped)
     │       ├── MapChunkRenderer.update(camera) — show/hide chunk views
     │       ├── Debug overlays: collision, chunk grid, hitbox
-    │       ├── EntityRenderer.sync(entities, alpha) — floor-snapped interpolation
-    │       └── PlayerView.updateFromEntity(player, alpha) — floor-snapped interpolation
+    │       ├── EntityRenderer.sync(entities, alpha) — round-snapped interpolation
+    │       └── PlayerView.updateFromEntity(player, alpha) — round-snapped interpolation
     └── DebugOverlay.update(lastFrameTime)
 ```
 
@@ -77,13 +77,18 @@ window resize → Renderer.resize()
 ```
 
 ### Config constants (shared/core/Config.js)
-- TILE_SIZE = 16
-- EMPTY_TILE = -1
+- TILE_SIZE = 16, EMPTY_TILE = -1
 - BASE_TILES_X = 40, BASE_TILES_Y = 22
 - MIN_SCALE = 2, MAX_SCALE = 6
-- MIN_TILES_X = 38, MAX_TILES_X = 46
-- MIN_TILES_Y = 20, MAX_TILES_Y = 26
-- TICK_RATE = 20, TICK_MS = 50
+- MIN_TILES_X = 38, MAX_TILES_X = 46, MIN_TILES_Y = 20, MAX_TILES_Y = 26
+- SERVER_TICK_RATE = 20, SERVER_TICK_MS = 50
+- CLIENT_SIM_TICK_RATE = 60, CLIENT_SIM_TICK_MS ≈ 16.67
+- SNAPSHOT_RATE = 20, SNAPSHOT_INTERVAL_TICKS = 1
+- PLAYER_SPEED = 48
+- AOI_MODE = "region", AOI_REGION_RADIUS = 1
+- AOI_RADIUS = 160, AOI_RADIUS_SQ = 25600
+- INTERACTION_RANGE = 32, INTERACTION_RANGE_SQ = 1024
+- REMOTE_INTERPOLATION_DELAY_MS = 100, MAX_REMOTE_SNAPSHOTS = 20
 
 ## Scene lifecycle
 - enter(engine) — create containers, load map, setup entities, pass viewport to Camera/MapChunkRenderer, add to stage
@@ -115,7 +120,7 @@ window resize → Renderer.resize()
 - **NetworkManager** (`client/network/`): WebSocket wrapper, sends hello/input, receives welcome/snapshot via callbacks
 
 ### Render layer (shared/render/)
-- **EntityRenderer**: Map<id, Sprite>, creates sprites on first sync, interpolates with Math.floor
+- **EntityRenderer**: Map<id, Sprite>, creates sprites on first sync, interpolates with Math.round
 - **MapChunkRenderer**: chunk-based tilemap rendering (see Tilemap section)
 
 ## Data model (shared/data/)
@@ -236,7 +241,7 @@ Authored (`content/worlds/.authored/{id}.json`):
 - All toggle with Escape (sync with `engine.debug.visible`).
 
 ## Pixel-perfect rendering rules
-- All render-time positions use `Math.floor` (sprites AND camera)
+- All render-time positions use `Math.round` (sprites AND camera)
 - Camera and sprites must use the SAME rounding function to avoid 1px oscillation
 - Game logic keeps float coordinates — rounding is render-only
 - `roundPixels: true` in PixiJS as GPU-level safety net
@@ -365,17 +370,34 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 ├── SessionManager     — session ↔ connection ↔ player (dual Map lookup)
 ├── MovementSystem     — authoritative movement (per-axis collision resolve)
 ├── CollisionSystem    — hitbox-based AABB vs collision layer tiles
-└── RuntimeMapManager  — loads chunk-based maps from filesystem
+├── MapTransitionSystem — detects map border crossings, updates player.mapId
+├── RuntimeMapManager  — loads chunk-based maps from filesystem (+ stashes entities[])
+├── RuntimeWorldManager — loads world definitions, region lookups, neighbor queries
+├── PrefabRegistry     — loads entity prefabs from content/prefabs/entities/
+├── ServerEntityManager — runtime entity registry (runtimeId, mapId, authoredId indexes)
+└── Entity lifecycle   — spawnEntitiesForMap() / despawnEntitiesForMap()
 ```
 
 ### Protocol
-- MSG_TYPES: hello, welcome, input, snapshot, error
+- MSG_TYPES: hello, welcome, input, snapshot, interact, interact_result, error
 - Input: seq-based dedup (accept only if seq > player.input.seq, starts at -1)
-- Snapshots: broadcast every `snapshotInterval` ticks (default 3 = ~150ms)
-- Snapshot payload: `{ type: "snapshot", tick, players: [{ id, x, y, vx, vy, facing, mapId }] }`
+- Interact: `{ type: "interact", targetId }` → server validates + responds with `interact_result`
+- Snapshots: broadcast every `SNAPSHOT_INTERVAL_TICKS` (default 1 = every tick at 20 TPS)
+- Snapshot payload: `{ type: "snapshot", tick, lastProcessedSeq, players: [...], entities: [...] }`
+- Players: `[{ id, x, y, vx, vy, facing, mapId }]` — self always first
+- Entities: `[{ id, authoredId, kind, x, y, sprite?, interactable? }]` — AOI-filtered
+
+### AOI filtering
+- Configurable via `AOI_MODE` in Config.js: `"region"` | `"radius"` | `"region+radius"` (default: `"region"`)
+- **Single-map mode** (no worldId): legacy filter — same mapId + radius (AOI_RADIUS = 160px)
+- **World-aware mode**:
+  - `"region"`: grid distance ≤ AOI_REGION_RADIUS (default 1 = 3×3 region grid)
+  - `"radius"`: world-space distance ≤ AOI_RADIUS (160px = 10 tiles)
+  - `"region+radius"`: both conditions (AND)
+- Pre-computed caches per broadcast tick: worldDataCache + cellCache
 
 ### Server player
-- `ServerPlayer`: id, mapId, x, y (feet convention), vx, vy, facing, hitbox, input state
+- `ServerPlayer`: id, worldId, mapId, x, y (feet convention), vx, vy, facing, hitbox, input state
 - `toData()` returns snapshot-ready plain object
 
 ### Collision
@@ -388,7 +410,34 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - tickRate, tickMs, serverName, host, port, startMapId, spawnX/Y, playerSpeed, snapshotInterval
 - Factory function with overrides support
 
+## Authored entity system
+
+### Data model
+- **Prefabs**: `content/prefabs/entities/*.json` — reusable templates with id, kind, components, params
+- **Map entities**: `entities[]` array in runtime map JSON — instances with id, prefabId?, kind?, x, y, params?, components?
+- **Merge**: prefab + instance → params shallow merge, components shallow per key then shallow within each component
+
+### Server runtime
+- `GameEntity` (`server/src/game/entities/`) — runtimeId ("e1"), authoredId, mapId, kind, x, y, params, components
+- `ServerEntityManager` (`server/src/runtime/`) — registry indexed by runtimeId, mapId ("mapId/authoredId")
+- `PrefabRegistry` (`server/src/runtime/`) — loads/caches from filesystem, graceful on missing dir
+- `EntityFactory` (`server/src/runtime/`) — pure functions: resolveEntity, validateInstance, validateResolved
+- Lifecycle: `spawnEntitiesForMap(mapId)` / `despawnEntitiesForMap(mapId)` on GameServer
+
+### Snapshot replication
+- Entities in `snapshot.entities[]`, AOI-filtered (same mode as players)
+- `toSnapshotData()` → minimal payload (id, authoredId, kind, x, y, sprite?, interactable?)
+- `_toWorldEntityData()` converts map-local → world-space (same math as players)
+- Client: `RemoteEntity` model + `RemoteEntityView` (kind-based colored placeholders)
+
+### Interaction system
+- **Authored**: `components.interaction = { trigger: "action", type: "text", text: "..." }`
+- **Protocol**: client sends `{ type: "interact", targetId }`, server responds `{ type: "interact_result", entityId, authoredId, interactionType, text }`
+- **Server validation**: `_resolveInteraction()` checks entity exists, `_isEntityRelevantToPlayer()` (same AOI as snapshots), interaction component, feet-to-feet range ≤ INTERACTION_RANGE
+- **Server resolver**: `switch (interaction.type)` — currently "text" only, extensible
+- **Client**: KeyE → 200ms cooldown → `_findNearestInteractable()` (feet distance) → send → `InteractionTextOverlay.show()` (auto-hide 3s)
+
 ## Future systems
-- **Client-side prediction**: predict movement locally, reconcile with server snapshots
-- **NPC/Monster entities**: same entity system, different update logic
+- **Dialogue trees**: branching conversation system
+- **NPC AI/movement**: entity behavior, pathfinding
 - **Binary protocol**: replace JSON for bandwidth efficiency
