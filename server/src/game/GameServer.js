@@ -12,7 +12,7 @@ import { CollisionSystem } from "./systems/CollisionSystem.js";
 import { MapTransitionSystem } from "./systems/MapTransitionSystem.js";
 import { RuntimeMapManager } from "../runtime/RuntimeMapManager.js";
 import { RuntimeWorldManager } from "../runtime/RuntimeWorldManager.js";
-import { AOI_RADIUS_SQ } from "../../../src/shared/core/Config.js";
+import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ } from "../../../src/shared/core/Config.js";
 
 /**
  * Central game server orchestrator.
@@ -251,11 +251,20 @@ export class GameServer {
 
   /**
    * Sends an AOI-filtered snapshot to each connected session.
-   * Each client receives only: itself (always first) + nearby players on the same map.
-   * Proximity is checked via squared distance against AOI_RADIUS_SQ.
-   * Coordinates are converted to world-space before sending.
+   * Each client receives: itself (always first) + visible players filtered by AOI_MODE.
+   * Legacy (no worldId): same mapId + radius. World-aware: configurable region/radius/both.
    */
   broadcastSnapshots() {
+    // Pre-compute world data and region cells once per broadcast tick
+    const worldDataCache = new Map();
+    const cellCache = new Map();
+    for (const player of this.players.values()) {
+      worldDataCache.set(player.id, this._toWorldPlayerData(player));
+      if (player.worldId) {
+        cellCache.set(player.id, this.runtimeWorlds.getMapCell(player.worldId, player.mapId));
+      }
+    }
+
     for (const session of this.sessions.getAll()) {
       const conn = this.network.getConnection(session.connectionId);
       if (!conn) continue;
@@ -263,17 +272,46 @@ export class GameServer {
       const selfPlayer = this.players.get(session.playerId);
       if (!selfPlayer) continue;
 
+      const selfWorldData = worldDataCache.get(selfPlayer.id);
+
       // Self always first
-      const visiblePlayers = [this._toWorldPlayerData(selfPlayer)];
+      const visiblePlayers = [selfWorldData];
 
       for (const other of this.players.values()) {
         if (other.id === selfPlayer.id) continue;
-        if (other.mapId !== selfPlayer.mapId) continue;
 
-        const dx = other.x - selfPlayer.x;
-        const dy = other.y - selfPlayer.y;
-        if (dx * dx + dy * dy <= AOI_RADIUS_SQ) {
-          visiblePlayers.push(this._toWorldPlayerData(other));
+        // ── Legacy path: no worldId (single-map mode) ──
+        if (!selfPlayer.worldId) {
+          if (other.mapId !== selfPlayer.mapId) continue;
+          const otherWorldData = worldDataCache.get(other.id);
+          const dx = otherWorldData.x - selfWorldData.x;
+          const dy = otherWorldData.y - selfWorldData.y;
+          if (dx * dx + dy * dy <= AOI_RADIUS_SQ) {
+            visiblePlayers.push(otherWorldData);
+          }
+          continue;
+        }
+
+        // ── World-aware path ──
+        if (other.worldId !== selfPlayer.worldId) continue;
+
+        let visible = false;
+        switch (AOI_MODE) {
+          case "region":
+            visible = this._isWithinRegionAOI(cellCache.get(selfPlayer.id), cellCache.get(other.id));
+            break;
+          case "radius":
+            visible = this._isWithinRadiusAOI(selfWorldData, worldDataCache.get(other.id));
+            break;
+          case "region+radius":
+            visible =
+              this._isWithinRegionAOI(cellCache.get(selfPlayer.id), cellCache.get(other.id)) &&
+              this._isWithinRadiusAOI(selfWorldData, worldDataCache.get(other.id));
+            break;
+        }
+
+        if (visible) {
+          visiblePlayers.push(worldDataCache.get(other.id));
         }
       }
 
@@ -283,6 +321,32 @@ export class GameServer {
         players: visiblePlayers,
       }));
     }
+  }
+
+  /**
+   * Checks whether two players are within region AOI (grid distance).
+   * @param {{ rx: number, ry: number }} selfCell - Region cell of the observing player.
+   * @param {{ rx: number, ry: number }} otherCell - Region cell of the other player.
+   * @returns {boolean} True if within AOI_REGION_RADIUS in both axes.
+   */
+  _isWithinRegionAOI(selfCell, otherCell) {
+    if (!selfCell || !otherCell) return false;
+    return (
+      Math.abs(otherCell.rx - selfCell.rx) <= AOI_REGION_RADIUS &&
+      Math.abs(otherCell.ry - selfCell.ry) <= AOI_REGION_RADIUS
+    );
+  }
+
+  /**
+   * Checks whether two players are within radius AOI (world-space distance).
+   * @param {{ x: number, y: number }} selfData - World-space snapshot of the observing player.
+   * @param {{ x: number, y: number }} otherData - World-space snapshot of the other player.
+   * @returns {boolean} True if squared distance is within AOI_RADIUS_SQ.
+   */
+  _isWithinRadiusAOI(selfData, otherData) {
+    const dx = otherData.x - selfData.x;
+    const dy = otherData.y - selfData.y;
+    return dx * dx + dy * dy <= AOI_RADIUS_SQ;
   }
 
   /**
