@@ -10,7 +10,7 @@
     "-1,0": {
       "mapId": "test_map_west"
     },
-    "-1,1": {
+    "0,-1": {
       "mapId": "test_map_north"
     },
     "0,0": {

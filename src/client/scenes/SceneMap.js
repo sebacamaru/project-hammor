@@ -176,11 +176,15 @@ export class SceneMap extends Scene {
           const view = new PlayerView(this.entityLayer);
           entry = { player, view };
           this.remotePlayers.set(p.id, entry);
-          // Sync view immediately so the sprite doesn't flash at (0,0)
-          view.updateFromEntity(player, 1);
         }
 
+        const wasNew = !entry.player.hasServerState;
         entry.player.pushRemoteSnapshot(p, performance.now());
+
+        // Sync view after first snapshot so facing/position are correct on frame 1
+        if (wasNew) {
+          entry.view.updateFromEntity(entry.player, 1);
+        }
       }
 
       // Remove players no longer in snapshot

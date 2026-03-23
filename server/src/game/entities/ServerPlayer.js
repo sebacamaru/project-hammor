@@ -8,13 +8,15 @@ import { PlayerInputState } from "../input/PlayerInputState.js";
 export class ServerPlayer {
   /**
    * @param {string} id - Unique player id (e.g. "p1").
+   * @param {string|null} worldId - The world this player belongs to, or null for single-map mode.
    * @param {string} mapId - The map this player is currently in.
-   * @param {number} x - Initial x position in pixels.
-   * @param {number} y - Initial y position in pixels.
+   * @param {number} x - Initial x position in pixels (map-local).
+   * @param {number} y - Initial y position in pixels (map-local).
    */
-  constructor(id, mapId, x, y) {
+  constructor(id, worldId, mapId, x, y) {
     this.id = id;
     this.type = "player";
+    this.worldId = worldId;
     this.mapId = mapId;
     this.x = x;
     this.y = y;
@@ -37,6 +39,7 @@ export class ServerPlayer {
     return {
       id: this.id,
       type: this.type,
+      worldId: this.worldId,
       mapId: this.mapId,
       x: this.x,
       y: this.y,

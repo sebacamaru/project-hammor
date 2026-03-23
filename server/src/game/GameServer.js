@@ -9,7 +9,9 @@ import { SessionManager } from "./SessionManager.js";
 import { ServerPlayer } from "./entities/ServerPlayer.js";
 import { MovementSystem } from "./systems/MovementSystem.js";
 import { CollisionSystem } from "./systems/CollisionSystem.js";
+import { MapTransitionSystem } from "./systems/MapTransitionSystem.js";
 import { RuntimeMapManager } from "../runtime/RuntimeMapManager.js";
+import { RuntimeWorldManager } from "../runtime/RuntimeWorldManager.js";
 import { AOI_RADIUS_SQ } from "../../../src/shared/core/Config.js";
 
 /**
@@ -49,27 +51,56 @@ export class GameServer {
     this.nextPlayerId = 1;
     this.movementSystem = new MovementSystem();
     this.collisionSystem = new CollisionSystem();
+    this.mapTransitionSystem = new MapTransitionSystem(config.serverName);
     this.runtimeMaps = new RuntimeMapManager();
+    this.runtimeWorlds = new RuntimeWorldManager();
   }
 
   /**
-   * Starts the server: loads runtime map, opens WebSocket, starts tick loop.
-   * If map loading fails, nothing else starts.
+   * Starts the server: loads world and maps, opens WebSocket, starts tick loop.
+   * If a startWorldId is configured, loads the world and all its maps.
+   * Otherwise falls back to loading only the startMapId (single-map mode).
    */
   async start() {
-    const map = await this.runtimeMaps.loadMap(this.config.startMapId);
-    console.log(
-      `[${this.config.serverName}] Loaded map ${map.id} (${map.width}x${map.height})`,
-    );
+    const tag = `[${this.config.serverName}]`;
+
+    if (this.config.startWorldId) {
+      // World mode: load world definition + all maps in the world
+      const world = await this.runtimeWorlds.loadWorld(this.config.startWorldId);
+      console.log(
+        `${tag} Loaded world "${world.id}" (${world.maps.length} maps, region ${world.regionWidth}x${world.regionHeight} tiles)`,
+      );
+
+      // Validate that startMapId belongs to this world
+      const startCell = this.runtimeWorlds.getMapCell(this.config.startWorldId, this.config.startMapId);
+      if (!startCell) {
+        throw new Error(
+          `startMapId "${this.config.startMapId}" not found in world "${this.config.startWorldId}"`,
+        );
+      }
+
+      // Load all maps in the world
+      const mapIds = this.runtimeWorlds.getMapIds(this.config.startWorldId);
+      for (const mapId of mapIds) {
+        const map = await this.runtimeMaps.loadMap(mapId);
+        console.log(`${tag}   Loaded map "${map.id}" (${map.width}x${map.height})`);
+      }
+    } else {
+      // Single-map mode (legacy)
+      const map = await this.runtimeMaps.loadMap(this.config.startMapId);
+      console.log(
+        `${tag} Loaded map ${map.id} (${map.width}x${map.height})`,
+      );
+    }
 
     await this.network.start();
     console.log(
-      `[${this.config.serverName}] WebSocket listening on ${this.config.host}:${this.config.port}`,
+      `${tag} WebSocket listening on ${this.config.host}:${this.config.port}`,
     );
 
     this.loop.start();
     console.log(
-      `[${this.config.serverName}] Started at ${this.config.tickRate} TPS`,
+      `${tag} Started at ${this.config.tickRate} TPS`,
     );
   }
 
@@ -85,12 +116,18 @@ export class GameServer {
   }
 
   /**
-   * Main simulation tick. Runs movement for all players and periodic debug logging.
+   * Main simulation tick. Runs movement, map transitions, and periodic debug logging.
    * @param {number} dt - Tick duration in milliseconds.
    */
   update(dt) {
     this.tickCount++;
-    this.movementSystem.update(this.players, dt, this.config, this.runtimeMaps, this.collisionSystem);
+    this.movementSystem.update(
+      this.players, dt, this.config,
+      this.runtimeMaps, this.collisionSystem, this.runtimeWorlds,
+    );
+
+    // Check for map border crossings after movement
+    this.mapTransitionSystem.update(this.players, this.runtimeMaps, this.runtimeWorlds);
 
     if (this.tickCount % this.config.snapshotInterval === 0) {
       this.broadcastSnapshots();
@@ -101,7 +138,7 @@ export class GameServer {
       console.log(`${tag} Tick ${this.tickCount}`);
       for (const player of this.players.values()) {
         console.log(
-          `${tag}   ${player.id} pos=(${player.x.toFixed(2)}, ${player.y.toFixed(2)}) vel=(${player.vx.toFixed(2)}, ${player.vy.toFixed(2)}) facing=${player.facing}`,
+          `${tag}   ${player.id} map=${player.mapId} pos=(${player.x.toFixed(2)}, ${player.y.toFixed(2)}) vel=(${player.vx.toFixed(2)}, ${player.vy.toFixed(2)}) facing=${player.facing}`,
         );
       }
     }
@@ -152,6 +189,7 @@ export class GameServer {
         const playerId = `p${this.nextPlayerId++}`;
         const player = new ServerPlayer(
           playerId,
+          this.config.startWorldId ?? null,
           this.config.startMapId,
           this.config.spawnX,
           this.config.spawnY,
@@ -215,6 +253,7 @@ export class GameServer {
    * Sends an AOI-filtered snapshot to each connected session.
    * Each client receives only: itself (always first) + nearby players on the same map.
    * Proximity is checked via squared distance against AOI_RADIUS_SQ.
+   * Coordinates are converted to world-space before sending.
    */
   broadcastSnapshots() {
     for (const session of this.sessions.getAll()) {
@@ -225,7 +264,7 @@ export class GameServer {
       if (!selfPlayer) continue;
 
       // Self always first
-      const visiblePlayers = [selfPlayer.toData()];
+      const visiblePlayers = [this._toWorldPlayerData(selfPlayer)];
 
       for (const other of this.players.values()) {
         if (other.id === selfPlayer.id) continue;
@@ -234,7 +273,7 @@ export class GameServer {
         const dx = other.x - selfPlayer.x;
         const dy = other.y - selfPlayer.y;
         if (dx * dx + dy * dy <= AOI_RADIUS_SQ) {
-          visiblePlayers.push(other.toData());
+          visiblePlayers.push(this._toWorldPlayerData(other));
         }
       }
 
@@ -257,7 +296,28 @@ export class GameServer {
     return createMessage(MSG_TYPES.WELCOME, {
       connectionId: conn.id,
       sessionId: session.id,
-      player: player.toData(),
+      player: this._toWorldPlayerData(player),
     });
+  }
+
+  /**
+   * Converts a player's map-local data to world-space coordinates for protocol output.
+   * In single-map mode (no worldId), returns raw map-local data unchanged.
+   * @param {ServerPlayer} player
+   * @returns {object} Player snapshot data with world-space x/y.
+   */
+  _toWorldPlayerData(player) {
+    const data = player.toData();
+
+    if (player.worldId) {
+      const cell = this.runtimeWorlds.getMapCell(player.worldId, player.mapId);
+      if (cell) {
+        const size = this.runtimeWorlds.getRegionSizePx(player.worldId);
+        data.x += cell.rx * size.widthPx;
+        data.y += cell.ry * size.heightPx;
+      }
+    }
+
+    return data;
   }
 }

@@ -13,13 +13,15 @@ export class MovementSystem {
   /**
    * Updates all players' positions based on their current input state.
    * Per-axis collision resolution: tries X first, then Y.
+   * Passes open border flags to collision so players can cross into neighbor maps.
    * @param {Map<string, ServerPlayer>} players - All active players.
    * @param {number} dt - Tick duration in milliseconds.
    * @param {object} config - Server config (needs playerSpeed).
    * @param {RuntimeMapManager} runtimeMaps - Loaded runtime maps.
    * @param {CollisionSystem} collisionSystem - Collision checker.
+   * @param {RuntimeWorldManager|null} runtimeWorlds - Loaded worlds (null in single-map mode).
    */
-  update(players, dt, config, runtimeMaps, collisionSystem) {
+  update(players, dt, config, runtimeMaps, collisionSystem, runtimeWorlds = null) {
     if (!config?.playerSpeed || dt <= 0) return;
 
     const speed = config.playerSpeed;
@@ -61,9 +63,14 @@ export class MovementSystem {
         continue;
       }
 
+      // Look up open borders for world-aware collision
+      const openBorders = player.worldId
+        ? runtimeWorlds?.getOpenBorders(player.worldId, player.mapId)
+        : null;
+
       // Resolve X axis
       const targetX = player.x + dx * distance;
-      if (collisionSystem.isWalkable(map, targetX, player.y, player.hitbox)) {
+      if (collisionSystem.isWalkable(map, targetX, player.y, player.hitbox, openBorders)) {
         player.x = targetX;
         player.vx = dx * speed;
       } else {
@@ -72,7 +79,7 @@ export class MovementSystem {
 
       // Resolve Y axis (using updated player.x from above)
       const targetY = player.y + dy * distance;
-      if (collisionSystem.isWalkable(map, player.x, targetY, player.hitbox)) {
+      if (collisionSystem.isWalkable(map, player.x, targetY, player.hitbox, openBorders)) {
         player.y = targetY;
         player.vy = dy * speed;
       } else {
