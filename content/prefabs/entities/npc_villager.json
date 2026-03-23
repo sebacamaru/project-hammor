@@ -1,0 +1,9 @@
+{
+  "id": "npc_villager",
+  "kind": "npc",
+  "components": {
+    "sprite": { "sheet": "npc_01", "animation": "idle_down" },
+    "dialogue": { "tree": "villager_default" }
+  },
+  "params": { "speed": 32, "wanderRadius": 48 }
+}

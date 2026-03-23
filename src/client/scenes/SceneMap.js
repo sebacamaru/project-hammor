@@ -15,6 +15,8 @@ import { LoadedRegion } from "../world/LoadedRegion.js";
 import { TileCollision } from "../../shared/data/TileCollision.js";
 import { makeRegionKey, worldToRegion, regionToWorldOffset } from "../../shared/world/WorldMath.js";
 import { NetworkManager } from "../network/NetworkManager.js";
+import { RemoteEntity } from "../game/RemoteEntity.js";
+import { RemoteEntityView } from "../game/RemoteEntityView.js";
 
 export class SceneMap extends Scene {
   constructor(gameStart = {}) {
@@ -112,6 +114,9 @@ export class SceneMap extends Scene {
     // Remote players: serverId → { player: Player, view: PlayerView }
     this.remotePlayers = new Map();
 
+    // Remote non-player entities: runtimeId → { entity: RemoteEntity, view: RemoteEntityView }
+    this.remoteEntities = new Map();
+
     // Player — updated manually, not through EntityManager
     // Spawn in world space: local tile coords + region world offset
     let spawnX = (this.gameStart.x ?? 0) * TILE_SIZE + 8;   // feet: center of tile
@@ -192,6 +197,31 @@ export class SceneMap extends Scene {
         if (!snapshotIds.has(id)) {
           entry.view.destroy();
           this.remotePlayers.delete(id);
+        }
+      }
+
+      // Non-player entities: spawn / update / despawn
+      const entityIds = new Set();
+      for (const e of (msg.entities ?? [])) {
+        entityIds.add(e.id);
+
+        let entry = this.remoteEntities.get(e.id);
+        if (!entry) {
+          const entity = new RemoteEntity(e);
+          const view = new RemoteEntityView(this.entityLayer, e.kind);
+          entry = { entity, view };
+          this.remoteEntities.set(e.id, entry);
+        }
+
+        entry.entity.applySnapshot(e);
+        entry.view.updateFromEntity(entry.entity);
+      }
+
+      // Remove entities no longer in snapshot
+      for (const [id, entry] of this.remoteEntities) {
+        if (!entityIds.has(id)) {
+          entry.view.destroy();
+          this.remoteEntities.delete(id);
         }
       }
     };
@@ -277,6 +307,7 @@ export class SceneMap extends Scene {
     const regionMapId = currentRegion?.mapId ?? "?";
     d.set("region", `${this._currentRegionRx}, ${this._currentRegionRy} (${regionMapId})`);
     d.set("entities", this.entityManager.entities.size);
+    d.set("remote entities", this.remoteEntities.size);
     d.set("viewport", `${vp.tilesX}x${vp.tilesY} @${vp.scale}x`);
     d.set("canvas", `${vp.cssWidth}x${vp.cssHeight}`);
     const el = this.engine.renderer.rootElement;
@@ -352,6 +383,10 @@ export class SceneMap extends Scene {
       view.destroy();
     }
     this.remotePlayers.clear();
+    for (const { view } of this.remoteEntities.values()) {
+      view.destroy();
+    }
+    this.remoteEntities.clear();
     this.entityRenderer.destroy();
     this.playerView.destroy();
     this.root.destroy({ children: true });

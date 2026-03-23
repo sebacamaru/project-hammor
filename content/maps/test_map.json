@@ -14,6 +14,26 @@
     "light_blockers",
     "regions"
   ],
+  "entities": [
+    {
+      "id": "villager_01",
+      "prefabId": "npc_villager",
+      "x": 120,
+      "y": 96,
+      "components": {
+        "dialogue": { "tree": "villager_special" }
+      }
+    },
+    {
+      "id": "sign_01",
+      "kind": "object",
+      "x": 64,
+      "y": 128,
+      "components": {
+        "interaction": { "type": "sign", "text": "Welcome to the test map!" }
+      }
+    }
+  ],
   "chunks": [
     {
       "cx": 0,

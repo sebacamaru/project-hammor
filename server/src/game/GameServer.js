@@ -12,6 +12,10 @@ import { CollisionSystem } from "./systems/CollisionSystem.js";
 import { MapTransitionSystem } from "./systems/MapTransitionSystem.js";
 import { RuntimeMapManager } from "../runtime/RuntimeMapManager.js";
 import { RuntimeWorldManager } from "../runtime/RuntimeWorldManager.js";
+import { PrefabRegistry } from "../runtime/PrefabRegistry.js";
+import { ServerEntityManager } from "../runtime/ServerEntityManager.js";
+import { GameEntity } from "./entities/GameEntity.js";
+import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
 import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ } from "../../../src/shared/core/Config.js";
 
 /**
@@ -54,6 +58,8 @@ export class GameServer {
     this.mapTransitionSystem = new MapTransitionSystem(config.serverName);
     this.runtimeMaps = new RuntimeMapManager();
     this.runtimeWorlds = new RuntimeWorldManager();
+    this.prefabs = new PrefabRegistry();
+    this.entities = new ServerEntityManager();
   }
 
   /**
@@ -93,6 +99,18 @@ export class GameServer {
       );
     }
 
+    // Load entity prefabs
+    const prefabCount = await this.prefabs.loadAll();
+    console.log(`${tag} Loaded ${prefabCount} entity prefab(s)`);
+
+    // Spawn authored entities for all loaded maps
+    for (const mapId of this.runtimeMaps.maps.keys()) {
+      this.spawnEntitiesForMap(mapId);
+    }
+    if (this.entities.count() > 0) {
+      console.log(`${tag} Total runtime entities: ${this.entities.count()}`);
+    }
+
     await this.network.start();
     console.log(
       `${tag} WebSocket listening on ${this.config.host}:${this.config.port}`,
@@ -113,6 +131,80 @@ export class GameServer {
     console.log(
       `[${this.config.serverName}] Stopped (${this.tickCount} ticks elapsed)`,
     );
+  }
+
+  /**
+   * Resolves and spawns all authored entities for a map into the ServerEntityManager.
+   * Validates each instance, resolves prefabs, and logs results.
+   * Called during start() for each loaded map. Designed for future dynamic region loading.
+   * @param {string} mapId
+   */
+  spawnEntitiesForMap(mapId) {
+    const tag = `[${this.config.serverName}]`;
+    const instances = this.runtimeMaps.getMapEntities(mapId);
+    if (instances.length === 0) return;
+
+    const seenIds = new Set();
+    let spawned = 0;
+
+    for (const instance of instances) {
+      // Pre-resolve validation
+      const check = validateInstance(instance);
+      if (!check.ok) {
+        console.warn(`${tag} [entities] Invalid entity in map "${mapId}": ${check.error}`);
+        continue;
+      }
+
+      // Duplicate authored id within this map
+      if (seenIds.has(instance.id)) {
+        console.warn(
+          `${tag} [entities] Duplicate entity id "${instance.id}" in map "${mapId}" — skipping`,
+        );
+        continue;
+      }
+      seenIds.add(instance.id);
+
+      // Resolve prefab + instance overrides
+      let resolved;
+      try {
+        resolved = resolveEntity(instance, this.prefabs);
+      } catch (err) {
+        console.warn(`${tag} [entities] ${err.message}`);
+        continue;
+      }
+
+      // Create runtime entity
+      const entity = new GameEntity(
+        this.entities.nextId(),
+        resolved.authoredId,
+        mapId,
+        resolved.kind,
+        resolved.x,
+        resolved.y,
+        resolved.params,
+        resolved.components,
+      );
+      this.entities.register(entity);
+      spawned++;
+    }
+
+    if (spawned > 0) {
+      console.log(`${tag}   Spawned ${spawned} entity(s) for map "${mapId}"`);
+    }
+  }
+
+  /**
+   * Removes all runtime entities belonging to a map from the ServerEntityManager.
+   * Designed for future dynamic region unloading.
+   * @param {string} mapId
+   */
+  despawnEntitiesForMap(mapId) {
+    const count = this.entities.removeByMap(mapId);
+    if (count > 0) {
+      console.log(
+        `[${this.config.serverName}] Despawned ${count} entity(s) for map "${mapId}"`,
+      );
+    }
   }
 
   /**
@@ -315,10 +407,14 @@ export class GameServer {
         }
       }
 
+      // Non-player entities: AOI-filtered (same mode as players)
+      const visibleEntities = this._getVisibleEntities(selfPlayer, selfWorldData, cellCache);
+
       conn.send(createMessage(MSG_TYPES.SNAPSHOT, {
         tick: this.tickCount,
         lastProcessedSeq: selfPlayer.lastProcessedSeq,
         players: visiblePlayers,
+        entities: visibleEntities,
       }));
     }
   }
@@ -377,6 +473,94 @@ export class GameServer {
       const cell = this.runtimeWorlds.getMapCell(player.worldId, player.mapId);
       if (cell) {
         const size = this.runtimeWorlds.getRegionSizePx(player.worldId);
+        data.x += cell.rx * size.widthPx;
+        data.y += cell.ry * size.heightPx;
+      }
+    }
+
+    return data;
+  }
+
+  /**
+   * Returns AOI-filtered non-player entities for a client's snapshot.
+   * Applies the same AOI_MODE logic as player filtering (region/radius/region+radius).
+   * Legacy single-map mode: same mapId + radius check.
+   * @param {ServerPlayer} selfPlayer
+   * @param {{ x: number, y: number }} selfWorldData - Player's world-space position.
+   * @param {Map<string, {rx: number, ry: number}>} cellCache - Pre-computed region cells.
+   * @returns {object[]} Snapshot-ready entity data in world-space coordinates.
+   */
+  _getVisibleEntities(selfPlayer, selfWorldData, cellCache) {
+    if (this.entities.count() === 0) return [];
+
+    const result = [];
+    const selfCell = cellCache.get(selfPlayer.id);
+
+    if (!selfPlayer.worldId) {
+      // Legacy single-map mode: same map + radius
+      for (const entity of this.entities.getByMap(selfPlayer.mapId)) {
+        const data = this._toWorldEntityData(entity, null);
+        if (this._isWithinRadiusAOI(selfWorldData, data)) {
+          result.push(data);
+        }
+      }
+      return result;
+    }
+
+    // World mode: apply the same AOI_MODE switch as players
+    const worldId = selfPlayer.worldId;
+    const mapIds = this.runtimeWorlds.getMapIds(worldId);
+    if (!mapIds) return result;
+
+    for (const mapId of mapIds) {
+      const mapCell = this.runtimeWorlds.getMapCell(worldId, mapId);
+      if (!mapCell) continue;
+
+      // Pre-check: skip maps outside region radius for modes that use it
+      const regionOk = (AOI_MODE === "radius")
+        ? true
+        : this._isWithinRegionAOI(selfCell, mapCell);
+      if (!regionOk) continue;
+
+      for (const entity of this.entities.getByMap(mapId)) {
+        const data = this._toWorldEntityData(entity, worldId);
+
+        let visible = false;
+        switch (AOI_MODE) {
+          case "region":
+            visible = true; // already passed region check above
+            break;
+          case "radius":
+            visible = this._isWithinRadiusAOI(selfWorldData, data);
+            break;
+          case "region+radius":
+            visible = this._isWithinRadiusAOI(selfWorldData, data);
+            break;
+        }
+
+        if (visible) {
+          result.push(data);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Converts an entity's map-local snapshot data to world-space coordinates.
+   * Same pattern as _toWorldPlayerData(): adds region pixel offset.
+   * @param {GameEntity} entity
+   * @param {string|null} worldId
+   * @returns {object} Snapshot-ready entity data with world-space x/y.
+   */
+  _toWorldEntityData(entity, worldId) {
+    const data = entity.toSnapshotData();
+
+    if (worldId) {
+      const cell = this.runtimeWorlds.getMapCell(worldId, entity.mapId);
+      if (cell) {
+        const size = this.runtimeWorlds.getRegionSizePx(worldId);
         data.x += cell.rx * size.widthPx;
         data.y += cell.ry * size.heightPx;
       }

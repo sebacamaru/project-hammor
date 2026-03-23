@@ -11,6 +11,8 @@ export class RuntimeMapManager {
   constructor() {
     /** @type {Map<string, MapData>} mapId → loaded MapData */
     this.maps = new Map();
+    /** @type {Map<string, object[]>} mapId → raw authored entity instances from map JSON */
+    this.mapEntities = new Map();
   }
 
   /**
@@ -71,6 +73,10 @@ export class RuntimeMapManager {
     }
 
     this.maps.set(mapId, map);
+
+    // Stash raw authored entity instances (if present in the map JSON)
+    this.mapEntities.set(mapId, Array.isArray(mapJson.entities) ? mapJson.entities : []);
+
     return map;
   }
 
@@ -81,5 +87,15 @@ export class RuntimeMapManager {
    */
   getMap(mapId) {
     return this.maps.get(mapId);
+  }
+
+  /**
+   * Returns the raw authored entity instances for a loaded map.
+   * Returns an empty array if the map has no entities or is not loaded.
+   * @param {string} mapId
+   * @returns {object[]}
+   */
+  getMapEntities(mapId) {
+    return this.mapEntities.get(mapId) ?? [];
   }
 }
