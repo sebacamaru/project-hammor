@@ -71,7 +71,7 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `PlayerView` = in `client/game/`, owns AnimatedSprite, renders with offset from feet.
 - `PlayerAnimations` = animation metadata in `shared/data/models/`.
 - `EntityData` = serializable snapshot in `shared/data/models/`.
-- `RemoteEntity` = in `client/game/`, lightweight model for non-player entities from snapshots (id, kind, x, y, interactable).
+- `RemoteEntity` = in `client/game/`, lightweight model for non-player entities from snapshots (id, kind, x, y, interactable, solid, hitbox).
 - `RemoteEntityView` = in `client/game/`, kind-based colored 16×16 placeholders (cyan=npc, yellow=object/sign, magenta=default).
 
 ### Authored entity system (server)
@@ -80,13 +80,23 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - **Merge**: prefab + instance → two-level shallow merge (params shallow, components shallow per key, each component shallow).
 - **Server runtime**:
   - `GameEntity` = in `server/src/game/entities/`. Pure data: runtimeId, authoredId, mapId, kind, x, y, params, components.
-  - `GameEntity.toSnapshotData()` → minimal network payload (id, authoredId, kind, x, y, sprite?, interactable?).
+  - `GameEntity.toSnapshotData()` → minimal network payload (id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?).
+  - `GameEntity.toDebugHitboxData()` → debug hitbox data for solid entities (id, x, y, hitbox) or null.
   - `GameEntity.toDebugData()` → full dump for logging.
   - `ServerEntityManager` = in `server/src/runtime/`. Indexed by runtimeId, mapId, authoredId. Methods: register, remove, removeByMap, getByMap, getByAuthoredId.
   - `PrefabRegistry` = in `server/src/runtime/`. Loads/caches prefabs from filesystem. Graceful on missing directory.
   - `EntityFactory` = in `server/src/runtime/`. Pure functions: resolveEntity, validateInstance, validateResolved.
 - **Lifecycle**: `GameServer.spawnEntitiesForMap(mapId)` / `despawnEntitiesForMap(mapId)` — lifecycle-oriented, ready for dynamic region loading.
 - **Snapshots**: entities included in snapshot `entities[]` array, AOI-filtered same as players (respects AOI_MODE).
+- **Debug hitboxes**: snapshot optionally includes `debugEntityHitboxes[]` for solid entities (gated by `DEBUG_SEND_ENTITY_HITBOXES` in Config.js).
+
+### Entity collision system
+- **Authored data**: `components.collision = { solid: true, hitbox: { offsetX, offsetY, width, height } }`.
+- **Server**: `MovementSystem` checks AABB overlap between player hitbox and solid entity hitboxes, per-axis (X then Y) — same resolution as tile collision. Solid entity rects cached per mapId per tick.
+- **Client prediction**: `SceneMap._collidesWithEntities()` mirrors server logic — integrated into `_collides` callback alongside tile collision. Eliminates prediction jitter against solid entities.
+- **Hitbox model**: AABB relative to entity feet position (same convention as player). Falls back to `DEFAULT_ENTITY_HITBOX` if hitbox is missing or malformed.
+- **Strict inequality**: edge contact is allowed (less sticky feel). `pRight > eLeft && pLeft < eRight`.
+- **Non-solid entities**: entities without `collision.solid === true` remain fully passable.
 
 ### Interaction system
 - **Authored data**: `components.interaction = { trigger: "action", type: "text", text: "..." }`.
@@ -155,7 +165,7 @@ src/
 │   ├── game/
 │   │   ├── Player.js         Player entity (server-driven, applyServerState, feet convention)
 │   │   ├── PlayerView.js     Player sprite (AnimatedSprite, offset from feet)
-│   │   ├── RemoteEntity.js   Non-player entity data from snapshots (id, kind, x, y, interactable)
+│   │   ├── RemoteEntity.js   Non-player entity data from snapshots (id, kind, x, y, interactable, solid, hitbox)
 │   │   └── RemoteEntityView.js  Kind-based colored placeholder sprites
 │   ├── network/
 │   │   └── NetworkManager.js Client WebSocket (hello, input, welcome, snapshot, interact_result)
@@ -164,7 +174,7 @@ src/
 │   │   └── LoadedRegion.js   Wraps MapData + MapChunkRenderer with world offset
 │   ├── render/
 │   │   ├── ChunkDebugOverlay.js    Tile grid + chunk boundary debug lines
-│   │   ├── HitboxDebugOverlay.js   Entity hitbox debug rectangles
+│   │   ├── HitboxDebugOverlay.js   Player hitbox (cyan) + entity hitboxes (red) debug overlay
 │   │   ├── TileLayerDebugOverlay.js  Collision layer debug highlight
 │   │   └── InteractionTextOverlay.js  Screen-space interaction text (auto-hide, bottom-center)
 │   └── scenes/
@@ -509,6 +519,7 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - Per-axis resolution: try X first, then Y → allows wall sliding
 - OOB = blocked (out-of-bounds tiles are solid)
 - Uses shared `TILE_SIZE` from Config.js
+- Also checks solid entity hitboxes (AABB-vs-AABB) in the same per-axis pass
 
 ### Client networking
 - `NetworkManager` (`src/client/network/`): minimal WebSocket wrapper, callbacks for welcome/snapshot/interact_result
@@ -523,7 +534,7 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 
 ## Debug
 - `Escape` toggles debug overlay (starts hidden). Shows: FPS, camera pos, player pos, chunk pos, entity count, viewport info, canvas size, container size.
-- Debug overlays (all toggle with Escape): collision layer highlight (red), entity hitbox (cyan), tile grid (blue) + chunk boundaries (red).
+- Debug overlays (all toggle with Escape): collision layer highlight (red), player hitbox (cyan) + solid entity hitboxes (red), tile grid (blue) + chunk boundaries (red).
 - Camera debug: IJKL enters free camera mode, WASD returns to player follow.
 - `window.__engine` available in dev mode (Vite DEV).
 - `__engine.renderer.viewport` to inspect current viewport state from console.

@@ -237,7 +237,7 @@ Authored (`content/worlds/.authored/{id}.json`):
 ## Debug overlays (client/render/)
 - **ChunkDebugOverlay**: blue tile grid lines + red chunk boundary lines (2px). Uses Graphics.rect + fill.
 - **TileLayerDebugOverlay**: highlights tiles in a named layer (used for collision). Configurable color.
-- **HitboxDebugOverlay**: renders entity hitbox as cyan rectangle.
+- **HitboxDebugOverlay**: renders player hitbox (cyan), solid entity hitboxes (red). Entity hitbox data comes from `debugEntityHitboxes` in snapshots (gated by `DEBUG_SEND_ENTITY_HITBOXES`).
 - All toggle with Escape (sync with `engine.debug.visible`).
 
 ## Pixel-perfect rendering rules
@@ -368,7 +368,7 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 ├── NetworkServer      — WebSocket server (ws library)
 │   └── ClientConnection — per-socket wrapper
 ├── SessionManager     — session ↔ connection ↔ player (dual Map lookup)
-├── MovementSystem     — authoritative movement (per-axis collision resolve)
+├── MovementSystem     — authoritative movement (per-axis collision resolve, tiles + solid entities)
 ├── CollisionSystem    — hitbox-based AABB vs collision layer tiles
 ├── MapTransitionSystem — detects map border crossings, updates player.mapId
 ├── RuntimeMapManager  — loads chunk-based maps from filesystem (+ stashes entities[])
@@ -385,7 +385,8 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - Snapshots: broadcast every `SNAPSHOT_INTERVAL_TICKS` (default 1 = every tick at 20 TPS)
 - Snapshot payload: `{ type: "snapshot", tick, lastProcessedSeq, players: [...], entities: [...] }`
 - Players: `[{ id, x, y, vx, vy, facing, mapId }]` — self always first
-- Entities: `[{ id, authoredId, kind, x, y, sprite?, interactable? }]` — AOI-filtered
+- Entities: `[{ id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox? }]` — AOI-filtered
+- Debug: `debugEntityHitboxes: [{ id, x, y, hitbox }]` — optional, gated by `DEBUG_SEND_ENTITY_HITBOXES`
 
 ### AOI filtering
 - Configurable via `AOI_MODE` in Config.js: `"region"` | `"radius"` | `"region+radius"` (default: `"region"`)
@@ -426,9 +427,17 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 
 ### Snapshot replication
 - Entities in `snapshot.entities[]`, AOI-filtered (same mode as players)
-- `toSnapshotData()` → minimal payload (id, authoredId, kind, x, y, sprite?, interactable?)
+- `toSnapshotData()` → minimal payload (id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?)
+- `toDebugHitboxData()` → debug-only hitbox data for solid entities (id, x, y, hitbox)
 - `_toWorldEntityData()` converts map-local → world-space (same math as players)
-- Client: `RemoteEntity` model + `RemoteEntityView` (kind-based colored placeholders)
+- Client: `RemoteEntity` model (stores solid + hitbox for prediction) + `RemoteEntityView` (kind-based colored placeholders)
+
+### Entity collision
+- **Authored**: `components.collision = { solid: true, hitbox: { offsetX, offsetY, width, height } }`
+- **Server**: `MovementSystem` checks AABB player hitbox vs solid entity hitboxes, per-axis (X then Y), same resolution as tile collision. Solid rects cached per mapId per tick via `_getSolidEntityRects()`.
+- **Client prediction**: `SceneMap._collidesWithEntities()` mirrors server logic, integrated into `_collides` callback alongside tile collision. Eliminates prediction jitter.
+- **Hitbox model**: AABB relative to feet position. Falls back to `DEFAULT_ENTITY_HITBOX` if missing/malformed.
+- **Strict inequality**: edge contact allowed (`pRight > eLeft`, not `>=`). Non-solid entities remain passable.
 
 ### Interaction system
 - **Authored**: `components.interaction = { trigger: "action", type: "text", text: "..." }`
