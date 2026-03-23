@@ -31,6 +31,10 @@ export const EMPTY_TILE = -1;
 
 export const PLAYER_SPEED = 48; // pixels per second
 
+// --- Area of Interest (AOI) ---
+export const AOI_RADIUS = 160; // pixels (10 tiles)
+export const AOI_RADIUS_SQ = AOI_RADIUS * AOI_RADIUS;
+
 // --- Remote player interpolation ---
 export const REMOTE_INTERPOLATION_DELAY_MS = 100;
 export const MAX_REMOTE_SNAPSHOTS = 20;

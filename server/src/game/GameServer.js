@@ -10,6 +10,7 @@ import { ServerPlayer } from "./entities/ServerPlayer.js";
 import { MovementSystem } from "./systems/MovementSystem.js";
 import { CollisionSystem } from "./systems/CollisionSystem.js";
 import { RuntimeMapManager } from "../runtime/RuntimeMapManager.js";
+import { AOI_RADIUS_SQ } from "../../../src/shared/core/Config.js";
 
 /**
  * Central game server orchestrator.
@@ -211,23 +212,37 @@ export class GameServer {
   }
 
   /**
-   * Sends a snapshot of all players to every connected session.
-   * Called every snapshotInterval ticks.
+   * Sends an AOI-filtered snapshot to each connected session.
+   * Each client receives only: itself (always first) + nearby players on the same map.
+   * Proximity is checked via squared distance against AOI_RADIUS_SQ.
    */
   broadcastSnapshots() {
-    const players = [...this.players.values()].map(p => p.toData());
-
     for (const session of this.sessions.getAll()) {
       const conn = this.network.getConnection(session.connectionId);
       if (!conn) continue;
 
-      const player = this.players.get(session.playerId);
-      const msg = createMessage(MSG_TYPES.SNAPSHOT, {
+      const selfPlayer = this.players.get(session.playerId);
+      if (!selfPlayer) continue;
+
+      // Self always first
+      const visiblePlayers = [selfPlayer.toData()];
+
+      for (const other of this.players.values()) {
+        if (other.id === selfPlayer.id) continue;
+        if (other.mapId !== selfPlayer.mapId) continue;
+
+        const dx = other.x - selfPlayer.x;
+        const dy = other.y - selfPlayer.y;
+        if (dx * dx + dy * dy <= AOI_RADIUS_SQ) {
+          visiblePlayers.push(other.toData());
+        }
+      }
+
+      conn.send(createMessage(MSG_TYPES.SNAPSHOT, {
         tick: this.tickCount,
-        lastProcessedSeq: player ? player.lastProcessedSeq : -1,
-        players,
-      });
-      conn.send(msg);
+        lastProcessedSeq: selfPlayer.lastProcessedSeq,
+        players: visiblePlayers,
+      }));
     }
   }
 
