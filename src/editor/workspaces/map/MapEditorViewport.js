@@ -4,20 +4,34 @@ import {
   EDITOR_ZOOM_WHEEL_THRESHOLD,
 } from "./MapEditorConfig.js";
 import { waitFrames } from "./utils/waitFrames.js";
+import { snapWorldToFeet } from "../../../shared/core/TileMath.js";
 
 export class MapEditorViewport {
-  constructor(container, renderer, state, toolManager, getDocument, input) {
+  /**
+   * @param {HTMLElement} container
+   * @param {import('../../../shared/render/Renderer.js').Renderer} renderer
+   * @param {import('./MapEditorState.js').MapEditorState} state
+   * @param {import('./tools/ToolManager.js').ToolManager} toolManager
+   * @param {() => import('./document/MapDocument.js').MapDocument|null} getDocument
+   * @param {import('../../../shared/input/Input.js').Input} input
+   * @param {{ onDragPreview?: (entityId: string, x: number, y: number) => void, onDragClear?: () => void }} [options]
+   */
+  constructor(container, renderer, state, toolManager, getDocument, input, options = {}) {
     this.container = container;
     this.renderer = renderer;
     this.state = state;
     this.toolManager = toolManager;
     this.getDocument = getDocument ?? null;
     this.input = input;
+    this._options = options;
 
     this.isPointerDown = false;
     this._temporaryPanActive = false;
     this._temporaryEraserActive = false;
     this._wheelAccumulator = 0;
+
+    /** @type {{ entityId: string, previewX: number, previewY: number }|null} */
+    this._drag = null;
 
     this.onPointerDown = this.onPointerDown.bind(this);
     this.onPointerMove = this.onPointerMove.bind(this);
@@ -154,9 +168,19 @@ export class MapEditorViewport {
         return;
       }
 
-      // Normal selection
+      // Selection or drag start
       const hitId = doc ? this._hitTestEntities(doc.entities, ctx.worldX, ctx.worldY) : null;
-      this.state.patch({ selectedEntityId: hitId });
+      if (hitId && hitId === s.selectedEntityId) {
+        // Already selected — start drag
+        const tileSize = s.map?.tileSize ?? 16;
+        const { x, y } = snapWorldToFeet(ctx.worldX, ctx.worldY, tileSize);
+        this._drag = { entityId: hitId, previewX: x, previewY: y };
+        this._options.onDragPreview?.(hitId, x, y);
+        this.renderer.canvas.style.cursor = "grabbing";
+      } else {
+        // Different entity or empty space — normal selection change
+        this.state.patch({ selectedEntityId: hitId });
+      }
       return;
     }
 
@@ -211,9 +235,46 @@ export class MapEditorViewport {
     return `entity_${String(n).padStart(3, "0")}`;
   }
 
+  /**
+   * Cancels an in-progress drag without committing the position change.
+   * Clears the overlay preview and resets drag state.
+   */
+  _cancelDrag() {
+    if (!this._drag) return;
+    this._options.onDragClear?.();
+    this._drag = null;
+    this.renderer.canvas.style.cursor = "";
+  }
+
   onPointerMove(e) {
     const ctx = this.buildPointerContext(e);
     this.updateHoverTile(ctx);
+
+    // Drag active — update preview position, skip tool manager
+    if (this._drag) {
+      const tileSize = this.state.get().map?.tileSize ?? 16;
+      const { x, y } = snapWorldToFeet(ctx.worldX, ctx.worldY, tileSize);
+      if (x !== this._drag.previewX || y !== this._drag.previewY) {
+        this._drag.previewX = x;
+        this._drag.previewY = y;
+        this._options.onDragPreview?.(this._drag.entityId, x, y);
+      }
+      return;
+    }
+
+    // Grab cursor when hovering over the currently selected entity
+    if (this.isEventInsideViewport(e)) {
+      const s = this.state.get();
+      if (s.mode === "events" && s.selectedEntityId) {
+        const doc = this.getDocument?.();
+        if (doc) {
+          const hitId = this._hitTestEntities(doc.entities, ctx.worldX, ctx.worldY);
+          this.renderer.canvas.style.cursor = hitId === s.selectedEntityId ? "grab" : "";
+        }
+      } else if (s.mode !== "events") {
+        // Don't interfere with terrain cursor
+      }
+    }
 
     this.toolManager.pointerMove(ctx);
   }
@@ -222,6 +283,24 @@ export class MapEditorViewport {
     if (!this.isPointerDown) return;
 
     this.isPointerDown = false;
+
+    // Commit drag if active
+    if (this._drag) {
+      const doc = this.getDocument?.();
+      if (doc) {
+        const entity = doc.entities.find((ent) => ent.id === this._drag.entityId);
+        if (entity && (this._drag.previewX !== entity.x || this._drag.previewY !== entity.y)) {
+          doc.updateEntity(this._drag.entityId, {
+            x: this._drag.previewX,
+            y: this._drag.previewY,
+          });
+        }
+      }
+      this._options.onDragClear?.();
+      this._drag = null;
+      this.renderer.canvas.style.cursor = "";
+      return;
+    }
 
     const ctx = this.buildPointerContext(e);
     this.toolManager.pointerUp(ctx);

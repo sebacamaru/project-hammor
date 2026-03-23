@@ -218,6 +218,23 @@ export class SceneEditor extends Scene {
     this.entityOverlay?.setSelectedEntityId(id);
   }
 
+  /**
+   * Sets a temporary drag preview position for the given entity in the overlay.
+   * @param {string} entityId
+   * @param {number} x
+   * @param {number} y
+   */
+  setEntityDragPreview(entityId, x, y) {
+    this.entityOverlay?.setDragPreview(entityId, x, y);
+  }
+
+  /**
+   * Clears the entity drag preview in the overlay.
+   */
+  clearEntityDragPreview() {
+    this.entityOverlay?.clearDragPreview();
+  }
+
   rebuildChunk(cx, cy) {
     if (this.chunkRenderer) {
       this.chunkRenderer.rebuildChunk(cx, cy);

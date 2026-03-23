@@ -20,6 +20,9 @@ export class EntityOverlay {
 
     /** @type {string|null} ID of the currently selected entity, or null. */
     this._selectedEntityId = null;
+
+    /** @type {{ entityId: string, x: number, y: number }|null} Transient drag preview position. */
+    this._dragPreview = null;
   }
 
   /**
@@ -31,6 +34,26 @@ export class EntityOverlay {
     const next = id ?? null;
     if (this._selectedEntityId === next) return;
     this._selectedEntityId = next;
+    this._rebuild();
+  }
+
+  /**
+   * Sets a temporary drag preview position for the given entity and redraws.
+   * @param {string} entityId
+   * @param {number} x
+   * @param {number} y
+   */
+  setDragPreview(entityId, x, y) {
+    this._dragPreview = { entityId, x, y };
+    this._rebuild();
+  }
+
+  /**
+   * Clears the drag preview and redraws.
+   */
+  clearDragPreview() {
+    if (this._dragPreview === null) return;
+    this._dragPreview = null;
     this._rebuild();
   }
 
@@ -61,9 +84,15 @@ export class EntityOverlay {
    * @param {object} entity
    */
   _drawEntity(entity) {
-    const x = entity.x;
-    const y = entity.y;
+    let x = entity.x;
+    let y = entity.y;
     if (x == null || y == null) return;
+
+    // Use drag preview position if this entity is being dragged
+    if (this._dragPreview?.entityId === entity.id) {
+      x = this._dragPreview.x;
+      y = this._dragPreview.y;
+    }
 
     const color = this._getKindColor(entity.kind, entity.prefabId);
     const isSelected = this._selectedEntityId != null && entity.id === this._selectedEntityId;

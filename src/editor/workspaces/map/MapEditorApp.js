@@ -140,6 +140,14 @@ export class MapEditorApp {
       this.toolManager,
       () => this.document,
       this.input,
+      {
+        onDragPreview: (entityId, x, y) => {
+          this.scenes.current?.setEntityDragPreview?.(entityId, x, y);
+        },
+        onDragClear: () => {
+          this.scenes.current?.clearEntityDragPreview?.();
+        },
+      },
     );
 
     // Forward entity selection state to the overlay; reset on mode change
