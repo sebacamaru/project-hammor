@@ -2,7 +2,7 @@ import { Container } from "pixi.js";
 import { Scene } from "../../shared/scene/Scene.js";
 import { Camera } from "../../shared/render/Camera.js";
 import { GameMap } from "../../shared/data/models/GameMap.js";
-import { TILE_SIZE, DEBUG_FLAGS } from "../../shared/core/Config.js";
+import { TILE_SIZE, DEBUG_FLAGS, INTERACTION_RANGE_SQ } from "../../shared/core/Config.js";
 import { EntityManager } from "../../shared/data/models/EntityManager.js";
 import { EntityRenderer } from "../../shared/render/EntityRenderer.js";
 import { Player } from "../game/Player.js";
@@ -17,6 +17,7 @@ import { makeRegionKey, worldToRegion, regionToWorldOffset } from "../../shared/
 import { NetworkManager } from "../network/NetworkManager.js";
 import { RemoteEntity } from "../game/RemoteEntity.js";
 import { RemoteEntityView } from "../game/RemoteEntityView.js";
+import { InteractionTextOverlay } from "../render/InteractionTextOverlay.js";
 
 export class SceneMap extends Scene {
   constructor(gameStart = {}) {
@@ -116,6 +117,10 @@ export class SceneMap extends Scene {
 
     // Remote non-player entities: runtimeId → { entity: RemoteEntity, view: RemoteEntityView }
     this.remoteEntities = new Map();
+
+    // Interaction state
+    this._lastInteractTime = 0;
+    this.interactionOverlay = new InteractionTextOverlay(engine.renderer.stage, this.viewport);
 
     // Player — updated manually, not through EntityManager
     // Spawn in world space: local tile coords + region world offset
@@ -226,6 +231,11 @@ export class SceneMap extends Scene {
       }
     };
 
+    this.network.onInteractResult = (msg) => {
+      console.log(`[Interact] ${msg.entityId} (${msg.authoredId}): ${msg.text}`);
+      this.interactionOverlay.show(msg.text);
+    };
+
     this.network.connect();
   }
 
@@ -250,6 +260,12 @@ export class SceneMap extends Scene {
       this.player.predict(dt, current, this._collides);
       this.player.syncLocalFromWorld();
     }
+
+    // Interaction: action key
+    if (inp.pressed("KeyE")) {
+      this._tryInteract();
+    }
+    this.interactionOverlay.update();
 
     this.entityManager.updateAll(dt, this.engine.input);
 
@@ -308,6 +324,8 @@ export class SceneMap extends Scene {
     d.set("region", `${this._currentRegionRx}, ${this._currentRegionRy} (${regionMapId})`);
     d.set("entities", this.entityManager.entities.size);
     d.set("remote entities", this.remoteEntities.size);
+    const nearestInteractable = this._findNearestInteractable();
+    d.set("interact", nearestInteractable ? `${nearestInteractable.id} (${nearestInteractable.authoredId})` : "none");
     d.set("viewport", `${vp.tilesX}x${vp.tilesY} @${vp.scale}x`);
     d.set("canvas", `${vp.cssWidth}x${vp.cssHeight}`);
     const el = this.engine.renderer.rootElement;
@@ -387,9 +405,59 @@ export class SceneMap extends Scene {
       view.destroy();
     }
     this.remoteEntities.clear();
+    this.interactionOverlay.destroy();
     this.entityRenderer.destroy();
     this.playerView.destroy();
     this.root.destroy({ children: true });
+  }
+
+  // --- Interaction helpers ---
+
+  /**
+   * Attempts to interact with the nearest interactable entity.
+   * Enforces a client-side cooldown (200ms) to prevent spam.
+   * If the overlay is visible, dismisses it instead.
+   */
+  _tryInteract() {
+    const now = performance.now();
+    if (now - this._lastInteractTime < 200) return;
+    this._lastInteractTime = now;
+
+    // Dismiss overlay if already showing
+    if (this.interactionOverlay.isVisible()) {
+      this.interactionOverlay.hide();
+      return;
+    }
+
+    const target = this._findNearestInteractable();
+    if (!target) return;
+
+    this.network.send({ type: "interact", targetId: target.id });
+  }
+
+  /**
+   * Finds the nearest interactable remote entity within INTERACTION_RANGE.
+   * Uses feet-to-feet distance (player.worldX/Y vs entity.x/y, both world-space).
+   * @returns {import('../game/RemoteEntity.js').RemoteEntity|null}
+   */
+  _findNearestInteractable() {
+    let best = null;
+    let bestDistSq = INTERACTION_RANGE_SQ;
+
+    for (const { entity } of this.remoteEntities.values()) {
+      if (!entity.interactable) continue;
+
+      const dx = entity.x - this.player.worldX;
+      const dy = entity.y - this.player.worldY;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq <= bestDistSq) {
+        bestDistSq = distSq;
+        best = entity;
+      }
+    }
+
+    return best;
   }
 
   // --- Region helpers ---

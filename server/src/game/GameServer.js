@@ -3,6 +3,7 @@ import { NetworkServer } from "../network/NetworkServer.js";
 import {
   createMessage,
   validateInput,
+  validateInteract,
   MSG_TYPES,
 } from "../network/protocols/messages.js";
 import { SessionManager } from "./SessionManager.js";
@@ -16,7 +17,7 @@ import { PrefabRegistry } from "../runtime/PrefabRegistry.js";
 import { ServerEntityManager } from "../runtime/ServerEntityManager.js";
 import { GameEntity } from "./entities/GameEntity.js";
 import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
-import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ } from "../../../src/shared/core/Config.js";
+import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ } from "../../../src/shared/core/Config.js";
 
 /**
  * Central game server orchestrator.
@@ -331,6 +332,26 @@ export class GameServer {
         break;
       }
 
+      case MSG_TYPES.INTERACT: {
+        const session = this.sessions.getByConnection(conn.id);
+        if (!session) return;
+
+        const validation = validateInteract(msg);
+        if (!validation.ok) {
+          console.warn(`[${this.config.serverName}] Invalid interact from ${conn.id}: ${validation.error}`);
+          return;
+        }
+
+        const player = this.players.get(session.playerId);
+        if (!player) return;
+
+        const result = this._resolveInteraction(player, msg.targetId);
+        if (result) {
+          conn.send(createMessage(MSG_TYPES.INTERACT_RESULT, result));
+        }
+        break;
+      }
+
       default:
         conn.send(
           createMessage(MSG_TYPES.ERROR, {
@@ -479,6 +500,92 @@ export class GameServer {
     }
 
     return data;
+  }
+
+  /**
+   * Validates and resolves an interaction attempt between a player and a target entity.
+   * Checks: entity exists, map/world context, interaction component, range.
+   * @param {ServerPlayer} player
+   * @param {string} targetId - Runtime entity id.
+   * @returns {object|null} Interaction result payload, or null if invalid.
+   */
+  _resolveInteraction(player, targetId) {
+    const tag = `[${this.config.serverName}]`;
+    const entity = this.entities.get(targetId);
+
+    if (!entity) {
+      console.log(`${tag} [interact] Player ${player.id} → entity "${targetId}" not found`);
+      return null;
+    }
+
+    // Validate interaction component
+    const interaction = entity.components.interaction;
+    if (!interaction || interaction.trigger !== "action") {
+      console.log(`${tag} [interact] Entity "${targetId}" has no action trigger`);
+      return null;
+    }
+
+    // Validate map/world context (same logic as snapshot visibility)
+    if (!this._isEntityRelevantToPlayer(player, entity)) {
+      console.log(`${tag} [interact] Entity "${targetId}" not relevant to player ${player.id}`);
+      return null;
+    }
+
+    // Distance check (feet-to-feet, world-space)
+    const playerWorld = this._toWorldPlayerData(player);
+    const entityWorld = this._toWorldEntityData(entity, player.worldId ?? null);
+    const dx = entityWorld.x - playerWorld.x;
+    const dy = entityWorld.y - playerWorld.y;
+    if (dx * dx + dy * dy > INTERACTION_RANGE_SQ) {
+      console.log(`${tag} [interact] Entity "${targetId}" out of range for player ${player.id}`);
+      return null;
+    }
+
+    // Resolve by interaction type
+    switch (interaction.type) {
+      case "text":
+        console.log(`${tag} [interact] Player ${player.id} → entity "${targetId}" (text)`);
+        return {
+          entityId: entity.runtimeId,
+          authoredId: entity.authoredId,
+          interactionType: "text",
+          text: interaction.text ?? "",
+        };
+
+      default:
+        console.log(`${tag} [interact] Unsupported interaction type "${interaction.type}" on entity "${targetId}"`);
+        return null;
+    }
+  }
+
+  /**
+   * Checks whether an entity is relevant to a player (same visibility rules as snapshots).
+   * World mode: entity's map region must pass the current AOI_MODE check.
+   * Legacy single-map: entity must be on the same mapId.
+   * @param {ServerPlayer} player
+   * @param {GameEntity} entity
+   * @returns {boolean}
+   */
+  _isEntityRelevantToPlayer(player, entity) {
+    if (!player.worldId) {
+      // Legacy single-map mode
+      return entity.mapId === player.mapId;
+    }
+
+    const playerCell = this.runtimeWorlds.getMapCell(player.worldId, player.mapId);
+    const entityCell = this.runtimeWorlds.getMapCell(player.worldId, entity.mapId);
+    if (!playerCell || !entityCell) return false;
+
+    switch (AOI_MODE) {
+      case "region":
+        return this._isWithinRegionAOI(playerCell, entityCell);
+      case "radius":
+        return true; // radius check happens separately in distance validation
+      case "region+radius":
+        return this._isWithinRegionAOI(playerCell, entityCell);
+      default:
+        return false;
+    }
   }
 
   /**

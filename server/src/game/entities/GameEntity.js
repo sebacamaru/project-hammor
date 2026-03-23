@@ -26,17 +26,10 @@ export class GameEntity {
   }
 
   /**
-   * Returns a plain object for logging and debug inspection.
-   * This is NOT a network/snapshot format — serialization for
-   * replication will be designed in a future phase.
-   * @returns {object}
-   */
-  /**
-   * Returns the minimal data needed by clients for rendering.
-   * The `sprite` field is a derived network payload extracted from
-   * components.sprite — not the canonical runtime shape.
+   * Returns the minimal data needed by clients for rendering and interaction hints.
+   * Derived network payload — not the canonical runtime shape.
    * Position is map-local; caller converts to world-space before sending.
-   * @returns {{ id: string, authoredId: string, kind: string, x: number, y: number, sprite?: object }}
+   * @returns {{ id: string, authoredId: string, kind: string, x: number, y: number, sprite?: object, interactable?: boolean }}
    */
   toSnapshotData() {
     const data = {
@@ -48,6 +41,9 @@ export class GameEntity {
     };
     if (this.components.sprite) {
       data.sprite = this.components.sprite;
+    }
+    if (this.components.interaction) {
+      data.interactable = true;
     }
     return data;
   }

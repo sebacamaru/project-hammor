@@ -21,7 +21,8 @@
       "x": 120,
       "y": 96,
       "components": {
-        "dialogue": { "tree": "villager_special" }
+        "dialogue": { "tree": "villager_special" },
+        "interaction": { "trigger": "action", "type": "text", "text": "Nice weather today." }
       }
     },
     {
@@ -30,7 +31,7 @@
       "x": 64,
       "y": 128,
       "components": {
-        "interaction": { "type": "sign", "text": "Welcome to the test map!" }
+        "interaction": { "trigger": "action", "type": "text", "text": "Welcome to the test map!" }
       }
     }
   ],

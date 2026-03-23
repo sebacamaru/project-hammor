@@ -20,6 +20,8 @@ export class RemoteEntity {
     this.y = data.y;
     /** @type {object|null} Sprite component data (sheet, animation, frame) or null. */
     this.sprite = data.sprite ?? null;
+    /** @type {boolean} Whether this entity can be interacted with. */
+    this.interactable = data.interactable ?? false;
   }
 
   /**
@@ -30,5 +32,6 @@ export class RemoteEntity {
     this.x = data.x;
     this.y = data.y;
     this.sprite = data.sprite ?? null;
+    this.interactable = data.interactable ?? false;
   }
 }

@@ -4,6 +4,8 @@ export const MSG_TYPES = {
   WELCOME: "welcome",
   INPUT: "input",
   SNAPSHOT: "snapshot",
+  INTERACT: "interact",
+  INTERACT_RESULT: "interact_result",
   ERROR: "error",
 };
 
@@ -57,6 +59,19 @@ export function validateInput(msg) {
     return { ok: false, error: "input flags (up/down/left/right) must all be booleans" };
   }
 
+  return { ok: true };
+}
+
+/**
+ * Validates the payload of an interact message.
+ * Ensures targetId is a non-empty string.
+ * @param {object} msg - The parsed message (must have .targetId).
+ * @returns {{ ok: true } | { ok: false, error: string }}
+ */
+export function validateInteract(msg) {
+  if (typeof msg.targetId !== "string" || msg.targetId.length === 0) {
+    return { ok: false, error: "targetId must be a non-empty string" };
+  }
   return { ok: true };
 }
 

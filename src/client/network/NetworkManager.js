@@ -16,6 +16,8 @@ export class NetworkManager {
     this.onWelcome = null;
     /** @type {function|null} Called with snapshot message payload. */
     this.onSnapshot = null;
+    /** @type {function|null} Called with interact_result message payload. */
+    this.onInteractResult = null;
   }
 
   /**
@@ -37,6 +39,9 @@ export class NetworkManager {
           break;
         case "snapshot":
           this.onSnapshot?.(msg);
+          break;
+        case "interact_result":
+          this.onInteractResult?.(msg);
           break;
       }
     };
