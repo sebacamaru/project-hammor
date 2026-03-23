@@ -35,6 +35,7 @@ export class RemoteEntityView {
   updateFromEntity(entity) {
     this.sprite.x = Math.round(entity.x) - 8;
     this.sprite.y = Math.round(entity.y) - 16;
+    this.sprite.zIndex = Math.round(entity.y); // Y-sort by feet position
   }
 
   /**

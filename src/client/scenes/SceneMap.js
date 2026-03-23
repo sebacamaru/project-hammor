@@ -47,6 +47,7 @@ export class SceneMap extends Scene {
     this.groundLayer = new Container();
     this.groundDetailLayer = new Container();
     this.entityLayer = new Container();
+    this.entityLayer.sortableChildren = true;
     this.fringeLayer = new Container();
 
     this.root.addChild(this.groundLayer);

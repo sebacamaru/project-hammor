@@ -55,6 +55,7 @@ export class PlayerView {
     }
     this.sprite.x = ix - 8;   // center horizontally from feet
     this.sprite.y = iy - 16;  // sprite above feet
+    this.sprite.zIndex = iy;  // Y-sort by feet position (iy = Math.round(feetY))
 
     const dirName = DIRECTION_NAMES[player.direction];
     const animName = player.moving ? `walk_${dirName}` : `idle_${dirName}`;
