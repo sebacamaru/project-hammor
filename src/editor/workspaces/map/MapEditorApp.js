@@ -18,6 +18,7 @@ import { LayersPanel } from "./panels/LayersPanel.js";
 import { ToolsPanel } from "./panels/ToolsPanel.js";
 import { StatusBarPanel } from "./panels/StatusBarPanel.js";
 import { TilesPanel } from "./panels/TilesPanel.js";
+import { EventsPanel } from "./panels/EventsPanel.js";
 
 import { SceneEditor } from "./scenes/SceneEditor.js";
 import { MapEditorViewport } from "./MapEditorViewport.js";
@@ -107,6 +108,23 @@ export class MapEditorApp {
     this.layers = new LayersPanel(this.layout.rightPanelEl, this.state);
     this.tools = new ToolsPanel(this.layout.toolsEl, this.state);
     this.status = new StatusBarPanel(this.layout.statusBarEl, this.state);
+    this.eventsPanel = new EventsPanel(this.layout.eventsPanelEl, this.state, () => this.document);
+
+    // Mode-based panel visibility
+    this._terrainEls = [
+      this.layout.leftPanelEl,
+      this.layout.rightPanelEl,
+      this.layout.toolsEl,
+    ];
+    this._eventsEls = [
+      this.layout.eventsPanelEl,
+    ];
+    this.state.subscribe((s) => {
+      const terrain = s.mode === "terrain";
+      const events = s.mode === "events";
+      for (const el of this._terrainEls) el.style.display = terrain ? "" : "none";
+      for (const el of this._eventsEls) el.style.display = events ? "" : "none";
+    });
 
     // UI visibility toggle (via state subscription, not per-frame)
     this._shellEl = this.host.querySelector(".editor-shell");
@@ -120,8 +138,20 @@ export class MapEditorApp {
       this.renderer,
       this.state,
       this.toolManager,
+      () => this.document,
       this.input,
     );
+
+    // Forward entity selection state to the overlay; reset on mode change
+    this.state.subscribe((s) => {
+      this.scenes.current?.setSelectedEntityId?.(s.selectedEntityId);
+
+      if (s.mode !== "events") {
+        if (s.selectedEntityId != null || s.entityPlaceMode) {
+          queueMicrotask(() => this.state.patch({ selectedEntityId: null, entityPlaceMode: false }));
+        }
+      }
+    });
 
     window.addEventListener("keydown", this.onKeyDown);
 
@@ -143,6 +173,7 @@ export class MapEditorApp {
 
   unmount() {
     this.loop?.stop();
+    this.eventsPanel?.destroy();
     window.removeEventListener("keydown", this.onKeyDown);
     this.viewport?.destroy();
     this.scenes?.current?.destroy();
@@ -186,6 +217,19 @@ export class MapEditorApp {
         this.state.update((s) => {
           s.activeTool = "eyedropper";
         });
+      }
+    }
+
+    // Delete entity shortcut (events mode only)
+    if (this.state.get().mode === "events" && this.input.pressed("Delete")) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const isEditable = document.activeElement?.isContentEditable;
+      if (tag !== "input" && tag !== "textarea" && tag !== "select" && !isEditable) {
+        const { selectedEntityId } = this.state.get();
+        if (selectedEntityId && this.document) {
+          const removed = this.document.removeEntity(selectedEntityId);
+          if (removed) this.state.patch({ selectedEntityId: null });
+        }
       }
     }
 
@@ -325,6 +369,7 @@ export class MapEditorApp {
     this.currentMapId = mapId;
     this.history.clear();
     this.setDocument(doc);
+    this.state.patch({ selectedEntityId: null });
     await this.rebuildFullMap();
 
     this.state.update((s) => {
@@ -374,6 +419,10 @@ export class MapEditorApp {
     this.documentUnsubscribe = this.document.subscribe((event) => {
       if (event.type === "tilesChanged") {
         this.handleDocumentTilesChanged(event);
+      }
+      if (event.type === "entitiesChanged") {
+        this.syncDirtyState();
+        this.scenes.current?.setEntities?.(this.document.entities);
       }
     });
   }

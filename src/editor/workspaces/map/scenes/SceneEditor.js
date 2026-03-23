@@ -210,6 +210,14 @@ export class SceneEditor extends Scene {
     }
   }
 
+  /**
+   * Highlights the entity with the given id in the overlay, or clears selection if null.
+   * @param {string|null} id
+   */
+  setSelectedEntityId(id) {
+    this.entityOverlay?.setSelectedEntityId(id);
+  }
+
   rebuildChunk(cx, cy) {
     if (this.chunkRenderer) {
       this.chunkRenderer.rebuildChunk(cx, cy);

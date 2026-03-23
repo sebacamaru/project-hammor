@@ -41,6 +41,9 @@ export class MapEditorState {
       dirty: false,
       saveStatus: "idle",
       statusMessage: "",
+
+      selectedEntityId: null,
+      entityPlaceMode: false,
     };
 
     this.listeners = new Set();

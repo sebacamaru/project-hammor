@@ -6,11 +6,12 @@ import {
 import { waitFrames } from "./utils/waitFrames.js";
 
 export class MapEditorViewport {
-  constructor(container, renderer, state, toolManager, input) {
+  constructor(container, renderer, state, toolManager, getDocument, input) {
     this.container = container;
     this.renderer = renderer;
     this.state = state;
     this.toolManager = toolManager;
+    this.getDocument = getDocument ?? null;
     this.input = input;
 
     this.isPointerDown = false;
@@ -126,10 +127,88 @@ export class MapEditorViewport {
       this._temporaryEraserActive = true;
     }
 
+    // Events mode: entity placement or selection (Space+left still pans as normal)
+    const s = this.state.get();
+    if (e.button === 0 && !this.input.held("Space") && s.mode === "events") {
+      const ctx = this.buildPointerContext(e);
+      this.updateHoverTile(ctx);
+      const doc = this.getDocument?.();
+
+      // Place mode: create entity at clicked tile
+      if (s.entityPlaceMode && doc) {
+        const id = this._generateEntityId(doc.entities);
+        const entity = {
+          id,
+          prefab: "entity",
+          x: ctx.worldX,
+          y: ctx.worldY,
+          components: {
+            collision: {
+              solid: false,
+              hitbox: { offsetX: -8, offsetY: -16, width: 16, height: 16 },
+            },
+          },
+        };
+        doc.addEntity(entity);
+        this.state.patch({ selectedEntityId: id, entityPlaceMode: false });
+        return;
+      }
+
+      // Normal selection
+      const hitId = doc ? this._hitTestEntities(doc.entities, ctx.worldX, ctx.worldY) : null;
+      this.state.patch({ selectedEntityId: hitId });
+      return;
+    }
+
     const ctx = this.buildPointerContext(e);
     this.updateHoverTile(ctx);
 
     this.toolManager.pointerDown(ctx);
+  }
+
+  /**
+   * Returns the id of the topmost entity whose sprite rect contains (worldX, worldY),
+   * or null if no entity was hit. Uses (ex-8, ey-16, 16×16) — mirrors EntityOverlay._drawEntity().
+   * @param {Array<object>} entities
+   * @param {number} worldX
+   * @param {number} worldY
+   * @returns {string|null}
+   */
+  _hitTestEntities(entities, worldX, worldY) {
+    if (!Array.isArray(entities)) return null;
+
+    for (let i = entities.length - 1; i >= 0; i--) {
+      const entity = entities[i];
+      const ex = entity.x;
+      const ey = entity.y;
+      if (ex == null || ey == null) continue;
+
+      // Always use sprite rect — same calculation as EntityOverlay._drawEntity() spriteX/spriteY
+      const rx = ex - 8;
+      const ry = ey - 16;
+      const rw = 16;
+      const rh = 16;
+
+      if (rw > 0 && rh > 0 &&
+          worldX >= rx && worldX < rx + rw &&
+          worldY >= ry && worldY < ry + rh) {
+        return entity.id ?? null;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Generates a unique entity id like "entity_001", skipping ids that already exist.
+   * @param {Array<object>} entities
+   * @returns {string}
+   */
+  _generateEntityId(entities) {
+    const existing = new Set((entities ?? []).map((e) => e.id));
+    let n = 1;
+    while (existing.has(`entity_${String(n).padStart(3, "0")}`)) n++;
+    return `entity_${String(n).padStart(3, "0")}`;
   }
 
   onPointerMove(e) {

@@ -64,6 +64,105 @@
     width: 240px;
 }
 
+.editor-panel-events {
+    position: absolute;
+    top: 120px;
+    right: 20px;
+    bottom: 90px;
+    width: 240px;
+}
+
+.events-panel .events-hint {
+    padding: 8px 12px;
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.events-panel .events-selection {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.events-add-btn {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.events-actions {
+    padding: 4px 12px 0;
+}
+
+.events-delete-btn {
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    background: rgba(255, 80, 80, 0.1);
+    color: #ff6666;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 4px;
+}
+
+.events-inspector {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inspector-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.inspector-field span {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.inspector-field input[type="text"],
+.inspector-field input[type="number"] {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    color: white;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+.inspector-checkbox {
+    justify-content: flex-start;
+}
+
+.inspector-fieldset {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 8px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.inspector-fieldset legend {
+    font-size: 11px;
+    opacity: 0.6;
+    padding: 0 4px;
+}
+
 .editor-tools {
     position: absolute;
     left: 50%;

@@ -1,5 +1,7 @@
 // Internally the editor stores layer data in Uint16Array. Because Uint16Array
 // cannot represent -1, we reserve the max uint16 value as the empty sentinel.
+import { snapWorldToFeet } from "../../../../shared/core/TileMath.js";
+
 const EMPTY_STORED_TILE_ID = 0xffff;
 const DEV = import.meta.env?.DEV ?? false;
 
@@ -137,6 +139,52 @@ export class MapDocument {
     } finally {
       this._writeLockDepth -= 1;
     }
+  }
+
+  /**
+   * Appends an entity to the entities array and emits an entitiesChanged event.
+   * @param {object} entity
+   */
+  addEntity(entity) {
+    const tileSize = this.meta.tileSize ?? 16;
+    const { x, y } = snapWorldToFeet(entity.x, entity.y, tileSize);
+    entity.x = x;
+    entity.y = y;
+
+    this.entities.push(entity);
+    this.isDirty = true;
+    this.emit({ type: "entitiesChanged", document: this });
+  }
+
+  /**
+   * Removes the entity with the given id from the entities array.
+   * Emits entitiesChanged if the entity was found and removed.
+   * @param {string} id
+   * @returns {boolean} true if entity was found and removed
+   */
+  removeEntity(id) {
+    const index = this.entities.findIndex((e) => e.id === id);
+    if (index === -1) return false;
+    this.entities.splice(index, 1);
+    this.isDirty = true;
+    this.emit({ type: "entitiesChanged", document: this });
+    return true;
+  }
+
+  /**
+   * Applies a shallow merge of patch onto the entity with the given id.
+   * Emits entitiesChanged if the entity was found.
+   * @param {string} id
+   * @param {object} patch — top-level entity fields to merge (e.g. { id, prefab, components })
+   * @returns {boolean} true if entity was found and updated
+   */
+  updateEntity(id, patch) {
+    const entity = this.entities.find((e) => e.id === id);
+    if (!entity) return false;
+    Object.assign(entity, patch);
+    this.isDirty = true;
+    this.emit({ type: "entitiesChanged", document: this });
+    return true;
   }
 
   markClean() {

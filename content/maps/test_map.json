@@ -189,7 +189,7 @@
             0,
             0,
             0,
-            -1,
+            6,
             0,
             0,
             0,
@@ -217,7 +217,7 @@
             0,
             0,
             0,
-            0,
+            6,
             0,
             0,
             0,
@@ -249,7 +249,7 @@
             0,
             0,
             0,
-            -1,
+            6,
             0,
             6,
             6,
@@ -148413,7 +148413,7 @@
       "id": "villager_01",
       "prefabId": "npc_villager",
       "x": 120,
-      "y": 96,
+      "y": 192,
       "components": {
         "dialogue": {
           "tree": "villager_special"
@@ -148437,8 +148437,8 @@
     {
       "id": "sign_01",
       "kind": "object",
-      "x": 64,
-      "y": 128,
+      "x": 72,
+      "y": 224,
       "components": {
         "interaction": {
           "trigger": "action",

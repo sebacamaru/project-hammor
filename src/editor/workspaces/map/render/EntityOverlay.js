@@ -17,6 +17,21 @@ export class EntityOverlay {
 
     /** @type {Text[]} Cached label Text objects. */
     this._labels = [];
+
+    /** @type {string|null} ID of the currently selected entity, or null. */
+    this._selectedEntityId = null;
+  }
+
+  /**
+   * Sets the selected entity by id and redraws the overlay.
+   * Pass null to deselect. No-ops if the id has not changed.
+   * @param {string|null} id
+   */
+  setSelectedEntityId(id) {
+    const next = id ?? null;
+    if (this._selectedEntityId === next) return;
+    this._selectedEntityId = next;
+    this._rebuild();
   }
 
   /**
@@ -51,14 +66,21 @@ export class EntityOverlay {
     if (x == null || y == null) return;
 
     const color = this._getKindColor(entity.kind, entity.prefabId);
+    const isSelected = this._selectedEntityId != null && entity.id === this._selectedEntityId;
 
     // --- Sprite rectangle (16×16, offset from feet) ---
     const spriteX = x - 8;
     const spriteY = y - 16;
     this.graphics.rect(spriteX, spriteY, 16, 16);
-    this.graphics.fill({ color, alpha: 0.3 });
+    this.graphics.fill({ color, alpha: isSelected ? 0.5 : 0.3 });
     this.graphics.rect(spriteX, spriteY, 16, 16);
-    this.graphics.stroke({ color, alpha: 0.85, width: 1 });
+    this.graphics.stroke({ color, alpha: 1, width: isSelected ? 2 : 1 });
+
+    // --- Selection ring (white outer outline) ---
+    if (isSelected) {
+      this.graphics.rect(spriteX - 1, spriteY - 1, 18, 18);
+      this.graphics.stroke({ color: 0xffffff, alpha: 0.9, width: 1 });
+    }
 
     // --- Hitbox outline (collision component) ---
     const collision = entity.components?.collision;
