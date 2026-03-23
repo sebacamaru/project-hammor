@@ -6,7 +6,12 @@ const DEV = import.meta.env?.DEV ?? false;
 export class MapDocument {
   static EMPTY_STORED_TILE_ID = EMPTY_STORED_TILE_ID;
 
-  constructor(meta = {}, layers = []) {
+  /**
+   * @param {object} meta - Map metadata (id, width, height, tileSize, chunkSize, tileset, etc.)
+   * @param {Array} layers - Layer definitions with id, kind, visible, data (Uint16Array or plain array)
+   * @param {Array} entities - Opaque entity data array (passthrough, not parsed by the editor)
+   */
+  constructor(meta = {}, layers = [], entities = []) {
     this.meta = { ...meta };
     this.layers = layers.map((layer) => ({
       id: layer.id,
@@ -16,6 +21,9 @@ export class MapDocument {
         ? new Uint16Array(layer.data)
         : Uint16Array.from(layer.data ?? []),
     }));
+
+    /** @type {Array<object>} Opaque entity instances — preserved through load/save unchanged. */
+    this.entities = Array.isArray(entities) ? [...entities] : [];
 
     this.listeners = new Set();
     this.layerMap = new Map(this.layers.map((layer) => [layer.id, layer]));

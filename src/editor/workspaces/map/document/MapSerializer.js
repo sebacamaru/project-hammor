@@ -1,6 +1,7 @@
 import { MapDocument } from "./MapDocument.js";
 
 export class MapSerializer {
+  /** @param {MapDocument} doc */
   static serialize(doc) {
     return {
       meta: {
@@ -12,9 +13,11 @@ export class MapSerializer {
         visible: layer.visible,
         data: Array.from(layer.data, (storedTileId) => MapDocument.fromStoredTileId(storedTileId)),
       })),
+      entities: doc.entities,
     };
   }
 
+  /** @param {string|object} json */
   static deserialize(json) {
     const obj = typeof json === "string" ? JSON.parse(json) : json;
 
@@ -27,7 +30,7 @@ export class MapSerializer {
           layer.data ?? [],
           (tileId) => MapDocument.toStoredTileId(tileId),
         ),
-      })));
+      })), obj.entities ?? []);
       doc.markClean();
       return doc;
     }

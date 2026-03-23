@@ -1,3 +1,6 @@
+/** Tool IDs that only operate in terrain mode. */
+const TERRAIN_TOOLS = new Set(["pencil", "eraser", "eyedropper"]);
+
 export class ToolManager {
   constructor(state) {
     this.state = state;
@@ -17,8 +20,16 @@ export class ToolManager {
     return this.temporaryToolId ?? this.state.get().activeTool;
   }
 
+  /**
+   * Returns the active tool instance, or null if the current tool is gated
+   * by mode (e.g. terrain tools are unavailable outside terrain mode).
+   */
   getActiveTool() {
-    return this.getTool(this.getActiveToolId());
+    const id = this.getActiveToolId();
+    if (TERRAIN_TOOLS.has(id) && this.state.get().mode !== "terrain") {
+      return null;
+    }
+    return this.getTool(id);
   }
 
   setTemporaryTool(id) {

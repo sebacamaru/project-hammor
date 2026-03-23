@@ -6,6 +6,7 @@ import { MapChunkRenderer } from "../../../../shared/render/MapChunkRenderer.js"
 import { TileLayerDebugOverlay } from "../../../../client/render/TileLayerDebugOverlay.js";
 import { ChunkDebugOverlay } from "../../../../client/render/ChunkDebugOverlay.js";
 import { clampEditorCamera } from "../utils/clampEditorCamera.js";
+import { EntityOverlay } from "../render/EntityOverlay.js";
 
 export class SceneEditor extends Scene {
   constructor(state) {
@@ -59,6 +60,10 @@ export class SceneEditor extends Scene {
     this.groundLayer.visible = !!s.visibleLayers.ground;
     this.groundDetailLayer.visible = !!s.visibleLayers.ground_detail;
     this.fringeLayer.visible = !!s.visibleLayers.fringe;
+
+    if (this.entityOverlay) {
+      this.entityOverlay.container.visible = s.mode === "events";
+    }
 
     this.collisionDebug.enabled = this.engine.debug.visible;
     this.chunkDebug.enabled = this.engine.debug.visible;
@@ -161,6 +166,7 @@ export class SceneEditor extends Scene {
     const brush = state.selectedBrush;
 
     if (
+      state.mode !== "terrain" ||
       !hover ||
       !brush ||
       brush.width !== 1 ||
@@ -192,6 +198,16 @@ export class SceneEditor extends Scene {
 
     this.hoverOverlay.rect(x, y, ts, ts);
     this.hoverOverlay.fill({ color: 0xffffff, alpha: 0.08 });
+  }
+
+  /**
+   * Updates the entity overlay with the given entity array. Triggers a single redraw.
+   * @param {Array<object>} entities
+   */
+  setEntities(entities) {
+    if (this.entityOverlay) {
+      this.entityOverlay.setEntities(entities);
+    }
   }
 
   rebuildChunk(cx, cy) {
@@ -273,9 +289,12 @@ export class SceneEditor extends Scene {
       this.engine.renderer.viewport,
     );
 
+    const entityOverlay = new EntityOverlay();
+
     container.addChild(groundLayer);
     container.addChild(groundDetailLayer);
     container.addChild(fringeLayer);
+    container.addChild(entityOverlay.container);
     container.addChild(collisionDebug.container);
     container.addChild(chunkDebug.container);
 
@@ -286,6 +305,7 @@ export class SceneEditor extends Scene {
       groundLayer,
       groundDetailLayer,
       fringeLayer,
+      entityOverlay,
       collisionDebug,
       chunkDebug,
     };
@@ -296,6 +316,7 @@ export class SceneEditor extends Scene {
     this.groundLayer = visuals.groundLayer;
     this.groundDetailLayer = visuals.groundDetailLayer;
     this.fringeLayer = visuals.fringeLayer;
+    this.entityOverlay = visuals.entityOverlay;
     this.collisionDebug = visuals.collisionDebug;
     this.chunkDebug = visuals.chunkDebug;
   }
@@ -303,6 +324,7 @@ export class SceneEditor extends Scene {
   destroyMapVisuals(visuals = this.mapVisuals) {
     if (!visuals) return;
 
+    visuals.entityOverlay?.destroy();
     visuals.collisionDebug?.destroy();
     visuals.chunkDebug?.destroy();
     visuals.chunkRenderer?.destroy();
@@ -313,6 +335,7 @@ export class SceneEditor extends Scene {
       this.groundLayer = null;
       this.groundDetailLayer = null;
       this.fringeLayer = null;
+      this.entityOverlay = null;
       this.collisionDebug = null;
       this.chunkDebug = null;
     }

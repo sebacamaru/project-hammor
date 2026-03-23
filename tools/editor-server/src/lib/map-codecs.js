@@ -74,7 +74,7 @@ export function authoredToRuntimeJson(authoredJson) {
   const document = MapSerializer.deserialize(authoredJson);
   const runtimeMap = RuntimeMapBridge.toGameMapData(document);
 
-  return {
+  const result = {
     version: document.meta.version ?? 1,
     id: document.meta.id ?? null,
     tileset: document.meta.tileset ?? null,
@@ -108,4 +108,10 @@ export function authoredToRuntimeJson(authoredJson) {
       })
       .filter((chunk) => Object.keys(chunk.tiles).length > 0),
   };
+
+  if (Array.isArray(authoredJson.entities) && authoredJson.entities.length > 0) {
+    result.entities = authoredJson.entities;
+  }
+
+  return result;
 }

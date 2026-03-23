@@ -981,7 +981,7 @@
         0,
         0,
         0,
-        0,
+        -1,
         0,
         0,
         0,
@@ -1361,7 +1361,7 @@
         0,
         0,
         0,
-        0,
+        -1,
         0,
         6,
         6,
@@ -221234,6 +221234,46 @@
         -1,
         -1
       ]
+    }
+  ],
+  "entities": [
+    {
+      "id": "villager_01",
+      "prefabId": "npc_villager",
+      "x": 120,
+      "y": 96,
+      "components": {
+        "dialogue": {
+          "tree": "villager_special"
+        },
+        "collision": {
+          "solid": true,
+          "hitbox": {
+            "offsetX": -4,
+            "offsetY": -4,
+            "width": 8,
+            "height": 4
+          }
+        },
+        "interaction": {
+          "trigger": "action",
+          "type": "text",
+          "text": "Nice weather today."
+        }
+      }
+    },
+    {
+      "id": "sign_01",
+      "kind": "object",
+      "x": 64,
+      "y": 128,
+      "components": {
+        "interaction": {
+          "trigger": "action",
+          "type": "text",
+          "text": "Welcome to the test map!"
+        }
+      }
     }
   ]
 }

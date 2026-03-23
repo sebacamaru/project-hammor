@@ -19,7 +19,7 @@ export class ToolsPanel {
 
     this.el.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-tool]");
-      if (!btn) return;
+      if (!btn || btn.disabled) return;
 
       this.state.update((s) => {
         s.activeTool = btn.dataset.tool;
@@ -28,10 +28,13 @@ export class ToolsPanel {
   }
 
   sync() {
-    const { activeTool } = this.state.get();
+    const { activeTool, mode } = this.state.get();
+    const terrainMode = mode === "terrain";
 
     for (const btn of this.el.querySelectorAll("[data-tool]")) {
-      btn.classList.toggle("is-active", btn.dataset.tool === activeTool);
+      btn.disabled = !terrainMode;
+      btn.classList.toggle("is-disabled", !terrainMode);
+      btn.classList.toggle("is-active", terrainMode && btn.dataset.tool === activeTool);
     }
   }
 

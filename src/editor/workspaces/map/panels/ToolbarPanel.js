@@ -23,8 +23,22 @@ export class ToolbarPanel {
       const btn = e.target.closest("[data-mode]");
       if (!btn) return;
 
+      const nextMode = btn.dataset.mode;
       this.state.update((s) => {
-        s.mode = btn.dataset.mode;
+        const prevMode = s.mode;
+        if (prevMode === nextMode) return;
+
+        // Save current terrain tool when leaving terrain mode
+        if (prevMode === "terrain") {
+          s.lastTerrainTool = s.activeTool;
+        }
+
+        s.mode = nextMode;
+
+        // Restore terrain tool when entering terrain mode
+        if (nextMode === "terrain") {
+          s.activeTool = s.lastTerrainTool || "pencil";
+        }
       });
     });
   }

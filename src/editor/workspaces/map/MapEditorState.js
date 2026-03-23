@@ -7,6 +7,7 @@ export class MapEditorState {
       mode: "terrain",
 
       activeTool: "pencil",
+      lastTerrainTool: "pencil",
       activeLayer: "ground",
 
       visibleLayers: {

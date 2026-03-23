@@ -130,6 +130,7 @@ export class MapEditorApp {
 
     // Escena del editor
     await this.scenes.goto(new SceneEditor(this.state, this.toolManager));
+    this.scenes.current?.setEntities?.(this.document?.entities);
 
     // Loop
     this.loop = new GameLoop(this);
@@ -169,21 +170,23 @@ export class MapEditorApp {
       });
     }
 
-    // Tool shortcuts
-    if (this.input.pressed("KeyB")) {
-      this.state.update((s) => {
-        s.activeTool = "pencil";
-      });
-    }
-    if (this.input.pressed("KeyE")) {
-      this.state.update((s) => {
-        s.activeTool = "eraser";
-      });
-    }
-    if (this.input.pressed("KeyI")) {
-      this.state.update((s) => {
-        s.activeTool = "eyedropper";
-      });
+    // Tool shortcuts (terrain mode only)
+    if (this.state.get().mode === "terrain") {
+      if (this.input.pressed("KeyB")) {
+        this.state.update((s) => {
+          s.activeTool = "pencil";
+        });
+      }
+      if (this.input.pressed("KeyE")) {
+        this.state.update((s) => {
+          s.activeTool = "eraser";
+        });
+      }
+      if (this.input.pressed("KeyI")) {
+        this.state.update((s) => {
+          s.activeTool = "eyedropper";
+        });
+      }
     }
 
     // Grid toggle
@@ -350,6 +353,7 @@ export class MapEditorApp {
     const currentScene = this.scenes.current;
     if (currentScene?.setMap) {
       currentScene.setMap(runtimeMap);
+      currentScene.setEntities?.(this.document.entities);
       return;
     }
 
