@@ -22,6 +22,10 @@ export class RemoteEntity {
     this.sprite = data.sprite ?? null;
     /** @type {boolean} Whether this entity can be interacted with. */
     this.interactable = data.interactable ?? false;
+    /** @type {boolean} Whether this entity blocks player movement. */
+    this.solid = data.solid ?? false;
+    /** @type {object|null} Collision hitbox for solid entities ({ offsetX, offsetY, width, height }). */
+    this.hitbox = data.hitbox ?? null;
   }
 
   /**
@@ -33,5 +37,7 @@ export class RemoteEntity {
     this.y = data.y;
     this.sprite = data.sprite ?? null;
     this.interactable = data.interactable ?? false;
+    this.solid = data.solid ?? false;
+    this.hitbox = data.hitbox ?? null;
   }
 }

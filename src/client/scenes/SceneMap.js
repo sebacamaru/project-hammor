@@ -103,10 +103,13 @@ export class SceneMap extends Scene {
     }
 
     // Collision resolver: world-aware (multi-region) or simple local (single map)
+    // Includes both tile collision and solid entity collision to match server behavior.
     if (this.worldData) {
-      this._collides = (wx, wy, hb) => this._collidesAtWorld(wx, wy, hb);
+      this._collides = (wx, wy, hb) =>
+        this._collidesAtWorld(wx, wy, hb) || this._collidesWithEntities(wx, wy, hb);
     } else {
-      this._collides = (wx, wy, hb) => TileCollision.collidesWithLayer(this.map, "collision", wx, wy, hb);
+      this._collides = (wx, wy, hb) =>
+        TileCollision.collidesWithLayer(this.map, "collision", wx, wy, hb) || this._collidesWithEntities(wx, wy, hb);
     }
 
     // Entities
@@ -118,6 +121,7 @@ export class SceneMap extends Scene {
 
     // Remote non-player entities: runtimeId → { entity: RemoteEntity, view: RemoteEntityView }
     this.remoteEntities = new Map();
+    this._debugEntityHitboxes = [];
 
     // Interaction state
     this._lastInteractTime = 0;
@@ -230,6 +234,9 @@ export class SceneMap extends Scene {
           this.remoteEntities.delete(id);
         }
       }
+
+      // Store debug hitbox data for overlay rendering
+      this._debugEntityHitboxes = msg.debugEntityHitboxes ?? [];
     };
 
     this.network.onInteractResult = (msg) => {
@@ -382,7 +389,7 @@ export class SceneMap extends Scene {
       player.updateRemoteInterpolation(now);
       view.updateFromEntity(player, alpha);
     }
-    this.hitboxDebug.render(this.player);
+    this.hitboxDebug.render(this.player, this._debugEntityHitboxes);
   }
 
   exit() {
@@ -507,6 +514,34 @@ export class SceneMap extends Scene {
 
       const local = region.worldToLocal(worldX, worldY);
       if (TileCollision.collidesWithLayer(region.map, "collision", local.x, local.y, hitbox)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Checks if a player hitbox at candidate feet position overlaps any solid remote entity.
+   * Mirrors server MovementSystem._collidesWithEntities() — same AABB logic and strict inequality.
+   * @param {number} x - Candidate feet X (world-space).
+   * @param {number} y - Candidate feet Y (world-space).
+   * @param {object} hitbox - Player hitbox ({ offsetX, offsetY, width, height }).
+   * @returns {boolean} True if any solid entity overlap.
+   */
+  _collidesWithEntities(x, y, hitbox) {
+    const pLeft = x + hitbox.offsetX;
+    const pTop = y + hitbox.offsetY;
+    const pRight = pLeft + hitbox.width;
+    const pBottom = pTop + hitbox.height;
+
+    for (const { entity } of this.remoteEntities.values()) {
+      if (!entity.solid || !entity.hitbox) continue;
+      const ehb = entity.hitbox;
+      const eLeft = entity.x + ehb.offsetX;
+      const eTop = entity.y + ehb.offsetY;
+      const eRight = eLeft + ehb.width;
+      const eBottom = eTop + ehb.height;
+      if (pRight > eLeft && pLeft < eRight && pBottom > eTop && pTop < eBottom) {
         return true;
       }
     }

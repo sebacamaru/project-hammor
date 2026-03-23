@@ -45,7 +45,23 @@ export class GameEntity {
     if (this.components.interaction) {
       data.interactable = true;
     }
+    if (this.components.collision?.solid && this.components.collision.hitbox) {
+      data.solid = true;
+      data.hitbox = this.components.collision.hitbox;
+    }
     return data;
+  }
+
+  /**
+   * Returns debug hitbox data for this entity, or null if not solid.
+   * Used to build debugEntityHitboxes in snapshots — separate from the clean snapshot payload.
+   * Position is map-local; caller converts to world-space before sending.
+   * @returns {{ id: string, x: number, y: number, hitbox: object }|null}
+   */
+  toDebugHitboxData() {
+    const col = this.components.collision;
+    if (!col?.solid || !col.hitbox) return null;
+    return { id: this.runtimeId, x: this.x, y: this.y, hitbox: col.hitbox };
   }
 
   /**

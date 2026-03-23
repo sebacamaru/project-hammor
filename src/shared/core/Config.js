@@ -41,6 +41,14 @@ export const AOI_RADIUS_SQ = AOI_RADIUS * AOI_RADIUS;
 export const INTERACTION_RANGE = 32; // 2 tiles in pixels
 export const INTERACTION_RANGE_SQ = INTERACTION_RANGE * INTERACTION_RANGE;
 
+// --- Entity collision ---
+export const DEFAULT_ENTITY_HITBOX = {
+  offsetX: -4,
+  offsetY: -4,
+  width: 8,
+  height: 4,
+};
+
 // --- Remote player interpolation ---
 export const REMOTE_INTERPOLATION_DELAY_MS = 100;
 export const MAX_REMOTE_SNAPSHOTS = 20;
@@ -52,3 +60,6 @@ export const DEBUG_FLAGS = {
   NET_ENABLE_RECONCILIATION: true,
   NET_ENABLE_REMOTE_INTERPOLATION: true,
 };
+
+// --- Server debug flags ---
+export const DEBUG_SEND_ENTITY_HITBOXES = true;

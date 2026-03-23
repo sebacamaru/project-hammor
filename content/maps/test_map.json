@@ -22,6 +22,7 @@
       "y": 96,
       "components": {
         "dialogue": { "tree": "villager_special" },
+        "collision": { "solid": true, "hitbox": { "offsetX": -4, "offsetY": -4, "width": 8, "height": 4 } },
         "interaction": { "trigger": "action", "type": "text", "text": "Nice weather today." }
       }
     },

@@ -17,7 +17,7 @@ import { PrefabRegistry } from "../runtime/PrefabRegistry.js";
 import { ServerEntityManager } from "../runtime/ServerEntityManager.js";
 import { GameEntity } from "./entities/GameEntity.js";
 import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
-import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ } from "../../../src/shared/core/Config.js";
+import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ, DEBUG_SEND_ENTITY_HITBOXES } from "../../../src/shared/core/Config.js";
 
 /**
  * Central game server orchestrator.
@@ -217,6 +217,7 @@ export class GameServer {
     this.movementSystem.update(
       this.players, dt, this.config,
       this.runtimeMaps, this.collisionSystem, this.runtimeWorlds,
+      this.entities,
     );
 
     // Check for map border crossings after movement
@@ -429,14 +430,18 @@ export class GameServer {
       }
 
       // Non-player entities: AOI-filtered (same mode as players)
-      const visibleEntities = this._getVisibleEntities(selfPlayer, selfWorldData, cellCache);
+      const { entities: visibleEntities, debugHitboxes } = this._getVisibleEntities(selfPlayer, selfWorldData, cellCache);
 
-      conn.send(createMessage(MSG_TYPES.SNAPSHOT, {
+      const snapshot = {
         tick: this.tickCount,
         lastProcessedSeq: selfPlayer.lastProcessedSeq,
         players: visiblePlayers,
         entities: visibleEntities,
-      }));
+      };
+      if (DEBUG_SEND_ENTITY_HITBOXES && debugHitboxes.length > 0) {
+        snapshot.debugEntityHitboxes = debugHitboxes;
+      }
+      conn.send(createMessage(MSG_TYPES.SNAPSHOT, snapshot));
     }
   }
 
@@ -595,29 +600,53 @@ export class GameServer {
    * @param {ServerPlayer} selfPlayer
    * @param {{ x: number, y: number }} selfWorldData - Player's world-space position.
    * @param {Map<string, {rx: number, ry: number}>} cellCache - Pre-computed region cells.
-   * @returns {object[]} Snapshot-ready entity data in world-space coordinates.
+   * @returns {{ entities: object[], debugHitboxes: object[] }} Snapshot-ready entity data and debug hitbox data.
    */
   _getVisibleEntities(selfPlayer, selfWorldData, cellCache) {
-    if (this.entities.count() === 0) return [];
+    const empty = { entities: [], debugHitboxes: [] };
+    if (this.entities.count() === 0) return empty;
 
     const result = [];
+    const debugHitboxes = [];
     const selfCell = cellCache.get(selfPlayer.id);
+
+    /**
+     * Adds an entity to the result list and collects debug hitbox data if solid.
+     * @param {GameEntity} entity
+     * @param {string|null} worldId
+     */
+    const addEntity = (entity, worldId) => {
+      result.push(this._toWorldEntityData(entity, worldId));
+      const hbData = entity.toDebugHitboxData();
+      if (hbData) {
+        // Convert hitbox position to world-space (same as entity snapshot)
+        if (worldId) {
+          const cell = this.runtimeWorlds.getMapCell(worldId, entity.mapId);
+          if (cell) {
+            const size = this.runtimeWorlds.getRegionSizePx(worldId);
+            hbData.x += cell.rx * size.widthPx;
+            hbData.y += cell.ry * size.heightPx;
+          }
+        }
+        debugHitboxes.push(hbData);
+      }
+    };
 
     if (!selfPlayer.worldId) {
       // Legacy single-map mode: same map + radius
       for (const entity of this.entities.getByMap(selfPlayer.mapId)) {
-        const data = this._toWorldEntityData(entity, null);
-        if (this._isWithinRadiusAOI(selfWorldData, data)) {
-          result.push(data);
+        // Radius check needs world-space coords (same as map-local in single-map mode)
+        if (this._isWithinRadiusAOI(selfWorldData, { x: entity.x, y: entity.y })) {
+          addEntity(entity, null);
         }
       }
-      return result;
+      return { entities: result, debugHitboxes };
     }
 
     // World mode: apply the same AOI_MODE switch as players
     const worldId = selfPlayer.worldId;
     const mapIds = this.runtimeWorlds.getMapIds(worldId);
-    if (!mapIds) return result;
+    if (!mapIds) return { entities: result, debugHitboxes };
 
     for (const mapId of mapIds) {
       const mapCell = this.runtimeWorlds.getMapCell(worldId, mapId);
@@ -646,12 +675,12 @@ export class GameServer {
         }
 
         if (visible) {
-          result.push(data);
+          addEntity(entity, worldId);
         }
       }
     }
 
-    return result;
+    return { entities: result, debugHitboxes };
   }
 
   /**
