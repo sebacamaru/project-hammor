@@ -103,12 +103,12 @@ export class EntityOverlay {
     this.graphics.rect(spriteX, spriteY, 16, 16);
     this.graphics.fill({ color, alpha: isSelected ? 0.5 : 0.3 });
     this.graphics.rect(spriteX, spriteY, 16, 16);
-    this.graphics.stroke({ color, alpha: 1, width: isSelected ? 2 : 1 });
+    this.graphics.stroke({ color, alpha: 1, width: isSelected ? 2 : 1, pixelLine: !isSelected });
 
     // --- Selection ring (white outer outline) ---
     if (isSelected) {
       this.graphics.rect(spriteX - 1, spriteY - 1, 18, 18);
-      this.graphics.stroke({ color: 0xffffff, alpha: 0.9, width: 1 });
+      this.graphics.stroke({ color: 0xffffff, alpha: 0.9, width: 1, pixelLine: true });
     }
 
     // --- Hitbox outline (collision component) ---
@@ -121,7 +121,7 @@ export class EntityOverlay {
       const hh = hb.height ?? 0;
       if (hw > 0 && hh > 0) {
         this.graphics.rect(hx, hy, hw, hh);
-        this.graphics.stroke({ color: 0xff4444, alpha: 0.7, width: 1 });
+        this.graphics.stroke({ color: 0xff4444, alpha: 0.7, width: 1, pixelLine: true });
       }
     }
 
@@ -135,11 +135,17 @@ export class EntityOverlay {
       const label = new Text({
         text: labelText,
         style: {
-          fontSize: 8,
+          fontSize: 11,
           fill: 0xffffff,
           fontFamily: "monospace",
+          dropShadow: {
+            color: 0x000000,
+            alpha: 0.8,
+            blur: 0,
+            distance: 1,
+          },
         },
-        resolution: 1,
+        resolution: 2,
       });
       label.anchor.set(0.5, 1);
       label.x = x;
