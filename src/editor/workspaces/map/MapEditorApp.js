@@ -125,13 +125,18 @@ export class MapEditorApp {
       this.layout.rightPanelEl,
       this.layout.toolsEl,
     ];
+    this._collisionEls = [
+      this.layout.toolsEl,
+    ];
     this._eventsEls = [
       this.layout.eventsPanelEl,
     ];
     this.state.subscribe((s) => {
       const terrain = s.mode === "terrain";
+      const collisions = s.mode === "collisions";
       const events = s.mode === "events";
       for (const el of this._terrainEls) el.style.display = terrain ? "" : "none";
+      for (const el of this._collisionEls) el.style.display = collisions ? "" : "none";
       for (const el of this._eventsEls) el.style.display = events ? "" : "none";
     });
 
@@ -219,8 +224,9 @@ export class MapEditorApp {
       });
     }
 
-    // Tool shortcuts (terrain mode only)
-    if (this.state.get().mode === "terrain") {
+    // Tool shortcuts (terrain + collision modes)
+    const mode = this.state.get().mode;
+    if (mode === "terrain" || mode === "collisions") {
       if (this.input.pressed("KeyB")) {
         this.state.update((s) => {
           s.activeTool = "pencil";
@@ -231,7 +237,7 @@ export class MapEditorApp {
           s.activeTool = "eraser";
         });
       }
-      if (this.input.pressed("KeyI")) {
+      if (mode === "terrain" && this.input.pressed("KeyI")) {
         this.state.update((s) => {
           s.activeTool = "eyedropper";
         });

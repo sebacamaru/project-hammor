@@ -33,16 +33,22 @@ export class EraseTool {
     if (!map || !doc || !history) return;
     if (ctx.tileX == null || ctx.tileY == null) return;
 
-    const eraseKey = `${ctx.tileX},${ctx.tileY},${s.activeLayer}`;
+    const collisionMode = s.mode === "collisions";
+    const layerId = collisionMode ? "collision" : s.activeLayer;
+
+    // Fail safely if collision layer doesn't exist in this document
+    if (collisionMode && !doc.getLayer("collision")) return;
+
+    const eraseKey = `${ctx.tileX},${ctx.tileY},${layerId}`;
     if (eraseKey === this.lastEraseKey) return;
     this.lastEraseKey = eraseKey;
 
     if (!this.isInsideMap(map, ctx.tileX, ctx.tileY)) return;
 
-    const current = doc.getTile(s.activeLayer, ctx.tileX, ctx.tileY);
+    const current = doc.getTile(layerId, ctx.tileX, ctx.tileY);
     if (current === -1) return;
 
-    history.execute(new EraseTilesCommand(doc, s.activeLayer, [{
+    history.execute(new EraseTilesCommand(doc, layerId, [{
       x: ctx.tileX,
       y: ctx.tileY,
     }]));

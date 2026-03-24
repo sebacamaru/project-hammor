@@ -1,21 +1,27 @@
+import { getToolsForMode } from "../tools/ToolManager.js";
+
+/** Tool ID → button label. */
+const TOOL_LABELS = {
+  pencil: "Pencil",
+  eraser: "Erase",
+  eyedropper: "Eyedropper",
+};
+
 export class ToolsPanel {
   constructor(el, state) {
     this.el = el;
     this.state = state;
+    this._lastMode = null;
 
-    this.render();
+    this._renderShell();
     this.unsubscribe = this.state.subscribe(() => this.sync());
     this.sync();
   }
 
-  render() {
-    this.el.innerHTML = `
-      <div class="tools-buttons">
-        <button type="button" data-tool="pencil">Pencil</button>
-        <button type="button" data-tool="eraser">Erase</button>
-        <button type="button" data-tool="eyedropper">Eyedropper</button>
-      </div>
-    `;
+  /** Builds the outer wrapper once and attaches the click delegate. */
+  _renderShell() {
+    this.el.innerHTML = `<div class="tools-buttons"></div>`;
+    this._buttonsEl = this.el.querySelector(".tools-buttons");
 
     this.el.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-tool]");
@@ -27,14 +33,29 @@ export class ToolsPanel {
     });
   }
 
+  /** Rebuilds the button set for the given tool IDs. */
+  _renderButtons(toolIds) {
+    this._buttonsEl.innerHTML = "";
+    for (const id of toolIds) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.tool = id;
+      btn.textContent = TOOL_LABELS[id] ?? id;
+      this._buttonsEl.appendChild(btn);
+    }
+  }
+
   sync() {
     const { activeTool, mode } = this.state.get();
-    const terrainMode = mode === "terrain";
 
-    for (const btn of this.el.querySelectorAll("[data-tool]")) {
-      btn.disabled = !terrainMode;
-      btn.classList.toggle("is-disabled", !terrainMode);
-      btn.classList.toggle("is-active", terrainMode && btn.dataset.tool === activeTool);
+    // Rebuild buttons only when mode actually changes
+    if (mode !== this._lastMode) {
+      this._lastMode = mode;
+      this._renderButtons(getToolsForMode(mode));
+    }
+
+    for (const btn of this._buttonsEl.querySelectorAll("[data-tool]")) {
+      btn.classList.toggle("is-active", btn.dataset.tool === activeTool);
     }
   }
 

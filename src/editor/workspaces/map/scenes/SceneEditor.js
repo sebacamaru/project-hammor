@@ -70,7 +70,7 @@ export class SceneEditor extends Scene {
       this.entitySpriteLayer.container.visible = eventsMode;
     }
 
-    this.collisionDebug.enabled = this.engine.debug.visible;
+    this.collisionDebug.enabled = this.engine.debug.visible || s.mode === "collisions";
     this.chunkDebug.enabled = this.engine.debug.visible;
 
     const d = this.engine.debug;

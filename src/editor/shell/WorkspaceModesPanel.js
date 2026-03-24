@@ -1,3 +1,5 @@
+import { TOOL_MODES } from "../workspaces/map/tools/ToolManager.js";
+
 /**
  * Reusable mode-tab component that renders into the shell topbar's `.shell-modes` slot.
  * Any workspace can instantiate this with its own mode list.
@@ -31,7 +33,15 @@ export class WorkspaceModesPanel {
           if (s.mode === id) return;
           if (s.mode === "terrain") s.lastTerrainTool = s.activeTool;
           s.mode = id;
-          if (id === "terrain") s.activeTool = s.lastTerrainTool || "pencil";
+          if (id === "terrain") {
+            s.activeTool = s.lastTerrainTool || "pencil";
+          } else {
+            // Normalize: if current tool is invalid for the new mode, fall back to pencil
+            const allowed = TOOL_MODES[s.activeTool];
+            if (allowed && !allowed.has(id)) {
+              s.activeTool = "pencil";
+            }
+          }
         });
       });
       this.el.appendChild(btn);
