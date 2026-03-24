@@ -25,7 +25,7 @@
 ## Key files
 - `src/client/ClientApp.js` — orchestrator, loads ProjectSettings, passes gameStart to SceneMap
 - `src/client/main.js` — entry point
-- `src/client/game/Player.js` — server-driven player (applyServerState, feet convention, no local movement)
+- `src/client/game/Player.js` — player with client-side prediction, reconciliation, correction smoothing (_renderErrorX/Y)
 - `src/client/game/PlayerView.js` — AnimatedSprite, renders with offset from feet (x-8, y-16)
 - `src/client/network/NetworkManager.js` — WebSocket client (hello, input, welcome, snapshot callbacks)
 - `src/client/scenes/SceneMap.js` — main game scene, world streaming, network integration
@@ -96,8 +96,8 @@
 - `server/src/game/ServerLoop.js` — fixed-timestep loop (setInterval)
 - `server/src/game/SessionManager.js` — session CRUD (byId + byConnectionId)
 - `server/src/game/entities/ServerPlayer.js` — server player (position, velocity, facing, hitbox, input)
-- `server/src/game/input/PlayerInputState.js` — last known input per player (seq dedup)
-- `server/src/game/systems/MovementSystem.js` — authoritative movement with per-axis collision
+- `server/src/game/input/PlayerInputState.js` — input queue per player (enqueue/drain, seq dedup, last-known fallback)
+- `server/src/game/systems/MovementSystem.js` — authoritative movement (input queue processing, per-input with CLIENT_SIM_TICK_MS)
 - `server/src/game/systems/CollisionSystem.js` — hitbox-based AABB vs collision tiles
 - `server/src/network/NetworkServer.js` — WebSocket server (ws library)
 - `server/src/network/ClientConnection.js` — per-socket wrapper
@@ -140,7 +140,8 @@
 - Server fully functional: WebSocket, sessions, authoritative movement, hitbox collision, snapshots
 - Client connected to server: sends input, receives snapshots, no local movement
 - Remote player interpolation: timestamped snapshot buffer (100ms delay, up to 20 snapshots)
-- Client-side prediction: local movement + server reconciliation (toggleable via DEBUG_FLAGS)
+- Client-side prediction: local movement + server reconciliation + correction smoothing (toggleable via DEBUG_FLAGS)
+- Server input queue processing: processes each client input individually with CLIENT_SIM_TICK_MS (eliminates prediction mismatch at any tick rate)
 - Configurable AOI: region/radius/region+radius modes (default: region = 3×3 grid)
 - Map transitions: server detects border crossings, updates player.mapId, world-aware movement
 - JSDoc required on all public methods

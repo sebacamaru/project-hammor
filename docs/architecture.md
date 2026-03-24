@@ -36,9 +36,10 @@ RAF tick
 │   ├── Input.poll()
 │   ├── SceneManager.update(dt)
 │   │   └── SceneMap.update(dt)
-│   │       ├── Player.update(dt) — saves prev positions (NO local movement)
-│   │       ├── Send input to server if changed (NetworkManager.sendInput)
-│   │       ├── [async] Snapshot arrives → Player.applyServerState() — sets x/y from server
+│   │       ├── Player.update(dt) — saves prev positions
+│   │       ├── NetworkManager.sendInput(current) — every frame, seq-numbered
+│   │       ├── Player.pushPendingInput(seq, input, dt) + Player.predict(dt, input, collides)
+│   │       ├── [async] Snapshot arrives → Player.reconcile(state, lastProcessedSeq, collides)
 │   │       ├── EntityManager.updateAll(dt, input)
 │   │       ├── Camera debug mode check (IJKL → free, WASD → follow)
 │   │       └── Debug info update (cam, player, chunk, entities, viewport)
@@ -47,6 +48,7 @@ RAF tick
 └── ClientApp.render(alpha)
     ├── SceneManager.render(alpha)
     │   └── SceneMap.render(alpha)
+    │       ├── Player.decayRenderError() — smooth correction blending
     │       ├── Camera.renderUpdate(player, alpha) — interpolate + recalc bounds
     │       ├── root.x/y = -camera (already round-snapped)
     │       ├── MapChunkRenderer.update(camera) — show/hide chunk views
@@ -380,12 +382,12 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 
 ### Protocol
 - MSG_TYPES: hello, welcome, input, snapshot, interact, interact_result, error
-- Input: seq-based dedup (accept only if seq > player.input.seq, starts at -1)
+- Input: seq-based dedup (accept only if seq > player.input.lastSeq, starts at -1)
 - Interact: `{ type: "interact", targetId }` → server validates + responds with `interact_result`
 - Snapshots: broadcast every `SNAPSHOT_INTERVAL_TICKS` (default 1 = every tick at 20 TPS)
 - Snapshot payload: `{ type: "snapshot", tick, lastProcessedSeq, players: [...], entities: [...] }`
 - Players: `[{ id, x, y, vx, vy, facing, mapId }]` — self always first
-- Entities: `[{ id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox? }]` — AOI-filtered
+- Entities: `[{ id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?, visual? }]` — AOI-filtered
 - Debug: `debugEntityHitboxes: [{ id, x, y, hitbox }]` — optional, gated by `DEBUG_SEND_ENTITY_HITBOXES`
 
 ### AOI filtering
@@ -397,8 +399,23 @@ GameServer (orchestrator) — server/src/game/GameServer.js
   - `"region+radius"`: both conditions (AND)
 - Pre-computed caches per broadcast tick: worldDataCache + cellCache
 
+### Input queue processing
+- Client sends input every frame at 60 TPS. Server ticks at 20 TPS (~3 inputs per tick).
+- `PlayerInputState` queues all received inputs (seq-deduped, capped at 120).
+- `MovementSystem.update()` drains the queue per player and processes each input individually with `CLIENT_SIM_TICK_MS` (16.67ms), exactly mirroring client prediction.
+- If queue is empty (network hiccup), falls back to last known input with `SERVER_TICK_MS`.
+- `player.lastProcessedSeq` updated after queue drain (not on receive).
+- This eliminates prediction mismatch at any server tick rate. 3 × 16.67ms ≈ 50ms = same as one server tick.
+
+### Client prediction & reconciliation
+- Client predicts locally each frame: `Player.predict(dt, input, collides)` — same logic as server MovementSystem.
+- `Player.pushPendingInput(seq, input, dt)` — buffers for replay during reconciliation.
+- On snapshot: `Player.reconcile(state, lastProcessedSeq, collides)` — snap to server pos, discard confirmed inputs, replay pending ones.
+- **Correction smoothing**: `_renderErrorX/Y` accumulated on reconciliation (pre vs post position delta), decayed 0.5× per render frame. Threshold of 4px for teleport snap. Used by PlayerView and Camera for visual-only smoothing. Safety net for real network jitter.
+- Toggled via `DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION` and `DEBUG_FLAGS.NET_ENABLE_RECONCILIATION`.
+
 ### Server player
-- `ServerPlayer`: id, worldId, mapId, x, y (feet convention), vx, vy, facing, hitbox, input state
+- `ServerPlayer`: id, worldId, mapId, x, y (feet convention), vx, vy, facing, hitbox, input (PlayerInputState), lastProcessedSeq
 - `toData()` returns snapshot-ready plain object
 
 ### Collision
@@ -427,10 +444,10 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 
 ### Snapshot replication
 - Entities in `snapshot.entities[]`, AOI-filtered (same mode as players)
-- `toSnapshotData()` → minimal payload (id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?)
+- `toSnapshotData()` → minimal payload (id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?, visual?)
 - `toDebugHitboxData()` → debug-only hitbox data for solid entities (id, x, y, hitbox)
 - `_toWorldEntityData()` converts map-local → world-space (same math as players)
-- Client: `RemoteEntity` model (stores solid + hitbox for prediction) + `RemoteEntityView` (kind-based colored placeholders)
+- Client: `RemoteEntity` model (stores solid + hitbox for prediction + visual data) + `RemoteEntityView` (AnimatedSprite from `components.visual` with PLAYER_ANIMATIONS idle support, falls back to kind-based colored placeholder)
 
 ### Entity collision
 - **Authored**: `components.collision = { solid: true, hitbox: { offsetX, offsetY, width, height } }`

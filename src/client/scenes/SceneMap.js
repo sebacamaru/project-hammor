@@ -218,7 +218,7 @@ export class SceneMap extends Scene {
         let entry = this.remoteEntities.get(e.id);
         if (!entry) {
           const entity = new RemoteEntity(e);
-          const view = new RemoteEntityView(this.entityLayer, e.kind);
+          const view = new RemoteEntityView(this.entityLayer, e.kind, !!e.visual);
           entry = { entity, view };
           this.remoteEntities.set(e.id, entry);
         }

@@ -50,13 +50,13 @@ export class RemoteEntityView {
    * @param {import("pixi.js").Container} parentContainer - The entity layer to add this view to.
    * @param {string} kind - Entity kind for placeholder color selection.
    */
-  constructor(parentContainer, kind) {
+  constructor(parentContainer, kind, hasVisual) {
     /** @type {import("pixi.js").Container} */
     this._parent = parentContainer;
 
-    /** @type {Graphics} Colored rect fallback — always present, hidden when sprite is loaded. */
-    this._rect = this._createPlaceholder(kind);
-    this._parent.addChild(this._rect);
+    /** @type {Graphics|null} Colored rect fallback — only created when entity has visual data (used while sprite loads). */
+    this._rect = hasVisual ? this._createPlaceholder(kind) : null;
+    if (this._rect) this._parent.addChild(this._rect);
 
     /** @type {import("pixi.js").Sprite|null} Real character sprite, null until async load completes. */
     this._sprite = null;
@@ -84,10 +84,12 @@ export class RemoteEntityView {
     const ex = Math.round(entity.x);
     const ey = Math.round(entity.y);
 
-    // Always keep rect in sync (fallback, also used before sprite loads)
-    this._rect.x = ex - 8;
-    this._rect.y = ey - 16;
-    this._rect.zIndex = ey;
+    // Keep rect in sync (fallback while sprite loads)
+    if (this._rect) {
+      this._rect.x = ex - 8;
+      this._rect.y = ey - 16;
+      this._rect.zIndex = ey;
+    }
 
     const v = entity.visual;
     if (v?.type === "character" && v.sheet) {
@@ -192,7 +194,7 @@ export class RemoteEntityView {
     this._positionSprite(this._sprite, spawnX, spawnY, fw, fh);
     this._parent.addChild(this._sprite);
 
-    this._rect.visible = false;
+    if (this._rect) this._rect.visible = false;
   }
 
   /**

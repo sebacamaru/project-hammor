@@ -64,15 +64,19 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `Entity.syncLocalFromWorld()` copies world coords to local (used after world-space collision).
 - `EntityManager` = collection in `shared/data/models/`.
 - `EntityRenderer` = syncs entity data → Pixi sprites in `shared/render/`.
-- `Player extends Entity` — in `client/game/`, server-driven (no local movement).
-- `Player.applyServerState(state)` — applies authoritative position from server snapshot.
-- `Player.update(dt)` — ONLY saves prev positions for interpolation. No movement logic.
+- `Player extends Entity` — in `client/game/`, with client-side prediction + server reconciliation.
+- `Player.predict(dt, input, collides)` — local predicted movement mirroring server MovementSystem.
+- `Player.reconcile(state, lastProcessedSeq, collides)` — snap to server, discard confirmed inputs, replay pending.
+- `Player._renderErrorX/Y` — correction smoothing: accumulated on reconciliation, decayed 0.5× per render frame, 4px threshold for teleport snap.
+- `Player.decayRenderError()` — called once per render frame before camera/sprite updates.
+- `Player.pushPendingInput(seq, input, dt)` — buffers sent inputs for reconciliation replay.
+- `Player.update(dt)` — saves prev positions for interpolation.
 - `Player.hitbox` = `{ offsetX: -4, offsetY: -4, width: 8, height: 4 }` — AABB relative to **feet**.
-- `PlayerView` = in `client/game/`, owns AnimatedSprite, renders with offset from feet.
+- `PlayerView` = in `client/game/`, owns AnimatedSprite, renders with offset from feet. Uses `_renderErrorX/Y` for smoothed position.
 - `PlayerAnimations` = animation metadata in `shared/data/models/`.
 - `EntityData` = serializable snapshot in `shared/data/models/`.
-- `RemoteEntity` = in `client/game/`, lightweight model for non-player entities from snapshots (id, kind, x, y, interactable, solid, hitbox).
-- `RemoteEntityView` = in `client/game/`, kind-based colored 16×16 placeholders (cyan=npc, yellow=object/sign, magenta=default).
+- `RemoteEntity` = in `client/game/`, lightweight model for non-player entities from snapshots (id, kind, x, y, interactable, solid, hitbox, visual).
+- `RemoteEntityView` = in `client/game/`, AnimatedSprite from `components.visual` (PLAYER_ANIMATIONS idle support, async sheet loading with race guard, module-level frame cache keyed by `sheet|fw|fh`). Falls back to kind-based colored 16×16 placeholders (cyan=npc, yellow=object/sign, magenta=default).
 
 ### Authored entity system (server)
 - **Prefabs**: reusable entity templates in `content/prefabs/entities/*.json`. Fields: id, kind, components, params.
@@ -80,7 +84,7 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - **Merge**: prefab + instance → two-level shallow merge (params shallow, components shallow per key, each component shallow).
 - **Server runtime**:
   - `GameEntity` = in `server/src/game/entities/`. Pure data: runtimeId, authoredId, mapId, kind, x, y, params, components.
-  - `GameEntity.toSnapshotData()` → minimal network payload (id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?).
+  - `GameEntity.toSnapshotData()` → minimal network payload (id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?, visual?).
   - `GameEntity.toDebugHitboxData()` → debug hitbox data for solid entities (id, x, y, hitbox) or null.
   - `GameEntity.toDebugData()` → full dump for logging.
   - `ServerEntityManager` = in `server/src/runtime/`. Indexed by runtimeId, mapId, authoredId. Methods: register, remove, removeByMap, getByMap, getByAuthoredId.
@@ -255,9 +259,9 @@ src/
 │       │   │   ├── ServerPlayer.js  Server player (position, velocity, facing, hitbox, input)
 │       │   │   └── GameEntity.js    Server runtime entity (runtimeId, authoredId, kind, x, y, components)
 │       │   ├── input/
-│       │   │   └── PlayerInputState.js  Last known input per player (seq-based dedup)
+│       │   │   └── PlayerInputState.js  Input queue per player (enqueue/drain, seq dedup, last-known fallback)
 │       │   └── systems/
-│       │       ├── MovementSystem.js    Authoritative movement (diagonal norm, per-axis resolve)
+│       │       ├── MovementSystem.js    Authoritative movement (input queue processing, per-input with CLIENT_SIM_TICK_MS)
 │       │       └── CollisionSystem.js   Hitbox-based collision against map tiles
 │       ├── network/
 │       │   ├── NetworkServer.js         WebSocket server (ws library)
@@ -476,7 +480,7 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 ├── NetworkServer      — WebSocket server (ws library, port 3001)
 │   └── ClientConnection — per-socket wrapper (id, send, close)
 ├── SessionManager     — session ↔ connection ↔ player mapping
-├── MovementSystem     — authoritative movement (speed, diagonal normalization, per-axis collision)
+├── MovementSystem     — authoritative movement (input queue drain, per-input with CLIENT_SIM_TICK_MS, per-axis collision)
 ├── CollisionSystem    — hitbox-based AABB vs collision layer tiles
 ├── MapTransitionSystem — detects map border crossings, updates player.mapId
 ├── RuntimeMapManager  — loads chunk-based maps from filesystem (content/maps/)
@@ -497,7 +501,7 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - Server broadcasts snapshots every `SNAPSHOT_INTERVAL_TICKS` ticks (default 1 = every tick at 20 TPS)
 - Snapshot: `{ type: "snapshot", tick, lastProcessedSeq, players: [...], entities: [...] }`
 - Players: `[{ id, x, y, vx, vy, facing, mapId }]` — self always first
-- Entities: `[{ id, authoredId, kind, x, y, sprite?, interactable? }]` — AOI-filtered non-player entities
+- Entities: `[{ id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?, visual? }]` — AOI-filtered non-player entities
 - Client `NetworkManager` receives snapshot → `Player.reconcile()` (local) / `Player.pushRemoteSnapshot()` (remote) + entity spawn/update/despawn
 
 ### AOI filtering
@@ -509,10 +513,21 @@ GameServer (orchestrator) — server/src/game/GameServer.js
   - `"region+radius"`: both conditions (AND)
 - Pre-computed caches per broadcast tick: worldDataCache + cellCache
 
-### Input flow
-- Client detects input change (compare with last sent) → `NetworkManager.sendInput({up,down,left,right})`
-- Server validates (seq-based dedup, all 4 flags boolean) → `PlayerInputState.apply()`
-- MovementSystem reads input each tick → computes movement → CollisionSystem validates
+### Input queue processing
+- Client sends input every frame at 60 TPS (`NetworkManager.sendInput` with incrementing seq).
+- Server validates (seq-based dedup) → `PlayerInputState.enqueue(seq, input)` — queues for later processing.
+- `MovementSystem.update()` drains the queue per player, processes each input with `CLIENT_SIM_TICK_MS` (16.67ms) via `_processOneInput()`.
+- If queue is empty (network hiccup), falls back to last known input with server `dt`.
+- `player.lastProcessedSeq` updated after queue drain (not on receive) — ensures snapshot reflects actually processed inputs.
+- This eliminates prediction mismatch: server processes same inputs with same dt as client predicted. 3 × 16.67ms ≈ 50ms.
+- Queue capped at 120 entries (same as client MAX_PENDING).
+
+### Client prediction & reconciliation
+- Client predicts locally each frame: `Player.predict(dt, input, collides)` — mirrors server `MovementSystem._processOneInput()`.
+- `Player.pushPendingInput(seq, input, dt)` — buffers for reconciliation replay.
+- On snapshot: `Player.reconcile(state, lastProcessedSeq, collides)` — snap to server pos, discard confirmed inputs (seq ≤ lastProcessedSeq), replay pending ones.
+- **Correction smoothing** (safety net): `_renderErrorX/Y` accumulated on reconciliation, decayed 0.5× per render frame, threshold 4px for teleport snap. Used by PlayerView and Camera.
+- Toggled via `DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION` and `DEBUG_FLAGS.NET_ENABLE_RECONCILIATION`.
 
 ### Collision (server)
 - Hitbox-based: checks all tiles covered by player hitbox (not just a point)
@@ -523,8 +538,8 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 
 ### Client networking
 - `NetworkManager` (`src/client/network/`): minimal WebSocket wrapper, callbacks for welcome/snapshot/interact_result
-- `SceneMap` creates NetworkManager, wires callbacks, sends input changes + interact requests
-- Player position comes EXCLUSIVELY from server snapshots (no local movement)
+- `SceneMap` creates NetworkManager, wires callbacks, sends input + interact requests
+- Client predicts locally but server is authoritative — reconciliation corrects any mismatch
 - Non-player entities managed in `remoteEntities` Map (spawn/update/despawn from snapshots)
 
 ## Future systems (not yet implemented)

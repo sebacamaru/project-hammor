@@ -447,7 +447,7 @@
             0,
             0,
             4,
-            4,
+            12,
             0,
             4,
             4,
@@ -148412,8 +148412,8 @@
     {
       "id": "villager_01",
       "prefabId": "npc_villager",
-      "x": 120,
-      "y": 160,
+      "x": 152,
+      "y": 208,
       "components": {
         "dialogue": {
           "tree": "villager_special"
@@ -148445,13 +148445,22 @@
     {
       "id": "sign_01",
       "kind": "object",
-      "x": 184,
-      "y": 224,
+      "x": 152,
+      "y": 240,
       "components": {
         "interaction": {
           "trigger": "action",
           "type": "text",
           "text": "Welcome to the test map!"
+        },
+        "collision": {
+          "solid": true,
+          "hitbox": {
+            "offsetX": -8,
+            "offsetY": -16,
+            "width": 16,
+            "height": 16
+          }
         }
       }
     }
