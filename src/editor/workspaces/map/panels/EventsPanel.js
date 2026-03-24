@@ -63,6 +63,34 @@ export class EventsPanel {
               <input type="number" data-field="hitbox-height">
             </label>
           </fieldset>
+          <fieldset class="inspector-fieldset">
+            <legend>Visual</legend>
+            <label class="inspector-field">
+              <span>Sheet</span>
+              <input type="text" data-field="visual-sheet" placeholder="npc_01">
+            </label>
+            <label class="inspector-field">
+              <span>Frame W</span>
+              <input type="number" data-field="visual-frameWidth">
+            </label>
+            <label class="inspector-field">
+              <span>Frame H</span>
+              <input type="number" data-field="visual-frameHeight">
+            </label>
+            <label class="inspector-field">
+              <span>Direction</span>
+              <select data-field="visual-direction">
+                <option value="down">Down</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="up">Up</option>
+              </select>
+            </label>
+            <label class="inspector-field">
+              <span>Pattern</span>
+              <input type="number" data-field="visual-pattern" min="0">
+            </label>
+          </fieldset>
           <button class="events-delete-btn" data-action="delete-entity">Delete Entity</button>
         </div>
       </div>
@@ -81,6 +109,11 @@ export class EventsPanel {
       hitboxOffsetY: this.el.querySelector('[data-field="hitbox-offsetY"]'),
       hitboxWidth: this.el.querySelector('[data-field="hitbox-width"]'),
       hitboxHeight: this.el.querySelector('[data-field="hitbox-height"]'),
+      visualSheet: this.el.querySelector('[data-field="visual-sheet"]'),
+      visualFrameWidth: this.el.querySelector('[data-field="visual-frameWidth"]'),
+      visualFrameHeight: this.el.querySelector('[data-field="visual-frameHeight"]'),
+      visualDirection: this.el.querySelector('[data-field="visual-direction"]'),
+      visualPattern: this.el.querySelector('[data-field="visual-pattern"]'),
     };
 
     // Add Entity button
@@ -163,6 +196,23 @@ export class EventsPanel {
     if (focused !== this._fields.hitboxHeight || selectionChanged) {
       this._fields.hitboxHeight.value = hitbox.height ?? 0;
     }
+
+    const visual = entity.components?.visual ?? {};
+    if (focused !== this._fields.visualSheet || selectionChanged) {
+      this._fields.visualSheet.value = visual.sheet ?? "";
+    }
+    if (focused !== this._fields.visualFrameWidth || selectionChanged) {
+      this._fields.visualFrameWidth.value = visual.frameWidth ?? 16;
+    }
+    if (focused !== this._fields.visualFrameHeight || selectionChanged) {
+      this._fields.visualFrameHeight.value = visual.frameHeight ?? 16;
+    }
+    if (focused !== this._fields.visualDirection || selectionChanged) {
+      this._fields.visualDirection.value = visual.direction ?? "down";
+    }
+    if (focused !== this._fields.visualPattern || selectionChanged) {
+      this._fields.visualPattern.value = visual.pattern ?? 1;
+    }
   }
 
   /**
@@ -203,6 +253,11 @@ export class EventsPanel {
       return;
     }
 
+    if (field.startsWith("visual-")) {
+      this._applyVisualChange(doc, entity, selectedEntityId);
+      return;
+    }
+
     // Collision fields: rebuild the full components.collision object
     this._applyCollisionChange(doc, entity, selectedEntityId);
   }
@@ -240,6 +295,28 @@ export class EventsPanel {
     };
 
     doc.updateEntity(entityId, { components });
+  }
+
+  /**
+   * Reads all visual fields from the inspector and applies them as a single patch.
+   * Uses spread to preserve existing collision (and other) component data.
+   * @param {import('../document/MapDocument.js').MapDocument} doc
+   * @param {object} entity
+   * @param {string} entityId
+   */
+  _applyVisualChange(doc, entity, entityId) {
+    const sheet = this._fields.visualSheet.value.trim();
+    const frameWidth = Math.max(1, parseInt(this._fields.visualFrameWidth.value, 10) || 16);
+    const frameHeight = Math.max(1, parseInt(this._fields.visualFrameHeight.value, 10) || 16);
+    const direction = this._fields.visualDirection.value;
+    const pattern = Math.max(0, parseInt(this._fields.visualPattern.value, 10) || 0);
+
+    doc.updateEntity(entityId, {
+      components: {
+        ...entity.components,
+        visual: { type: "character", sheet, frameWidth, frameHeight, direction, pattern },
+      },
+    });
   }
 
   /**

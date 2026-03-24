@@ -26,6 +26,8 @@ export class RemoteEntity {
     this.solid = data.solid ?? false;
     /** @type {object|null} Collision hitbox for solid entities ({ offsetX, offsetY, width, height }). */
     this.hitbox = data.hitbox ?? null;
+    /** @type {object|null} Visual component data (type, sheet, frameWidth, frameHeight, direction, pattern) or null. */
+    this.visual = data.visual ?? null;
   }
 
   /**
@@ -39,5 +41,6 @@ export class RemoteEntity {
     this.interactable = data.interactable ?? false;
     this.solid = data.solid ?? false;
     this.hitbox = data.hitbox ?? null;
+    this.visual = data.visual ?? null;
   }
 }

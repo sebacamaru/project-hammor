@@ -49,6 +49,9 @@ export class GameEntity {
       data.solid = true;
       data.hitbox = this.components.collision.hitbox;
     }
+    if (this.components.visual) {
+      data.visual = this.components.visual;
+    }
     return data;
   }
 

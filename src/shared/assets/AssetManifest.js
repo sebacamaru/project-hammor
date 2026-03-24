@@ -9,7 +9,7 @@ export const manifest = {
         },
         {
           alias: "npc_01",
-          src: "/content/sprites/npcs/npc_01.png",
+          src: "/content/sprites/characters/npc_01.png",
         },
         {
           alias: "tileset_world",

@@ -221241,7 +221241,7 @@
       "id": "villager_01",
       "prefabId": "npc_villager",
       "x": 120,
-      "y": 192,
+      "y": 160,
       "components": {
         "dialogue": {
           "tree": "villager_special"
@@ -221259,13 +221259,21 @@
           "trigger": "action",
           "type": "text",
           "text": "Nice weather today."
+        },
+        "visual": {
+          "type": "character",
+          "sheet": "npc_01",
+          "frameWidth": 16,
+          "frameHeight": 16,
+          "direction": "down",
+          "pattern": 1
         }
       }
     },
     {
       "id": "sign_01",
       "kind": "object",
-      "x": 72,
+      "x": 184,
       "y": 224,
       "components": {
         "interaction": {
