@@ -41,9 +41,9 @@ export class PlayerView {
       ix = Math.round(player.prevX + (player.x - player.prevX) * alpha);
       iy = Math.round(player.prevY + (player.y - player.prevY) * alpha);
     } else if (DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION) {
-      // Local player, prediction ON: direct position, no interpolation.
-      ix = Math.round(player.x);
-      iy = Math.round(player.y);
+      // Local player, prediction ON: direct position + correction smoothing.
+      ix = Math.round(player.x + (player._renderErrorX ?? 0));
+      iy = Math.round(player.y + (player._renderErrorY ?? 0));
     } else if (DEBUG_FLAGS.NET_ENABLE_REMOTE_INTERPOLATION) {
       // Local player, prediction OFF + interp ON: interpolate between snapshots
       ix = Math.round(player.prevX + (player.x - player.prevX) * alpha);

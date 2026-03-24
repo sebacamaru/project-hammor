@@ -15,7 +15,7 @@ export const MAX_TILES_Y = 26;
 export const TARGET_FPS = 60;
 
 // --- Tick rates ---
-export const SERVER_TICK_RATE = 60;
+export const SERVER_TICK_RATE = 20;
 export const SERVER_TICK_MS = 1000 / SERVER_TICK_RATE;
 
 export const CLIENT_SIM_TICK_RATE = 60;

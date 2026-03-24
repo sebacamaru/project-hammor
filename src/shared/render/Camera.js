@@ -97,9 +97,9 @@ export class Camera {
     // Position formula must match PlayerView to avoid camera/sprite desync
     let ix, iy;
     if (DEBUG_FLAGS.NET_ENABLE_CLIENT_PREDICTION) {
-      // Prediction ON: direct position, no interpolation
-      ix = Math.round(target.x);
-      iy = Math.round(target.y);
+      // Prediction ON: direct position + correction smoothing
+      ix = Math.round(target.x + (target._renderErrorX ?? 0));
+      iy = Math.round(target.y + (target._renderErrorY ?? 0));
     } else if (DEBUG_FLAGS.NET_ENABLE_REMOTE_INTERPOLATION) {
       // Prediction OFF + interp ON: interpolate between snapshots
       ix = Math.round(target.prevX + (target.x - target.prevX) * alpha);

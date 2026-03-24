@@ -326,10 +326,10 @@ export class GameServer {
         }
 
         // Ignore stale or duplicate inputs
-        if (msg.seq <= player.input.seq) return;
+        if (msg.seq <= player.input.lastSeq) return;
 
-        player.input.apply(msg.seq, msg.input);
-        player.lastProcessedSeq = msg.seq;
+        player.input.enqueue(msg.seq, msg.input);
+        // lastProcessedSeq updated by MovementSystem after processing the queue
         break;
       }
 

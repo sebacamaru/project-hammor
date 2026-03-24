@@ -31,6 +31,10 @@ export class Player extends Entity {
 
     /** Buffer of inputs sent but not yet confirmed by the server. */
     this.pendingInputs = [];
+
+    /** Render error offset for reconciliation smoothing (visual only). */
+    this._renderErrorX = 0;
+    this._renderErrorY = 0;
   }
 
   /**
@@ -109,6 +113,18 @@ export class Player extends Entity {
       this.pendingInputs.shift();
     }
     this.pendingInputs.push({ seq, input, dt });
+  }
+
+  /**
+   * Decays the render error offset each frame for smooth correction blending.
+   * Call once per render frame, before using the position for camera/sprite.
+   */
+  decayRenderError() {
+    const DECAY = 0.5;
+    this._renderErrorX *= DECAY;
+    this._renderErrorY *= DECAY;
+    if (Math.abs(this._renderErrorX) < 0.01) this._renderErrorX = 0;
+    if (Math.abs(this._renderErrorY) < 0.01) this._renderErrorY = 0;
   }
 
   /**
@@ -236,6 +252,9 @@ export class Player extends Entity {
       return;
     }
 
+    const preX = this.x;
+    const preY = this.y;
+
     // 1. Snap to authoritative position
     this.setAuthoritativeState(state);
 
@@ -259,6 +278,16 @@ export class Player extends Entity {
 
     // 4. Sync final result
     this.syncLocalFromWorld();
+
+    // 5. Accumulate render error for visual smoothing
+    this._renderErrorX += preX - this.x;
+    this._renderErrorY += preY - this.y;
+
+    // Large corrections (teleport, first connect) → snap, don't smooth
+    const SMOOTH_THRESHOLD = 4;
+    if (Math.abs(this._renderErrorX) > SMOOTH_THRESHOLD) this._renderErrorX = 0;
+    if (Math.abs(this._renderErrorY) > SMOOTH_THRESHOLD) this._renderErrorY = 0;
+
     this.prevX = this.x;
     this.prevY = this.y;
   }

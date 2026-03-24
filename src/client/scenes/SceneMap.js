@@ -368,6 +368,7 @@ export class SceneMap extends Scene {
   }
 
   render(alpha) {
+    this.player.decayRenderError();
     this.camera.renderUpdate(this.player, alpha);
 
     this.root.x = -this.camera.x;

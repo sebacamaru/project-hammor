@@ -1,4 +1,4 @@
-import { DEFAULT_ENTITY_HITBOX } from "../../../../src/shared/core/Config.js";
+import { CLIENT_SIM_TICK_MS, DEFAULT_ENTITY_HITBOX } from "../../../../src/shared/core/Config.js";
 
 /**
  * Authoritative movement system.
@@ -28,91 +28,117 @@ export class MovementSystem {
   update(players, dt, config, runtimeMaps, collisionSystem, runtimeWorlds = null, serverEntities = null) {
     if (!config?.playerSpeed || dt <= 0) return;
 
-    const speed = config.playerSpeed;
-    const distance = speed * (dt / 1000);
-
     // Cache solid entity rects per mapId to avoid rebuilding for players on the same map
     const solidCache = new Map();
 
     for (const player of players.values()) {
-      const { input } = player;
-      let dx = 0;
-      let dy = 0;
+      const queued = player.input.drain();
 
-      if (input.left) dx -= 1;
-      if (input.right) dx += 1;
-      if (input.up) dy -= 1;
-      if (input.down) dy += 1;
-
-      // No input → stop velocity, keep facing
-      if (dx === 0 && dy === 0) {
-        player.vx = 0;
-        player.vy = 0;
-        continue;
-      }
-
-      // Normalize diagonal so speed stays consistent
-      if (dx !== 0 && dy !== 0) {
-        const len = Math.hypot(dx, dy);
-        dx /= len;
-        dy /= len;
-      }
-
-      // Get the map for this player
-      const map = runtimeMaps.getMap(player.mapId);
-      if (!map) {
-        if (!this.warnedMaps.has(player.mapId)) {
-          console.warn(`[MovementSystem] No map loaded for "${player.mapId}"`);
-          this.warnedMaps.add(player.mapId);
+      if (queued.length > 0) {
+        // Process each queued input individually with the client's dt
+        for (const entry of queued) {
+          this._processOneInput(player, entry.input, CLIENT_SIM_TICK_MS, config, runtimeMaps, collisionSystem, runtimeWorlds, serverEntities, solidCache);
         }
-        player.vx = 0;
-        player.vy = 0;
-        continue;
+        player.lastProcessedSeq = queued[queued.length - 1].seq;
+      } else {
+        // Fallback: no new inputs this tick → use last known input with server dt
+        this._processOneInput(player, player.input, dt, config, runtimeMaps, collisionSystem, runtimeWorlds, serverEntities, solidCache);
       }
+    }
+  }
 
-      // Look up open borders for world-aware collision
-      const openBorders = player.worldId
-        ? runtimeWorlds?.getOpenBorders(player.worldId, player.mapId)
-        : null;
+  /**
+   * Processes a single input step for a player: computes movement, resolves collision per-axis.
+   * @param {ServerPlayer} player
+   * @param {{ up: boolean, down: boolean, left: boolean, right: boolean }} input - Directional flags.
+   * @param {number} dt - Duration for this step in milliseconds.
+   * @param {object} config - Server config (needs playerSpeed).
+   * @param {RuntimeMapManager} runtimeMaps
+   * @param {CollisionSystem} collisionSystem
+   * @param {RuntimeWorldManager|null} runtimeWorlds
+   * @param {ServerEntityManager|null} serverEntities
+   * @param {Map} solidCache - Per-tick solid entity rect cache (mapId → rects[]).
+   */
+  _processOneInput(player, input, dt, config, runtimeMaps, collisionSystem, runtimeWorlds, serverEntities, solidCache) {
+    const speed = config.playerSpeed;
+    const distance = speed * (dt / 1000);
 
-      // Get solid entity rects for this map (cached per tick)
-      if (!solidCache.has(player.mapId)) {
-        solidCache.set(player.mapId, serverEntities ? this._getSolidEntityRects(serverEntities, player.mapId) : []);
+    let dx = 0;
+    let dy = 0;
+
+    if (input.left) dx -= 1;
+    if (input.right) dx += 1;
+    if (input.up) dy -= 1;
+    if (input.down) dy += 1;
+
+    // No input → stop velocity, keep facing
+    if (dx === 0 && dy === 0) {
+      player.vx = 0;
+      player.vy = 0;
+      return;
+    }
+
+    // Normalize diagonal so speed stays consistent
+    if (dx !== 0 && dy !== 0) {
+      const len = Math.hypot(dx, dy);
+      dx /= len;
+      dy /= len;
+    }
+
+    // Get the map for this player
+    const map = runtimeMaps.getMap(player.mapId);
+    if (!map) {
+      if (!this.warnedMaps.has(player.mapId)) {
+        console.warn(`[MovementSystem] No map loaded for "${player.mapId}"`);
+        this.warnedMaps.add(player.mapId);
       }
-      const solidRects = solidCache.get(player.mapId);
+      player.vx = 0;
+      player.vy = 0;
+      return;
+    }
 
-      // Resolve X axis
-      const targetX = player.x + dx * distance;
-      if (collisionSystem.isWalkable(map, targetX, player.y, player.hitbox, openBorders)) {
-        if (!this._collidesWithEntities(targetX, player.y, player.hitbox, solidRects)) {
-          player.x = targetX;
-          player.vx = dx * speed;
-        } else {
-          player.vx = 0;
-        }
+    // Look up open borders for world-aware collision
+    const openBorders = player.worldId
+      ? runtimeWorlds?.getOpenBorders(player.worldId, player.mapId)
+      : null;
+
+    // Get solid entity rects for this map (cached per tick)
+    if (!solidCache.has(player.mapId)) {
+      solidCache.set(player.mapId, serverEntities ? this._getSolidEntityRects(serverEntities, player.mapId) : []);
+    }
+    const solidRects = solidCache.get(player.mapId);
+
+    // Resolve X axis
+    const targetX = player.x + dx * distance;
+    if (collisionSystem.isWalkable(map, targetX, player.y, player.hitbox, openBorders)) {
+      if (!this._collidesWithEntities(targetX, player.y, player.hitbox, solidRects)) {
+        player.x = targetX;
+        player.vx = dx * speed;
       } else {
         player.vx = 0;
       }
+    } else {
+      player.vx = 0;
+    }
 
-      // Resolve Y axis (using updated player.x from above)
-      const targetY = player.y + dy * distance;
-      if (collisionSystem.isWalkable(map, player.x, targetY, player.hitbox, openBorders)) {
-        if (!this._collidesWithEntities(player.x, targetY, player.hitbox, solidRects)) {
-          player.y = targetY;
-          player.vy = dy * speed;
-        } else {
-          player.vy = 0;
-        }
+    // Resolve Y axis (using updated player.x from above)
+    const targetY = player.y + dy * distance;
+    if (collisionSystem.isWalkable(map, player.x, targetY, player.hitbox, openBorders)) {
+      if (!this._collidesWithEntities(player.x, targetY, player.hitbox, solidRects)) {
+        player.y = targetY;
+        player.vy = dy * speed;
       } else {
         player.vy = 0;
       }
+    } else {
+      player.vy = 0;
+    }
 
-      // Facing reflects input intent, not collision result
-      if (Math.abs(dx) > Math.abs(dy)) {
-        player.facing = dx < 0 ? "left" : "right";
-      } else {
-        player.facing = dy < 0 ? "up" : "down";
-      }
+    // Facing reflects input intent, not collision result
+    if (Math.abs(dx) > Math.abs(dy)) {
+      player.facing = dx < 0 ? "left" : "right";
+    } else {
+      player.facing = dy < 0 ? "up" : "down";
     }
   }
 
