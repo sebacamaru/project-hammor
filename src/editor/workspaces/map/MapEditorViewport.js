@@ -151,11 +151,13 @@ export class MapEditorViewport {
       // Place mode: create entity at clicked tile
       if (s.entityPlaceMode && doc) {
         const id = this._generateEntityId(doc.entities);
+        const tileSize = s.map?.tileSize ?? 16;
+        const snapped = snapWorldToFeet(ctx.worldX, ctx.worldY, tileSize);
         const entity = {
           id,
           prefab: "entity",
-          x: ctx.worldX,
-          y: ctx.worldY,
+          x: snapped.x,
+          y: snapped.y,
           components: {
             collision: {
               solid: false,

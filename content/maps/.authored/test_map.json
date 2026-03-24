@@ -221274,7 +221274,7 @@
       "id": "sign_01",
       "kind": "object",
       "x": 152,
-      "y": 240,
+      "y": 224,
       "components": {
         "interaction": {
           "trigger": "action",

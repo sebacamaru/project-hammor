@@ -1,5 +1,4 @@
 import { MapDocument } from "./MapDocument.js";
-import { snapWorldToFeet } from "../../../../shared/core/TileMath.js";
 
 export class MapSerializer {
   /** @param {MapDocument} doc */
@@ -32,15 +31,6 @@ export class MapSerializer {
           (tileId) => MapDocument.toStoredTileId(tileId),
         ),
       })), obj.entities ?? []);
-      // Normalize entity positions to tile grid (safety pass for legacy/hand-edited data)
-      const tileSize = doc.meta.tileSize ?? 16;
-      for (const entity of doc.entities) {
-        if (entity.x != null && entity.y != null) {
-          const { x, y } = snapWorldToFeet(entity.x, entity.y, tileSize);
-          entity.x = x;
-          entity.y = y;
-        }
-      }
 
       doc.markClean();
       return doc;
