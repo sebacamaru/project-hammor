@@ -3538,9 +3538,9 @@
             -1,
             -1,
             -1,
-            -1,
-            -1,
-            -1,
+            0,
+            0,
+            0,
             -1,
             -1,
             -1,
@@ -148412,8 +148412,8 @@
     {
       "id": "villager_01",
       "prefabId": "npc_villager",
-      "x": 152,
-      "y": 208,
+      "x": 264,
+      "y": 176,
       "components": {
         "dialogue": {
           "tree": "villager_special"

@@ -159,8 +159,6 @@
     left: 50%;
     bottom: 90px;
     transform: translateX(-50%);
-    min-width: 240px;
-    height: 100px;
     padding: 8px 12px;
 }
 
@@ -190,7 +188,7 @@
     background: rgba(255, 255, 255, 0.06);
     color: white;
     padding: 14px 20px;
-    border-radius: 10px;
+    border-radius: 4px;
     cursor: pointer;
 }
 

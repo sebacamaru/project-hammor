@@ -32,7 +32,10 @@
       "Bash(git push:*)",
       "Bash(timeout 4 node server/src/index.js)",
       "Bash(netstat -ano)",
-      "Bash(taskkill //PID 18716 //F)"
+      "Bash(taskkill //PID 18716 //F)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(m\\) for m in d.get\\(''''maps'''',[]\\)]\")",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \":*)"
     ]
   }
 }

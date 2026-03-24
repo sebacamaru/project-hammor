@@ -105,10 +105,10 @@ export class MapEditorApp {
     // Mode tabs in shell topbar
     if (editor?.modesEl) {
       this.modesPanel = new WorkspaceModesPanel(editor.modesEl, this.state, [
-        { id: "terrain",    label: "Terrain"    },
+        { id: "terrain", label: "Terrain" },
         { id: "collisions", label: "Collisions" },
-        { id: "events",     label: "Events"     },
-        { id: "lights",     label: "Lights"     },
+        { id: "events", label: "Events" },
+        { id: "lights", label: "Lights" },
       ]);
     }
 
@@ -117,26 +117,22 @@ export class MapEditorApp {
     this.layers = new LayersPanel(this.layout.rightPanelEl, this.state);
     this.tools = new ToolsPanel(this.layout.toolsEl, this.state);
     this.status = new StatusBarPanel(this.layout.statusBarEl, this.state);
-    this.eventsPanel = new EventsPanel(this.layout.eventsPanelEl, this.state, () => this.document);
+    this.eventsPanel = new EventsPanel(
+      this.layout.eventsPanelEl,
+      this.state,
+      () => this.document,
+    );
 
     // Mode-based panel visibility
-    this._terrainEls = [
-      this.layout.leftPanelEl,
-      this.layout.rightPanelEl,
-      this.layout.toolsEl,
-    ];
-    this._collisionEls = [
-      this.layout.toolsEl,
-    ];
-    this._eventsEls = [
-      this.layout.eventsPanelEl,
-    ];
+    this._terrainEls = [this.layout.leftPanelEl, this.layout.rightPanelEl];
+    this._eventsEls = [this.layout.eventsPanelEl];
     this.state.subscribe((s) => {
       const terrain = s.mode === "terrain";
       const collisions = s.mode === "collisions";
       const events = s.mode === "events";
-      for (const el of this._terrainEls) el.style.display = terrain ? "" : "none";
-      for (const el of this._collisionEls) el.style.display = collisions ? "" : "none";
+      for (const el of this._terrainEls)
+        el.style.display = terrain ? "" : "none";
+      this.layout.toolsEl.style.display = terrain || collisions ? "" : "none";
       for (const el of this._eventsEls) el.style.display = events ? "" : "none";
     });
 
@@ -170,7 +166,12 @@ export class MapEditorApp {
 
       if (s.mode !== "events") {
         if (s.selectedEntityId != null || s.entityPlaceMode) {
-          queueMicrotask(() => this.state.patch({ selectedEntityId: null, entityPlaceMode: false }));
+          queueMicrotask(() =>
+            this.state.patch({
+              selectedEntityId: null,
+              entityPlaceMode: false,
+            }),
+          );
         }
       }
     });
@@ -248,7 +249,12 @@ export class MapEditorApp {
     if (this.state.get().mode === "events" && this.input.pressed("Delete")) {
       const tag = document.activeElement?.tagName?.toLowerCase();
       const isEditable = document.activeElement?.isContentEditable;
-      if (tag !== "input" && tag !== "textarea" && tag !== "select" && !isEditable) {
+      if (
+        tag !== "input" &&
+        tag !== "textarea" &&
+        tag !== "select" &&
+        !isEditable
+      ) {
         const { selectedEntityId } = this.state.get();
         if (selectedEntityId && this.document) {
           const removed = this.document.removeEntity(selectedEntityId);
