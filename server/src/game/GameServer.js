@@ -19,9 +19,7 @@ import { GameEntity } from "./entities/GameEntity.js";
 import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
 import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ, DEBUG_SEND_ENTITY_HITBOXES, TILE_SIZE, DEFAULT_ENTITY_HITBOX } from "../../../src/shared/core/Config.js";
 import { resolveInteractionResult } from "./interactions/resolveInteractionResult.js";
-import { applyInteractionCommands, DIR_DELTAS } from "./interactions/applyInteractionCommands.js";
-
-const SCRIPTED_STEP_TICKS = 3; // one step every 3 ticks = 150ms at 20 TPS
+import { applyInteractionCommands, DIR_DELTAS, DEFAULT_SCRIPTED_STEP_TICKS } from "./interactions/applyInteractionCommands.js";
 
 /**
  * Central game server orchestrator.
@@ -744,7 +742,7 @@ export class GameServer {
         entity.x = nx;
         entity.y = ny;
         sm.queue.shift();
-        sm.nextStepAt = this.tickCount + SCRIPTED_STEP_TICKS;
+        sm.nextStepAt = this.tickCount + sm.stepTicks;
       } else {
         // Blocked — clear queue, stop movement
         entity.scriptedMove = null;

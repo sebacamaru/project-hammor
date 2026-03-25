@@ -255,12 +255,16 @@ export class SceneMap extends Scene {
   update(dt) {
     // Read input first — needed for prediction and network
     const inp = this.engine.input;
-    const current = {
-      up: inp.held("ArrowUp") || inp.held("KeyW"),
-      down: inp.held("ArrowDown") || inp.held("KeyS"),
-      left: inp.held("ArrowLeft") || inp.held("KeyA"),
-      right: inp.held("ArrowRight") || inp.held("KeyD"),
-    };
+    const eventLock = this.eventRunner.isRunning();
+
+    const current = eventLock
+      ? { up: false, down: false, left: false, right: false }
+      : {
+          up: inp.held("ArrowUp") || inp.held("KeyW"),
+          down: inp.held("ArrowDown") || inp.held("KeyS"),
+          left: inp.held("ArrowLeft") || inp.held("KeyA"),
+          right: inp.held("ArrowRight") || inp.held("KeyD"),
+        };
 
     // Lifecycle: save prev positions for interpolation
     this.player.update(dt);
@@ -274,8 +278,8 @@ export class SceneMap extends Scene {
       this.player.syncLocalFromWorld();
     }
 
-    // Interaction: action key
-    if (inp.pressed("KeyE")) {
+    // Interaction: action key (blocked during events)
+    if (inp.pressed("KeyE") && !eventLock) {
       this._tryInteract();
     }
 

@@ -9182,7 +9182,13 @@
         "interaction": {
           "trigger": "action",
           "commands": [
-            { "type": "moveEntity", "target": "villager_01", "dir": "up", "steps": 2 }
+            {
+              "type": "moveEntity",
+              "target": "villager_01",
+              "dir": "up",
+              "steps": 2,
+              "speed": 10
+            }
           ]
         },
         "visual": {

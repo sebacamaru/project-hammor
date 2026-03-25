@@ -10,6 +10,23 @@ export const DIR_DELTAS = {
 
 const MAX_STEPS = 8;
 
+export const DEFAULT_SCRIPTED_STEP_TICKS = 3;
+
+/**
+ * Resolves the step interval (ticks per tile) for a moveEntity command.
+ * Fallback chain: cmd.speed → entity.components.movement.speed → global default.
+ * Clamped to 1..10.
+ * @param {object} cmd - The moveEntity command.
+ * @param {import("../entities/GameEntity.js").GameEntity} entity - Target entity.
+ * @returns {number}
+ */
+export function resolveStepTicks(cmd, entity) {
+  let stepTicks = cmd.speed;
+  if (!Number.isFinite(stepTicks)) stepTicks = entity.components?.movement?.speed;
+  if (!Number.isFinite(stepTicks)) stepTicks = DEFAULT_SCRIPTED_STEP_TICKS;
+  return Math.max(1, Math.min(10, Math.floor(stepTicks)));
+}
+
 /**
  * Applies world-affecting interaction commands on the server before returning
  * the interaction result to the client. Non-world-affecting commands (message,
@@ -70,7 +87,7 @@ export function applyInteractionCommands(commands, { findEntityByAuthoredId, log
         // Enqueue steps (replaces any existing queue)
         const queue = [];
         for (let i = 0; i < steps; i++) queue.push({ dir: cmd.dir });
-        entity.scriptedMove = { queue, nextStepAt: 0 };
+        entity.scriptedMove = { queue, nextStepAt: 0, stepTicks: resolveStepTicks(cmd, entity) };
         break;
       }
 

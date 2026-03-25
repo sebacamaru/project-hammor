@@ -1,6 +1,6 @@
 const SNAP_THRESHOLD = 64;
 const SNAP_EPSILON = 0.5;
-const LERP_FACTOR = 0.2;
+const LERP_FACTOR = 0.03;
 
 /**
  * Client-side data model for a non-player entity received from server snapshots.
@@ -53,7 +53,9 @@ export class RemoteEntity {
     this.visual = data.visual ?? null;
 
     // Snap render position if the correction is very large
-    if (Math.hypot(data.x - this.renderX, data.y - this.renderY) > SNAP_THRESHOLD) {
+    if (
+      Math.hypot(data.x - this.renderX, data.y - this.renderY) > SNAP_THRESHOLD
+    ) {
       this.renderX = data.x;
       this.renderY = data.y;
     }
@@ -80,6 +82,8 @@ export class RemoteEntity {
    * @returns {boolean}
    */
   isMoving() {
-    return Math.hypot(this.x - this.renderX, this.y - this.renderY) >= SNAP_EPSILON;
+    return (
+      Math.hypot(this.x - this.renderX, this.y - this.renderY) >= SNAP_EPSILON
+    );
   }
 }
