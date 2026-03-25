@@ -1,14 +1,14 @@
 /**
  * Client-side interaction presentation layer.
- * Routes interaction results from the server to the appropriate UI.
- * Currently supports "text" interactions via GameMessageBox.
+ * Routes interaction results from the server to the appropriate UI
+ * via EventRunner command sequences.
  */
 export class InteractionPresenter {
   /**
-   * @param {import("../ui/GameMessageBox.js").GameMessageBox} messageBox
+   * @param {import("../events/EventRunner.js").EventRunner} eventRunner
    */
-  constructor(messageBox) {
-    this._messageBox = messageBox;
+  constructor(eventRunner) {
+    this._eventRunner = eventRunner;
   }
 
   /**
@@ -26,7 +26,9 @@ export class InteractionPresenter {
 
     switch (result.interactionType) {
       case "text":
-        await this._messageBox.show({ text: result.text });
+        await this._eventRunner.run([
+          { type: "message", text: result.text, speaker: result.speaker ?? null },
+        ]);
         break;
       default:
         console.warn(`[InteractionPresenter] Unsupported type: "${result.interactionType}"`);

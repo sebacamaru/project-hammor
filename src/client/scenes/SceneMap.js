@@ -18,6 +18,7 @@ import { NetworkManager } from "../network/NetworkManager.js";
 import { RemoteEntity } from "../game/RemoteEntity.js";
 import { RemoteEntityView } from "../game/RemoteEntityView.js";
 import { GameMessageBox } from "../ui/GameMessageBox.js";
+import { EventRunner } from "../events/EventRunner.js";
 import { InteractionPresenter } from "../interactions/InteractionPresenter.js";
 
 export class SceneMap extends Scene {
@@ -127,7 +128,8 @@ export class SceneMap extends Scene {
     // Interaction state
     this._lastInteractTime = 0;
     this.messageBox = new GameMessageBox(engine.gameUIRoot.getRoot());
-    this.interactionPresenter = new InteractionPresenter(this.messageBox);
+    this.eventRunner = new EventRunner(this.messageBox);
+    this.interactionPresenter = new InteractionPresenter(this.eventRunner);
 
     // Player — updated manually, not through EntityManager
     // Spawn in world space: local tile coords + region world offset

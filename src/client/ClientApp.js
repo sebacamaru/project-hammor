@@ -53,6 +53,18 @@ export class ClientApp {
           console.log(`Chunk debug: ${overlay.enabled ? "on" : "off"}`);
         }
       };
+      window.testEventRunner = () => {
+        const scene = this.scenes.current;
+        if (!scene?.eventRunner) {
+          console.warn("[testEventRunner] No current scene with eventRunner");
+          return;
+        }
+        void scene.eventRunner.run([
+          { type: "message", text: "One" },
+          { type: "wait", ms: 300 },
+          { type: "message", text: "Two" },
+        ]);
+      };
     }
   }
 
