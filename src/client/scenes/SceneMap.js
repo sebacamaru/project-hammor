@@ -225,10 +225,11 @@ export class SceneMap extends Scene {
           const view = new RemoteEntityView(this.entityLayer, e.kind, !!e.visual);
           entry = { entity, view };
           this.remoteEntities.set(e.id, entry);
+          // Initial sync so the view isn't at (0,0) for one frame
+          view.updateFromEntity(entity);
         }
 
         entry.entity.applySnapshot(e);
-        entry.view.updateFromEntity(entry.entity);
       }
 
       // Remove entities no longer in snapshot
@@ -393,6 +394,13 @@ export class SceneMap extends Scene {
       player.updateRemoteInterpolation(now);
       view.updateFromEntity(player, alpha);
     }
+
+    // Interpolate and sync remote entity views
+    for (const { entity, view } of this.remoteEntities.values()) {
+      entity.updateRenderPosition();
+      view.updateFromEntity(entity);
+    }
+
     this.hitboxDebug.render(this.player, this._debugEntityHitboxes);
   }
 

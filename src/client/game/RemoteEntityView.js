@@ -14,7 +14,7 @@ const KIND_COLORS = {
 const DEFAULT_COLOR = 0xcc00cc; // magenta
 
 /**
- * Maps direction string to the idle animation key in PLAYER_ANIMATIONS.
+ * Maps direction string to idle/walk animation keys in PLAYER_ANIMATIONS.
  * Entity sheets share the same row layout as the player sheet.
  */
 const _IDLE_ANIM = {
@@ -22,6 +22,13 @@ const _IDLE_ANIM = {
   left:  "idle_left",
   right: "idle_right",
   up:    "idle_up",
+};
+
+const _WALK_ANIM = {
+  down:  "walk_down",
+  left:  "walk_left",
+  right: "walk_right",
+  up:    "walk_up",
 };
 
 /**
@@ -44,11 +51,13 @@ const _FRAME_CACHE = new Map();
  * Renders a real character sprite when `entity.visual` data is present,
  * or falls back to a kind-based colored 16×16 placeholder otherwise.
  * Position follows the feet convention (same offset as PlayerView).
+ * Supports walk/idle animation switching based on entity.isMoving().
  */
 export class RemoteEntityView {
   /**
    * @param {import("pixi.js").Container} parentContainer - The entity layer to add this view to.
    * @param {string} kind - Entity kind for placeholder color selection.
+   * @param {boolean} hasVisual - Whether entity has visual data.
    */
   constructor(parentContainer, kind, hasVisual) {
     /** @type {import("pixi.js").Container} */
@@ -64,7 +73,7 @@ export class RemoteEntityView {
     /** @type {string|null} The slice key of the sheet currently loaded (sheet|fw|fh). */
     this._loadedKey = null;
 
-    /** @type {string|null} The idle animation key currently playing (e.g. "idle_down"). */
+    /** @type {string|null} The animation key currently playing (e.g. "idle_down", "walk_left"). */
     this._currentAnim = null;
 
     /** @type {number} Incremented on each _loadSprite() call — stale async loads abort. */
@@ -75,20 +84,21 @@ export class RemoteEntityView {
   }
 
   /**
-   * Updates the view position from entity world-space coordinates.
-   * Triggers a sprite load when visual data is present and the sheet/size has changed.
-   * Applies a texture-only update when only direction/pattern changed.
+   * Updates the view position and animation from entity state.
+   * Uses entity.renderX/renderY for smooth positioning.
+   * Switches between walk/idle animation based on entity.isMoving().
+   * Triggers sprite load when visual data is present and sheet/size changed.
    * @param {import('./RemoteEntity.js').RemoteEntity} entity
    */
   updateFromEntity(entity) {
-    const ex = Math.round(entity.x);
-    const ey = Math.round(entity.y);
+    const rx = Math.round(entity.renderX);
+    const ry = Math.round(entity.renderY);
 
     // Keep rect in sync (fallback while sprite loads)
     if (this._rect) {
-      this._rect.x = ex - 8;
-      this._rect.y = ey - 16;
-      this._rect.zIndex = ey;
+      this._rect.x = rx - 8;
+      this._rect.y = ry - 16;
+      this._rect.zIndex = ry;
     }
 
     const v = entity.visual;
@@ -96,17 +106,22 @@ export class RemoteEntityView {
       const key = _sliceKey(v);
       if (key !== this._loadedKey) {
         // Sheet or frame size changed — full async reload
-        this._loadSprite(v, entity.x, entity.y);
+        this._loadSprite(v, entity.renderX, entity.renderY);
       } else if (this._sprite) {
-        // Sheet same — update animation if direction changed
-        this._playIdle(v.direction ?? "down");
+        // Sheet same — update animation based on movement state
+        const dir = v.direction ?? "down";
+        if (entity.isMoving()) {
+          this._playWalk(dir);
+        } else {
+          this._playIdle(dir);
+        }
       }
     }
 
     if (this._sprite) {
       const fw = v?.frameWidth ?? 16;
       const fh = v?.frameHeight ?? 16;
-      this._positionSprite(this._sprite, entity.x, entity.y, fw, fh);
+      this._positionSprite(this._sprite, entity.renderX, entity.renderY, fw, fh);
     }
   }
 
@@ -152,6 +167,8 @@ export class RemoteEntityView {
    * an AnimatedSprite playing the idle animation for the given direction.
    * Race guard: any load superseded by a newer call is silently abandoned.
    * @param {object} visual - Visual component data.
+   * @param {number} spawnX - Initial render X for positioning.
+   * @param {number} spawnY - Initial render Y for positioning.
    */
   async _loadSprite(visual, spawnX, spawnY) {
     const version = ++this._loadVersion;
@@ -198,15 +215,31 @@ export class RemoteEntityView {
   }
 
   /**
-   * Switches the AnimatedSprite to the idle animation for the given direction.
-   * No-ops if the direction hasn't changed.
+   * Switches to the idle animation for the given direction.
    * @param {string} direction - "down" | "left" | "right" | "up"
    */
   _playIdle(direction) {
-    const animKey = _IDLE_ANIM[direction] ?? "idle_down";
+    this._playAnim(_IDLE_ANIM[direction] ?? "idle_down");
+  }
+
+  /**
+   * Switches to the walk animation for the given direction.
+   * @param {string} direction - "down" | "left" | "right" | "up"
+   */
+  _playWalk(direction) {
+    this._playAnim(_WALK_ANIM[direction] ?? "walk_down");
+  }
+
+  /**
+   * Switches the AnimatedSprite to the given animation key.
+   * No-ops if the animation is already playing.
+   * @param {string} animKey - Animation key (e.g. "idle_down", "walk_left").
+   */
+  _playAnim(animKey) {
     if (this._currentAnim === animKey) return;
 
     const config = PLAYER_ANIMATIONS[animKey];
+    if (!config) return;
     const frames = _FRAME_CACHE.get(this._loadedKey);
     const textures = frames?.[config.row];
     if (!textures?.length) return;

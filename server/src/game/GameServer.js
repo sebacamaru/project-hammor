@@ -17,9 +17,11 @@ import { PrefabRegistry } from "../runtime/PrefabRegistry.js";
 import { ServerEntityManager } from "../runtime/ServerEntityManager.js";
 import { GameEntity } from "./entities/GameEntity.js";
 import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
-import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ, DEBUG_SEND_ENTITY_HITBOXES } from "../../../src/shared/core/Config.js";
+import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ, DEBUG_SEND_ENTITY_HITBOXES, TILE_SIZE, DEFAULT_ENTITY_HITBOX } from "../../../src/shared/core/Config.js";
 import { resolveInteractionResult } from "./interactions/resolveInteractionResult.js";
-import { applyInteractionCommands } from "./interactions/applyInteractionCommands.js";
+import { applyInteractionCommands, DIR_DELTAS } from "./interactions/applyInteractionCommands.js";
+
+const SCRIPTED_STEP_TICKS = 3; // one step every 3 ticks = 150ms at 20 TPS
 
 /**
  * Central game server orchestrator.
@@ -224,6 +226,9 @@ export class GameServer {
 
     // Check for map border crossings after movement
     this.mapTransitionSystem.update(this.players, this.runtimeMaps, this.runtimeWorlds);
+
+    // Process queued scripted entity movement (one step per interval)
+    this._processScriptedMovement();
 
     if (this.tickCount % this.config.snapshotInterval === 0) {
       this.broadcastSnapshots();
@@ -558,8 +563,6 @@ export class GameServer {
     // Apply authoritative world mutations before returning result
     applyInteractionCommands(resolved.commands, {
       findEntityByAuthoredId: (authoredId) => this.entities.getByAuthoredId(player.mapId, authoredId),
-      getMap: (mapId) => this.runtimeMaps.getMap(mapId),
-      collisionSystem: this.collisionSystem,
       logTag: `${tag} [interact]`,
     });
 
@@ -711,5 +714,47 @@ export class GameServer {
     }
 
     return data;
+  }
+
+  /**
+   * Processes queued scripted movement for all entities, one step per interval.
+   * Advances entities tile-by-tile using tile collision checks.
+   * Clears the queue on block or exhaustion.
+   * @private
+   */
+  _processScriptedMovement() {
+    for (const entity of this.entities.getAll()) {
+      const sm = entity.scriptedMove;
+      if (!sm || sm.queue.length === 0) continue;
+      if (this.tickCount < sm.nextStepAt) continue;
+
+      const step = sm.queue[0];
+      const delta = DIR_DELTAS[step.dir];
+      const map = this.runtimeMaps.getMap(entity.mapId);
+      if (!map) {
+        entity.scriptedMove = null;
+        continue;
+      }
+
+      const hitbox = entity.components?.collision?.hitbox ?? DEFAULT_ENTITY_HITBOX;
+      const nx = entity.x + delta.dx * TILE_SIZE;
+      const ny = entity.y + delta.dy * TILE_SIZE;
+
+      if (this.collisionSystem.isWalkable(map, nx, ny, hitbox)) {
+        entity.x = nx;
+        entity.y = ny;
+        sm.queue.shift();
+        sm.nextStepAt = this.tickCount + SCRIPTED_STEP_TICKS;
+      } else {
+        // Blocked — clear queue, stop movement
+        entity.scriptedMove = null;
+        continue;
+      }
+
+      // Queue exhausted
+      if (sm.queue.length === 0) {
+        entity.scriptedMove = null;
+      }
+    }
   }
 }

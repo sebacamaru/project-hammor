@@ -23,6 +23,8 @@ export class GameEntity {
     this.y = y;
     this.params = params;
     this.components = components;
+    /** @type {{ queue: { dir: string }[], nextStepAt: number }|null} Runtime scripted movement state. */
+    this.scriptedMove = null;
   }
 
   /**
