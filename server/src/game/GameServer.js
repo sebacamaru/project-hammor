@@ -18,6 +18,7 @@ import { ServerEntityManager } from "../runtime/ServerEntityManager.js";
 import { GameEntity } from "./entities/GameEntity.js";
 import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
 import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ, DEBUG_SEND_ENTITY_HITBOXES } from "../../../src/shared/core/Config.js";
+import { resolveInteractionResult } from "./interactions/resolveInteractionResult.js";
 
 /**
  * Central game server orchestrator.
@@ -546,21 +547,19 @@ export class GameServer {
       return null;
     }
 
-    // Resolve by interaction type
-    switch (interaction.type) {
-      case "text":
-        console.log(`${tag} [interact] Player ${player.id} → entity "${targetId}" (text)`);
-        return {
-          entityId: entity.runtimeId,
-          authoredId: entity.authoredId,
-          interactionType: "text",
-          text: interaction.text ?? "",
-        };
-
-      default:
-        console.log(`${tag} [interact] Unsupported interaction type "${interaction.type}" on entity "${targetId}"`);
-        return null;
+    // Normalize interaction to event-shaped result
+    const resolved = resolveInteractionResult(interaction);
+    if (!resolved) {
+      console.log(`${tag} [interact] Unsupported interaction on entity "${targetId}"`);
+      return null;
     }
+
+    console.log(`${tag} [interact] Player ${player.id} → entity "${targetId}" (event, ${resolved.commands.length} cmds)`);
+    return {
+      entityId: entity.runtimeId,
+      authoredId: entity.authoredId,
+      ...resolved,
+    };
   }
 
   /**

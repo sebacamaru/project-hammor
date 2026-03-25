@@ -221278,8 +221278,11 @@
       "components": {
         "interaction": {
           "trigger": "action",
-          "type": "text",
-          "text": "Welcome to the test map!"
+          "commands": [
+            { "type": "message", "text": "Welcome to the test map!" },
+            { "type": "wait", "ms": 300 },
+            { "type": "message", "text": "Enjoy your stay." }
+          ]
         },
         "collision": {
           "solid": true,

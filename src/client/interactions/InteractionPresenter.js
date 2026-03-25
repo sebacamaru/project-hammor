@@ -25,9 +25,13 @@ export class InteractionPresenter {
     }
 
     switch (result.interactionType) {
+      case "event":
+        await this._eventRunner.run(result.commands ?? []);
+        break;
       case "text":
+        // Legacy fallback — server no longer sends this, but keep for safety
         await this._eventRunner.run([
-          { type: "message", text: result.text, speaker: result.speaker ?? null },
+          { type: "message", text: result.text ?? "", speaker: result.speaker ?? null },
         ]);
         break;
       default:
