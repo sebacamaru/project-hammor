@@ -65,6 +65,18 @@ export class ClientApp {
           { type: "message", text: "Two" },
         ]);
       };
+      window.testFaceEntity = (authoredId = "villager_01", dir = "up") => {
+        const scene = this.scenes.current;
+        if (!scene?.eventRunner) {
+          console.warn("[testFaceEntity] No current scene with eventRunner");
+          return;
+        }
+        void scene.eventRunner.run([
+          { type: "faceEntity", target: "villager_01", dir: "left" },
+          { type: "wait", ms: 1000 },
+          { type: "message", text: "Hola." },
+        ]);
+      };
     }
   }
 

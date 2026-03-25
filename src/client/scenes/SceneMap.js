@@ -128,7 +128,15 @@ export class SceneMap extends Scene {
     // Interaction state
     this._lastInteractTime = 0;
     this.messageBox = new GameMessageBox(engine.gameUIRoot.getRoot());
-    this.eventRunner = new EventRunner(this.messageBox);
+    this.eventRunner = new EventRunner({
+      messageBox: this.messageBox,
+      findEntity: (authoredId) => {
+        for (const entry of this.remoteEntities.values()) {
+          if (entry.entity.authoredId === authoredId) return entry;
+        }
+        return null;
+      },
+    });
     this.interactionPresenter = new InteractionPresenter(this.eventRunner);
 
     // Player — updated manually, not through EntityManager
