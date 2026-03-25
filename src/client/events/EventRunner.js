@@ -1,19 +1,17 @@
-const VALID_DIRECTIONS = new Set(["down", "left", "right", "up"]);
-
 /**
  * Minimal sequential command runner for scripted interactions and cutscenes.
- * Executes an array of commands in order. Supports "message", "wait", and "faceEntity".
- * Prevents overlapping runs. No cancellation support yet (see Phase 3 caveats).
+ * Executes an array of commands in order. Supports "message" and "wait" locally.
+ * World-affecting commands like "faceEntity" are applied server-side and arrive
+ * via snapshot — the client treats them as no-ops.
+ * Prevents overlapping runs. No cancellation support yet.
  */
 export class EventRunner {
   /**
    * @param {object} deps
    * @param {import("../ui/GameMessageBox.js").GameMessageBox} deps.messageBox
-   * @param {(authoredId: string) => { entity: object, view: object } | null} deps.findEntity
    */
-  constructor({ messageBox, findEntity }) {
+  constructor({ messageBox }) {
     this._messageBox = messageBox;
-    this._findEntity = findEntity;
     this._running = false;
   }
 
@@ -67,24 +65,9 @@ export class EventRunner {
       case "wait":
         await new Promise(resolve => setTimeout(resolve, Math.max(0, cmd.ms ?? 0)));
         break;
-      case "faceEntity": {
-        if (!VALID_DIRECTIONS.has(cmd.dir)) {
-          console.warn(`[EventRunner] Invalid direction: "${cmd.dir}"`, cmd);
-          break;
-        }
-        const entry = this._findEntity(cmd.target);
-        if (!entry) {
-          console.warn(`[EventRunner] Entity not found: "${cmd.target}"`, cmd);
-          break;
-        }
-        if (!entry.entity?.visual || !entry.view) {
-          console.warn(`[EventRunner] Entity has no visual component: "${cmd.target}"`, cmd);
-          break;
-        }
-        entry.entity.visual.direction = cmd.dir;
-        entry.view.updateFromEntity(entry.entity);
+      case "faceEntity":
+        // Server-authoritative — applied on server, arrives via snapshot
         break;
-      }
       default:
         console.warn(`[EventRunner] Unknown command type: "${cmd.type}"`, cmd);
     }

@@ -19,6 +19,7 @@ import { GameEntity } from "./entities/GameEntity.js";
 import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
 import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ, DEBUG_SEND_ENTITY_HITBOXES } from "../../../src/shared/core/Config.js";
 import { resolveInteractionResult } from "./interactions/resolveInteractionResult.js";
+import { applyInteractionCommands } from "./interactions/applyInteractionCommands.js";
 
 /**
  * Central game server orchestrator.
@@ -553,6 +554,12 @@ export class GameServer {
       console.log(`${tag} [interact] Unsupported interaction on entity "${targetId}"`);
       return null;
     }
+
+    // Apply authoritative world mutations before returning result
+    applyInteractionCommands(resolved.commands, {
+      findEntityByAuthoredId: (authoredId) => this.entities.getByAuthoredId(player.mapId, authoredId),
+      logTag: `${tag} [interact]`,
+    });
 
     console.log(`${tag} [interact] Player ${player.id} → entity "${targetId}" (event, ${resolved.commands.length} cmds)`);
     return {
