@@ -1,0 +1,64 @@
+/* Game UI root — sits above canvas, passes mouse through by default */
+.game-ui-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Message box container — hidden by default, anchors box to bottom-center */
+.game-message-box-container {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 48px;
+}
+
+.game-message-box-container.is-open {
+  display: flex;
+}
+
+/* Message box card */
+.game-message-box {
+  max-width: 480px;
+  width: 90%;
+  padding: 14px 18px;
+  background: rgba(0, 0, 0, 0.82);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Speaker label (hidden when empty) */
+.game-message-box-speaker {
+  font-weight: bold;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Text content */
+.game-message-box-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 1.5em;
+}
+
+/* Dismiss hint — hidden until typewriter finishes */
+.game-message-box-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: right;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.game-message-box-hint.is-visible {
+  opacity: 1;
+}

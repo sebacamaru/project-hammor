@@ -53,6 +53,8 @@ ClientApp (orchestrator) — src/client/ClientApp.js
 ├── Input           — shared/input/ — polling-based keyboard state
 ├── SceneManager    — shared/scene/ — scene stack (goto/push/pop)
 ├── GameLoop        — shared/core/ — fixed timestep + RAF
+├── GameUIRoot      — client/ui/ — DOM overlay root above canvas
+│   └── GameMessageBox — client/ui/ — promise-based message box (keyboard dismiss)
 └── DebugOverlay    — shared/render/ — FPS/stats (Escape to toggle)
 ```
 
@@ -107,8 +109,8 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - **Protocol**: `INTERACT` (client→server: targetId), `INTERACT_RESULT` (server→client: entityId, authoredId, interactionType, text).
 - **Server validation**: entity exists, map/world context relevant (`_isEntityRelevantToPlayer`), interaction component with trigger "action", range check (feet-to-feet ≤ `INTERACTION_RANGE` = 32px).
 - **Server resolver**: switch on `interaction.type` — currently only "text" supported.
-- **Client**: KeyE polls → 200ms cooldown → `_findNearestInteractable()` (feet distance) → send interact → receive result → `InteractionTextOverlay.show(text)`.
-- **InteractionTextOverlay**: screen-space PixiJS Text, bottom-center, auto-hides 3s, replaces on each show, E dismisses.
+- **Client**: KeyE polls → 200ms cooldown → `_findNearestInteractable()` (feet distance) → send interact → receive result → `GameMessageBox.show({ text })`.
+- **GameMessageBox**: DOM-based message box (above canvas), bottom-center, promise-based (waits for player dismiss via E/Enter/Space), 120ms key guard prevents same-press dismiss.
 
 ### Coordinate convention ("feet")
 - **`player.x, player.y` = feet = center-bottom of sprite** (not top-left).
@@ -179,8 +181,12 @@ src/
 │   ├── render/
 │   │   ├── ChunkDebugOverlay.js    Tile grid + chunk boundary debug lines
 │   │   ├── HitboxDebugOverlay.js   Player hitbox (cyan) + entity hitboxes (red) debug overlay
-│   │   ├── TileLayerDebugOverlay.js  Collision layer debug highlight
-│   │   └── InteractionTextOverlay.js  Screen-space interaction text (auto-hide, bottom-center)
+│   │   └── TileLayerDebugOverlay.js  Collision layer debug highlight
+│   ├── ui/
+│   │   ├── GameUIRoot.js           DOM overlay root (above canvas, pointer-events none)
+│   │   ├── GameMessageBox.js       DOM message box (promise-based, keyboard dismiss)
+│   │   └── styles/
+│   │       └── game-ui.css         Game UI overlay styles
 │   └── scenes/
 │       └── SceneMap.js       Main gameplay scene (world streaming, multi-region)
 ├── editor/

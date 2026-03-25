@@ -461,7 +461,7 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - **Protocol**: client sends `{ type: "interact", targetId }`, server responds `{ type: "interact_result", entityId, authoredId, interactionType, text }`
 - **Server validation**: `_resolveInteraction()` checks entity exists, `_isEntityRelevantToPlayer()` (same AOI as snapshots), interaction component, feet-to-feet range ≤ INTERACTION_RANGE
 - **Server resolver**: `switch (interaction.type)` — currently "text" only, extensible
-- **Client**: KeyE → 200ms cooldown → `_findNearestInteractable()` (feet distance) → send → `InteractionTextOverlay.show()` (auto-hide 3s)
+- **Client**: KeyE → 200ms cooldown → `_findNearestInteractable()` (feet distance) → send → `GameMessageBox.show({ text })` (promise-based, dismiss via E/Enter/Space)
 
 ## Future systems
 - **Dialogue trees**: branching conversation system

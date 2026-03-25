@@ -17,7 +17,7 @@ import { makeRegionKey, worldToRegion, regionToWorldOffset } from "../../shared/
 import { NetworkManager } from "../network/NetworkManager.js";
 import { RemoteEntity } from "../game/RemoteEntity.js";
 import { RemoteEntityView } from "../game/RemoteEntityView.js";
-import { InteractionTextOverlay } from "../render/InteractionTextOverlay.js";
+import { GameMessageBox } from "../ui/GameMessageBox.js";
 
 export class SceneMap extends Scene {
   constructor(gameStart = {}) {
@@ -125,7 +125,7 @@ export class SceneMap extends Scene {
 
     // Interaction state
     this._lastInteractTime = 0;
-    this.interactionOverlay = new InteractionTextOverlay(engine.renderer.stage, this.viewport);
+    this.messageBox = new GameMessageBox(engine.gameUIRoot.getRoot());
 
     // Player — updated manually, not through EntityManager
     // Spawn in world space: local tile coords + region world offset
@@ -241,7 +241,7 @@ export class SceneMap extends Scene {
 
     this.network.onInteractResult = (msg) => {
       console.log(`[Interact] ${msg.entityId} (${msg.authoredId}): ${msg.text}`);
-      this.interactionOverlay.show(msg.text);
+      void this.messageBox.show({ text: msg.text });
     };
 
     this.network.connect();
@@ -273,7 +273,6 @@ export class SceneMap extends Scene {
     if (inp.pressed("KeyE")) {
       this._tryInteract();
     }
-    this.interactionOverlay.update();
 
     this.entityManager.updateAll(dt, this.engine.input);
 
@@ -414,7 +413,7 @@ export class SceneMap extends Scene {
       view.destroy();
     }
     this.remoteEntities.clear();
-    this.interactionOverlay.destroy();
+    this.messageBox.destroy();
     this.entityRenderer.destroy();
     this.playerView.destroy();
     this.root.destroy({ children: true });
@@ -425,16 +424,21 @@ export class SceneMap extends Scene {
   /**
    * Attempts to interact with the nearest interactable entity.
    * Enforces a client-side cooldown (200ms) to prevent spam.
-   * If the overlay is visible, dismisses it instead.
+   * If the message box is animating, skips to full text.
+   * If the message box is open (done animating), dismisses it.
    */
   _tryInteract() {
     const now = performance.now();
     if (now - this._lastInteractTime < 200) return;
     this._lastInteractTime = now;
 
-    // Dismiss overlay if already showing
-    if (this.interactionOverlay.isVisible()) {
-      this.interactionOverlay.hide();
+    // Skip animation or dismiss message box if showing
+    if (this.messageBox.isOpen()) {
+      if (this.messageBox.isAnimating()) {
+        this.messageBox.skipAnimation();
+      } else {
+        this.messageBox.dismiss();
+      }
       return;
     }
 

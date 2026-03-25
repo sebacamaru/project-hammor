@@ -7,12 +7,18 @@ import { SceneMap } from "./scenes/SceneMap.js";
 import { DebugOverlay } from "../shared/render/DebugOverlay.js";
 import { ProjectSettings } from "../shared/data/loaders/ProjectSettings.js";
 import { DEBUG_FLAGS } from "../shared/core/Config.js";
+import { GameUIRoot } from "./ui/GameUIRoot.js";
 
 export class ClientApp {
   async start() {
+    const gameEl = document.getElementById("game");
+
     // Init renderer first (creates Pixi app + canvas)
-    this.renderer = new Renderer(document.getElementById("game"));
+    this.renderer = new Renderer(gameEl);
     await this.renderer.init();
+
+    // DOM UI root — sits above canvas for in-game overlays
+    this.gameUIRoot = new GameUIRoot(gameEl);
 
     // Load assets
     await AssetManager.init();
