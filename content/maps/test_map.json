@@ -9182,8 +9182,7 @@
         "interaction": {
           "trigger": "action",
           "commands": [
-            { "type": "faceEntity", "target": "villager_01", "dir": "left" },
-            { "type": "message", "text": "¿Qué mirás?" }
+            { "type": "moveEntity", "target": "villager_01", "dir": "up", "steps": 2 }
           ]
         },
         "visual": {

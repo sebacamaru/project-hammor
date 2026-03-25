@@ -558,6 +558,8 @@ export class GameServer {
     // Apply authoritative world mutations before returning result
     applyInteractionCommands(resolved.commands, {
       findEntityByAuthoredId: (authoredId) => this.entities.getByAuthoredId(player.mapId, authoredId),
+      getMap: (mapId) => this.runtimeMaps.getMap(mapId),
+      collisionSystem: this.collisionSystem,
       logTag: `${tag} [interact]`,
     });
 

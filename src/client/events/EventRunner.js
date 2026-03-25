@@ -66,6 +66,7 @@ export class EventRunner {
         await new Promise(resolve => setTimeout(resolve, Math.max(0, cmd.ms ?? 0)));
         break;
       case "faceEntity":
+      case "moveEntity":
         // Server-authoritative — applied on server, arrives via snapshot
         break;
       default:
