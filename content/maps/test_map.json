@@ -9185,8 +9185,8 @@
             {
               "type": "moveEntity",
               "target": "villager_01",
-              "dir": "up",
-              "steps": 2,
+              "dir": "down",
+              "steps": 3,
               "speed": 10
             }
           ]
