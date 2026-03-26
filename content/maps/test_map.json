@@ -9182,6 +9182,7 @@
         "interaction": {
           "trigger": "action",
           "commands": [
+            { "type": "message", "text": "Mirá." },
             {
               "type": "moveEntity",
               "target": "villager_01",
@@ -9195,7 +9196,9 @@
               "dir": "right",
               "steps": 3,
               "speed": 10
-            }
+            },
+            { "type": "wait", "ms": 300 },
+            { "type": "message", "text": "Ahí." }
           ]
         },
         "visual": {
