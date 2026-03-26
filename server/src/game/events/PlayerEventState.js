@@ -1,3 +1,6 @@
+/** Default input lock applied when a server-driven event starts. */
+export const DEFAULT_EVENT_INPUT_LOCK = { move: false, interact: true };
+
 /**
  * Per-player state for an active server-driven event sequence.
  * Created when an interaction resolves to commands[], cleared when the
@@ -29,5 +32,12 @@ export class PlayerEventState {
 
     /** @type {string|null} runtimeId of entity being moved (for waiting_move). */
     this.moveTargetRuntimeId = null;
+
+    /**
+     * Granular input lock state for this event.
+     * Controls which player inputs are blocked while the event is active.
+     * @type {{ move: boolean, interact: boolean }}
+     */
+    this.inputLock = { ...DEFAULT_EVENT_INPUT_LOCK };
   }
 }

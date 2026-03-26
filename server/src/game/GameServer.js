@@ -20,7 +20,7 @@ import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
 import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ, DEBUG_SEND_ENTITY_HITBOXES, TILE_SIZE, DEFAULT_ENTITY_HITBOX } from "../../../src/shared/core/Config.js";
 import { resolveInteractionResult } from "./interactions/resolveInteractionResult.js";
 import { applyInteractionCommands, applyFaceEntity, applyMoveEntity, DIR_DELTAS, DEFAULT_SCRIPTED_STEP_TICKS } from "./interactions/applyInteractionCommands.js";
-import { PlayerEventState } from "./events/PlayerEventState.js";
+import { PlayerEventState, DEFAULT_EVENT_INPUT_LOCK } from "./events/PlayerEventState.js";
 
 /**
  * Central game server orchestrator.
@@ -587,6 +587,9 @@ export class GameServer {
     player.activeEvent = new PlayerEventState(resolved.commands);
     console.log(`${tag} [interact] Player ${player.id} → entity "${targetId}" (event, ${resolved.commands.length} cmds)`);
 
+    // Notify client of initial (fully locked) input lock state
+    conn.send(createMessage(MSG_TYPES.EVENT_INPUT_LOCK, { ...DEFAULT_EVENT_INPUT_LOCK }));
+
     // Advance immediately to process first command(s) in this tick
     this._advancePlayerEvent(player, conn);
   }
@@ -899,6 +902,17 @@ export class GameServer {
           ev.status = "waiting_ticks";
           ev.index++;
           break; // break switch, while-loop will break on waiting_ticks next iteration
+        }
+
+        case "inputLock": {
+          if (typeof cmd.move === "boolean") ev.inputLock.move = cmd.move;
+          if (typeof cmd.interact === "boolean") ev.inputLock.interact = cmd.interact;
+          conn.send(createMessage(MSG_TYPES.EVENT_INPUT_LOCK, {
+            move: ev.inputLock.move,
+            interact: ev.inputLock.interact,
+          }));
+          ev.index++;
+          continue; // instant — loop again immediately
         }
 
         case "faceEntity": {

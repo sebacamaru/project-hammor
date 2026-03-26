@@ -22,6 +22,8 @@ export class NetworkManager {
     this.onEventMessage = null;
     /** @type {function|null} Called when server-driven event ends. */
     this.onEventEnd = null;
+    /** @type {function|null} Called with granular input lock state during server-driven events. */
+    this.onEventInputLock = null;
   }
 
   /**
@@ -52,6 +54,9 @@ export class NetworkManager {
           break;
         case "event_end":
           this.onEventEnd?.(msg);
+          break;
+        case "event_input_lock":
+          this.onEventInputLock?.(msg);
           break;
       }
     };

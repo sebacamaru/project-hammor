@@ -11851,6 +11851,7 @@
           "trigger": "action",
           "commands": [
             { "type": "message", "text": "Mirá." },
+            { "type": "inputLock", "move": true },
             {
               "type": "moveEntity",
               "target": "villager_01",

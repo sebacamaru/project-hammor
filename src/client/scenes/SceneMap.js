@@ -131,8 +131,8 @@ export class SceneMap extends Scene {
     this.eventRunner = new EventRunner({ messageBox: this.messageBox });
     this.interactionPresenter = new InteractionPresenter(this.eventRunner);
 
-    // Server-driven event state
-    this._serverEventActive = false;
+    // Server-driven event granular input lock (controlled exclusively by EVENT_INPUT_LOCK / EVENT_END)
+    this._serverEventInputLock = { move: false, interact: false };
     this._destroyed = false;
 
     // Player — updated manually, not through EntityManager
@@ -254,7 +254,6 @@ export class SceneMap extends Scene {
     };
 
     this.network.onEventMessage = (msg) => {
-      this._serverEventActive = true;
       this.messageBox.show({ text: msg.text, speaker: msg.speaker ?? null })
         .then(() => {
           if (this._destroyed || !this.network) return;
@@ -262,8 +261,14 @@ export class SceneMap extends Scene {
         });
     };
 
+    this.network.onEventInputLock = (msg) => {
+      if (typeof msg.move === "boolean") this._serverEventInputLock.move = msg.move;
+      if (typeof msg.interact === "boolean") this._serverEventInputLock.interact = msg.interact;
+    };
+
     this.network.onEventEnd = () => {
-      this._serverEventActive = false;
+      this._serverEventInputLock.move = false;
+      this._serverEventInputLock.interact = false;
     };
 
     this.network.connect();
@@ -272,9 +277,11 @@ export class SceneMap extends Scene {
   update(dt) {
     // Read input first — needed for prediction and network
     const inp = this.engine.input;
-    const eventLock = this.eventRunner.isRunning() || this._serverEventActive;
+    const legacyEventLock = this.eventRunner.isRunning();
+    const moveLock = legacyEventLock || this._serverEventInputLock.move;
+    const interactLock = legacyEventLock || this._serverEventInputLock.interact;
 
-    const current = eventLock
+    const current = moveLock
       ? { up: false, down: false, left: false, right: false }
       : {
           up: inp.held("ArrowUp") || inp.held("KeyW"),
@@ -300,7 +307,7 @@ export class SceneMap extends Scene {
       if (this.messageBox.isOpen()) {
         if (this.messageBox.isAnimating()) this.messageBox.skipAnimation();
         else this.messageBox.dismiss();
-      } else if (!eventLock) {
+      } else if (!interactLock) {
         this._tryInteract();
       }
     }

@@ -9,6 +9,7 @@ export const MSG_TYPES = {
   EVENT_MESSAGE: "event_message",
   EVENT_END: "event_end",
   EVENT_ACK: "event_ack",
+  EVENT_INPUT_LOCK: "event_input_lock",
   ERROR: "error",
 };
 
