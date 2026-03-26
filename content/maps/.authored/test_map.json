@@ -11856,6 +11856,13 @@
               "dir": "down",
               "steps": 3,
               "speed": 10
+            },
+            {
+              "type": "moveEntity",
+              "target": "villager_01",
+              "dir": "right",
+              "steps": 3,
+              "speed": 10
             }
           ]
         },

@@ -1,6 +1,6 @@
 const SNAP_THRESHOLD = 64;
 const SNAP_EPSILON = 0.5;
-const LERP_FACTOR = 0.1;
+const LERP_FACTOR = 0.3;
 
 /**
  * Client-side data model for a non-player entity received from server snapshots.

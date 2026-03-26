@@ -715,42 +715,77 @@ export class GameServer {
   }
 
   /**
-   * Processes queued scripted movement for all entities, one step per interval.
-   * Advances entities tile-by-tile using tile collision checks.
-   * Clears the queue on block or exhaustion.
+   * Processes queued scripted movement for all entities with sub-tile smoothing.
+   * Each tile step is spread across stepTicks ticks instead of teleporting instantly.
+   * Collision is checked once per tile at step start; sub-tick movement is linear.
+   * Snaps to exact tile target on each step completion to avoid floating-point drift.
    * @private
    */
   _processScriptedMovement() {
     for (const entity of this.entities.getAll()) {
       const sm = entity.scriptedMove;
-      if (!sm || sm.queue.length === 0) continue;
-      if (this.tickCount < sm.nextStepAt) continue;
+      if (!sm) continue;
 
-      const step = sm.queue[0];
-      const delta = DIR_DELTAS[step.dir];
-      const map = this.runtimeMaps.getMap(entity.mapId);
-      if (!map) {
-        entity.scriptedMove = null;
-        continue;
+      // Phase 1: Continue an active sub-step
+      if (sm.active) {
+        sm.active.ticksLeft--;
+        if (sm.active.ticksLeft <= 0) {
+          // Snap to exact target to avoid float drift (e.g. 16/3 = 5.333...)
+          entity.x = sm.active.targetX;
+          entity.y = sm.active.targetY;
+          sm.active = null;
+        } else {
+          entity.x += sm.active.perTickDx;
+          entity.y += sm.active.perTickDy;
+        }
       }
 
-      const hitbox = entity.components?.collision?.hitbox ?? DEFAULT_ENTITY_HITBOX;
-      const nx = entity.x + delta.dx * TILE_SIZE;
-      const ny = entity.y + delta.dy * TILE_SIZE;
+      // Phase 2: If no active sub-step, start the next queued step
+      if (!sm.active && sm.queue.length > 0) {
+        const step = sm.queue[0];
+        const delta = DIR_DELTAS[step.dir];
+        const map = this.runtimeMaps.getMap(entity.mapId);
+        if (!map) {
+          entity.scriptedMove = null;
+          continue;
+        }
 
-      if (this.collisionSystem.isWalkable(map, nx, ny, hitbox)) {
-        entity.x = nx;
-        entity.y = ny;
-        sm.queue.shift();
-        sm.nextStepAt = this.tickCount + sm.stepTicks;
-      } else {
-        // Blocked — clear queue, stop movement
-        entity.scriptedMove = null;
-        continue;
+        const hitbox = entity.components?.collision?.hitbox ?? DEFAULT_ENTITY_HITBOX;
+        const targetX = entity.x + delta.dx * TILE_SIZE;
+        const targetY = entity.y + delta.dy * TILE_SIZE;
+
+        if (this.collisionSystem.isWalkable(map, targetX, targetY, hitbox)) {
+          sm.queue.shift();
+          // Update facing to match step direction
+          if (entity.components?.visual) {
+            entity.components.visual.direction = step.dir;
+          }
+          if (sm.stepTicks <= 1) {
+            // stepTicks=1: instant move (same as old behavior)
+            entity.x = targetX;
+            entity.y = targetY;
+          } else {
+            sm.active = {
+              perTickDx: (delta.dx * TILE_SIZE) / sm.stepTicks,
+              perTickDy: (delta.dy * TILE_SIZE) / sm.stepTicks,
+              targetX,
+              targetY,
+              ticksLeft: sm.stepTicks,
+            };
+            // Apply first tick of movement immediately (no wasted tick)
+            sm.active.ticksLeft--;
+            entity.x += sm.active.perTickDx;
+            entity.y += sm.active.perTickDy;
+          }
+        } else {
+          // Blocked — abort all movement
+          entity.scriptedMove = null;
+          continue;
+        }
       }
 
-      // Queue exhausted
-      if (sm.queue.length === 0) {
+      // Clear when fully done (no active step, no queue)
+      if (!sm.active && sm.queue.length === 0) {
         entity.scriptedMove = null;
       }
     }

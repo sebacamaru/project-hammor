@@ -79,15 +79,15 @@ export function applyInteractionCommands(commands, { findEntityByAuthoredId, log
           break;
         }
 
-        // Face immediately (visible in next snapshot)
-        if (entity.components?.visual) {
-          entity.components.visual.direction = cmd.dir;
+        // Enqueue steps (append to existing queue so chained moveEntity commands work)
+        // Facing is updated per-step in _processScriptedMovement, not upfront
+        const newSteps = [];
+        for (let i = 0; i < steps; i++) newSteps.push({ dir: cmd.dir });
+        if (entity.scriptedMove) {
+          entity.scriptedMove.queue.push(...newSteps);
+        } else {
+          entity.scriptedMove = { queue: newSteps, stepTicks: resolveStepTicks(cmd, entity), active: null };
         }
-
-        // Enqueue steps (replaces any existing queue)
-        const queue = [];
-        for (let i = 0; i < steps; i++) queue.push({ dir: cmd.dir });
-        entity.scriptedMove = { queue, nextStepAt: 0, stepTicks: resolveStepTicks(cmd, entity) };
         break;
       }
 
