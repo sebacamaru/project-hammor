@@ -19,7 +19,8 @@ import { GameEntity } from "./entities/GameEntity.js";
 import { validateInstance, resolveEntity } from "../runtime/EntityFactory.js";
 import { AOI_MODE, AOI_REGION_RADIUS, AOI_RADIUS_SQ, INTERACTION_RANGE_SQ, DEBUG_SEND_ENTITY_HITBOXES, TILE_SIZE, DEFAULT_ENTITY_HITBOX } from "../../../src/shared/core/Config.js";
 import { resolveInteractionResult } from "./interactions/resolveInteractionResult.js";
-import { applyInteractionCommands, DIR_DELTAS, DEFAULT_SCRIPTED_STEP_TICKS } from "./interactions/applyInteractionCommands.js";
+import { applyInteractionCommands, applyFaceEntity, applyMoveEntity, DIR_DELTAS, DEFAULT_SCRIPTED_STEP_TICKS } from "./interactions/applyInteractionCommands.js";
+import { PlayerEventState } from "./events/PlayerEventState.js";
 
 /**
  * Central game server orchestrator.
@@ -228,6 +229,9 @@ export class GameServer {
     // Process queued scripted entity movement (one step per interval)
     this._processScriptedMovement();
 
+    // Advance server-driven event sequences for all players
+    this._advancePlayerEvents();
+
     if (this.tickCount % this.config.snapshotInterval === 0) {
       this.broadcastSnapshots();
     }
@@ -260,6 +264,9 @@ export class GameServer {
       );
       return;
     }
+
+    const player = this.players.get(session.playerId);
+    if (player) player.activeEvent = null;
 
     this.sessions.remove(session.id);
     this.players.delete(session.playerId);
@@ -338,6 +345,19 @@ export class GameServer {
         break;
       }
 
+      case MSG_TYPES.EVENT_ACK: {
+        const session = this.sessions.getByConnection(conn.id);
+        if (!session) return;
+        const player = this.players.get(session.playerId);
+        if (!player) return;
+        // Only accept ACK when actually waiting for one; ignore stale ACKs
+        if (player.activeEvent && player.activeEvent.status === "waiting_ack") {
+          player.activeEvent.index++;
+          player.activeEvent.status = "ready";
+        }
+        break;
+      }
+
       case MSG_TYPES.INTERACT: {
         const session = this.sessions.getByConnection(conn.id);
         if (!session) return;
@@ -351,10 +371,7 @@ export class GameServer {
         const player = this.players.get(session.playerId);
         if (!player) return;
 
-        const result = this._resolveInteraction(player, msg.targetId);
-        if (result) {
-          conn.send(createMessage(MSG_TYPES.INTERACT_RESULT, result));
-        }
+        this._resolveInteraction(player, msg.targetId, conn);
         break;
       }
 
@@ -514,31 +531,39 @@ export class GameServer {
 
   /**
    * Validates and resolves an interaction attempt between a player and a target entity.
-   * Checks: entity exists, map/world context, interaction component, range.
+   * Checks: entity exists, map/world context, interaction component, range, no active event.
+   * If valid, creates a server-driven event sequence and begins advancing it.
    * @param {ServerPlayer} player
    * @param {string} targetId - Runtime entity id.
-   * @returns {object|null} Interaction result payload, or null if invalid.
+   * @param {import("../network/ClientConnection.js").ClientConnection} conn - Player's connection.
    */
-  _resolveInteraction(player, targetId) {
+  _resolveInteraction(player, targetId, conn) {
     const tag = `[${this.config.serverName}]`;
+
+    // Busy — already running an event for this player
+    if (player.activeEvent) {
+      console.log(`${tag} [interact] Player ${player.id} busy (active event), ignoring interact`);
+      return;
+    }
+
     const entity = this.entities.get(targetId);
 
     if (!entity) {
       console.log(`${tag} [interact] Player ${player.id} → entity "${targetId}" not found`);
-      return null;
+      return;
     }
 
     // Validate interaction component
     const interaction = entity.components.interaction;
     if (!interaction || interaction.trigger !== "action") {
       console.log(`${tag} [interact] Entity "${targetId}" has no action trigger`);
-      return null;
+      return;
     }
 
     // Validate map/world context (same logic as snapshot visibility)
     if (!this._isEntityRelevantToPlayer(player, entity)) {
       console.log(`${tag} [interact] Entity "${targetId}" not relevant to player ${player.id}`);
-      return null;
+      return;
     }
 
     // Distance check (feet-to-feet, world-space)
@@ -548,28 +573,22 @@ export class GameServer {
     const dy = entityWorld.y - playerWorld.y;
     if (dx * dx + dy * dy > INTERACTION_RANGE_SQ) {
       console.log(`${tag} [interact] Entity "${targetId}" out of range for player ${player.id}`);
-      return null;
+      return;
     }
 
     // Normalize interaction to event-shaped result
     const resolved = resolveInteractionResult(interaction);
     if (!resolved) {
       console.log(`${tag} [interact] Unsupported interaction on entity "${targetId}"`);
-      return null;
+      return;
     }
 
-    // Apply authoritative world mutations before returning result
-    applyInteractionCommands(resolved.commands, {
-      findEntityByAuthoredId: (authoredId) => this.entities.getByAuthoredId(player.mapId, authoredId),
-      logTag: `${tag} [interact]`,
-    });
-
+    // Create server-driven event sequence (no batch apply, no INTERACT_RESULT)
+    player.activeEvent = new PlayerEventState(resolved.commands);
     console.log(`${tag} [interact] Player ${player.id} → entity "${targetId}" (event, ${resolved.commands.length} cmds)`);
-    return {
-      entityId: entity.runtimeId,
-      authoredId: entity.authoredId,
-      ...resolved,
-    };
+
+    // Advance immediately to process first command(s) in this tick
+    this._advancePlayerEvent(player, conn);
   }
 
   /**
@@ -788,6 +807,127 @@ export class GameServer {
       if (!sm.active && sm.queue.length === 0) {
         entity.scriptedMove = null;
       }
+    }
+  }
+
+  /**
+   * Resolves the ClientConnection for a player by walking session → connectionId → connection.
+   * @param {string} playerId
+   * @returns {import("../network/ClientConnection.js").ClientConnection|null}
+   */
+  _getConnectionForPlayer(playerId) {
+    for (const session of this.sessions.getAll()) {
+      if (session.playerId === playerId) {
+        return this.network.getConnection(session.connectionId) ?? null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Advances server-driven event sequences for all players that have one.
+   * Called once per tick, after scripted movement processing.
+   * @private
+   */
+  _advancePlayerEvents() {
+    for (const player of this.players.values()) {
+      if (!player.activeEvent) continue;
+      const conn = this._getConnectionForPlayer(player.id);
+      if (!conn) continue;
+      this._advancePlayerEvent(player, conn);
+    }
+  }
+
+  /**
+   * Core event state machine. Processes commands in a loop until blocked or complete.
+   * Instant commands (faceEntity) loop immediately; blocking commands (message, wait, moveEntity)
+   * break out and resume on the next tick or when ACK arrives.
+   * @param {ServerPlayer} player
+   * @param {import("../network/ClientConnection.js").ClientConnection} conn
+   * @private
+   */
+  _advancePlayerEvent(player, conn) {
+    const tag = `[${this.config.serverName}]`;
+    const findEntity = (authoredId) => this.entities.getByAuthoredId(player.mapId, authoredId);
+
+    while (player.activeEvent) {
+      const ev = player.activeEvent;
+
+      // ── Check blocking conditions ──
+      if (ev.status === "waiting_ack") break;
+
+      if (ev.status === "waiting_ticks") {
+        if (this.tickCount >= ev.waitUntilTick) {
+          ev.status = "ready";
+        } else {
+          break;
+        }
+      }
+
+      if (ev.status === "waiting_move") {
+        const target = ev.moveTargetRuntimeId ? this.entities.get(ev.moveTargetRuntimeId) : null;
+        if (!target || !target.scriptedMove) {
+          ev.status = "ready";
+        } else {
+          break;
+        }
+      }
+
+      // ── status === "ready": process next command ──
+      if (ev.index >= ev.commands.length) {
+        conn.send(createMessage(MSG_TYPES.EVENT_END));
+        player.activeEvent = null;
+        break;
+      }
+
+      const cmd = ev.commands[ev.index];
+
+      switch (cmd.type) {
+        case "message": {
+          conn.send(createMessage(MSG_TYPES.EVENT_MESSAGE, {
+            text: cmd.text ?? "",
+            speaker: cmd.speaker ?? null,
+          }));
+          ev.status = "waiting_ack";
+          break; // break switch, while-loop will break on waiting_ack next iteration
+        }
+
+        case "wait": {
+          const ms = Number.isFinite(cmd.ms) ? cmd.ms : 0;
+          const ticks = Math.max(1, Math.ceil(ms / this.config.tickMs));
+          ev.waitUntilTick = this.tickCount + ticks;
+          ev.status = "waiting_ticks";
+          ev.index++;
+          break; // break switch, while-loop will break on waiting_ticks next iteration
+        }
+
+        case "faceEntity": {
+          applyFaceEntity(cmd, findEntity, `${tag} [event]`);
+          ev.index++;
+          continue; // instant — loop again immediately
+        }
+
+        case "moveEntity": {
+          const runtimeId = applyMoveEntity(cmd, findEntity, `${tag} [event]`);
+          if (runtimeId) {
+            ev.moveTargetRuntimeId = runtimeId;
+            ev.status = "waiting_move";
+          }
+          // If runtimeId is null (target missing/invalid), status stays "ready" and we skip
+          ev.index++;
+          if (runtimeId) break; // break switch — waiting_move will break the while-loop
+          continue; // skip failed — loop again
+        }
+
+        default: {
+          // Unknown command type — skip
+          ev.index++;
+          continue;
+        }
+      }
+
+      // After a blocking command (message/wait/moveEntity), break out of the while-loop
+      break;
     }
   }
 }

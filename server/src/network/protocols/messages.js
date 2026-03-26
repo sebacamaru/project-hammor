@@ -6,6 +6,9 @@ export const MSG_TYPES = {
   SNAPSHOT: "snapshot",
   INTERACT: "interact",
   INTERACT_RESULT: "interact_result",
+  EVENT_MESSAGE: "event_message",
+  EVENT_END: "event_end",
+  EVENT_ACK: "event_ack",
   ERROR: "error",
 };
 

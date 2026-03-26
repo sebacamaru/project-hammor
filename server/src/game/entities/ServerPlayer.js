@@ -28,6 +28,8 @@ export class ServerPlayer {
     this.input = new PlayerInputState();
     /** Last input sequence number processed by the server. */
     this.lastProcessedSeq = -1;
+    /** @type {import("../events/PlayerEventState.js").PlayerEventState|null} Active event sequence, or null. */
+    this.activeEvent = null;
   }
 
   /**

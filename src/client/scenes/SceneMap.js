@@ -131,6 +131,10 @@ export class SceneMap extends Scene {
     this.eventRunner = new EventRunner({ messageBox: this.messageBox });
     this.interactionPresenter = new InteractionPresenter(this.eventRunner);
 
+    // Server-driven event state
+    this._serverEventActive = false;
+    this._destroyed = false;
+
     // Player — updated manually, not through EntityManager
     // Spawn in world space: local tile coords + region world offset
     let spawnX = (this.gameStart.x ?? 0) * TILE_SIZE + 8;   // feet: center of tile
@@ -249,13 +253,26 @@ export class SceneMap extends Scene {
       void this.interactionPresenter.present(msg);
     };
 
+    this.network.onEventMessage = (msg) => {
+      this._serverEventActive = true;
+      this.messageBox.show({ text: msg.text, speaker: msg.speaker ?? null })
+        .then(() => {
+          if (this._destroyed || !this.network) return;
+          this.network.send({ type: "event_ack" });
+        });
+    };
+
+    this.network.onEventEnd = () => {
+      this._serverEventActive = false;
+    };
+
     this.network.connect();
   }
 
   update(dt) {
     // Read input first — needed for prediction and network
     const inp = this.engine.input;
-    const eventLock = this.eventRunner.isRunning();
+    const eventLock = this.eventRunner.isRunning() || this._serverEventActive;
 
     const current = eventLock
       ? { up: false, down: false, left: false, right: false }
@@ -278,9 +295,14 @@ export class SceneMap extends Scene {
       this.player.syncLocalFromWorld();
     }
 
-    // Interaction: action key (blocked during events)
-    if (inp.pressed("KeyE") && !eventLock) {
-      this._tryInteract();
+    // Interaction: action key
+    if (inp.pressed("KeyE")) {
+      if (this.messageBox.isOpen()) {
+        if (this.messageBox.isAnimating()) this.messageBox.skipAnimation();
+        else this.messageBox.dismiss();
+      } else if (!eventLock) {
+        this._tryInteract();
+      }
     }
 
     this.entityManager.updateAll(dt, this.engine.input);
@@ -413,6 +435,7 @@ export class SceneMap extends Scene {
   }
 
   destroy() {
+    this._destroyed = true;
     this.network.disconnect();
     this.collisionDebug.destroy();
     this.hitboxDebug.destroy();
@@ -440,23 +463,12 @@ export class SceneMap extends Scene {
   /**
    * Attempts to interact with the nearest interactable entity.
    * Enforces a client-side cooldown (200ms) to prevent spam.
-   * If the message box is animating, skips to full text.
-   * If the message box is open (done animating), dismisses it.
+   * Only called when no event is active and no message box is open (E key split handles those).
    */
   _tryInteract() {
     const now = performance.now();
     if (now - this._lastInteractTime < 200) return;
     this._lastInteractTime = now;
-
-    // Skip animation or dismiss message box if showing
-    if (this.messageBox.isOpen()) {
-      if (this.messageBox.isAnimating()) {
-        this.messageBox.skipAnimation();
-      } else {
-        this.messageBox.dismiss();
-      }
-      return;
-    }
 
     const target = this._findNearestInteractable();
     if (!target) return;

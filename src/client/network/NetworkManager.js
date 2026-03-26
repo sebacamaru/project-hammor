@@ -18,6 +18,10 @@ export class NetworkManager {
     this.onSnapshot = null;
     /** @type {function|null} Called with interact_result message payload. */
     this.onInteractResult = null;
+    /** @type {function|null} Called with event_message payload (server-driven event). */
+    this.onEventMessage = null;
+    /** @type {function|null} Called when server-driven event ends. */
+    this.onEventEnd = null;
   }
 
   /**
@@ -42,6 +46,12 @@ export class NetworkManager {
           break;
         case "interact_result":
           this.onInteractResult?.(msg);
+          break;
+        case "event_message":
+          this.onEventMessage?.(msg);
+          break;
+        case "event_end":
+          this.onEventEnd?.(msg);
           break;
       }
     };
