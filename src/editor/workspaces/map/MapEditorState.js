@@ -45,6 +45,7 @@ export class MapEditorState {
       selectedEntityId: null,
       entityPlaceMode: false,
       selectedLightId: null,
+      copiedLightSettings: null,
 
       lightingPreview: {
         enabled: true,
