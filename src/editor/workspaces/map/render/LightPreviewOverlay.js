@@ -37,7 +37,7 @@ function getRadialTexture() {
  * entity overlays so lights preview map illumination without washing
  * out editor affordances.
  *
- * Redraws only when data changes via setLights/setDragPreview — never per-frame.
+ * Redraws only when data changes via setLights/setDragPreview/clearDragPreview — never per-frame.
  */
 export class LightPreviewOverlay {
   constructor() {
@@ -46,8 +46,8 @@ export class LightPreviewOverlay {
     /** @type {Array<object>} */
     this._lights = [];
 
-    /** @type {Sprite[]} Cached halo sprites. */
-    this._sprites = [];
+    /** @type {Map<string, Sprite>} Cached halo sprites keyed by light id. */
+    this._spritesById = new Map();
 
     /** @type {{ lightId: string, x: number, y: number }|null} */
     this._dragPreview = null;
@@ -83,47 +83,73 @@ export class LightPreviewOverlay {
   }
 
   /**
-   * Full rebuild — destroys all sprites and recreates halos for enabled lights.
+   * Full rebuild — diffs sprites by light id, creates/updates/removes as needed.
    */
   _rebuild() {
-    this._destroySprites();
+    const tex = getRadialTexture();
+    const activeIds = new Set();
 
     for (const light of this._lights) {
-      if (light.enabled === false) continue;
-      this._addHalo(light);
+      const id = light.id;
+      if (!id) continue;
+
+      // Skip disabled or zero-radius lights
+      if (light.enabled === false || (light.radius ?? 96) <= 0) {
+        const existing = this._spritesById.get(id);
+        if (existing) existing.visible = false;
+        activeIds.add(id);
+        continue;
+      }
+
+      const alpha = Math.max(0, Math.min((light.intensity ?? 1) * 0.35, 0.85));
+      if (alpha <= 0) {
+        const existing = this._spritesById.get(id);
+        if (existing) existing.visible = false;
+        activeIds.add(id);
+        continue;
+      }
+
+      // Resolve position (drag preview overrides authored)
+      let x = light.x;
+      let y = light.y;
+      if (x == null || y == null) continue;
+
+      if (this._dragPreview?.lightId === id) {
+        x = this._dragPreview.x;
+        y = this._dragPreview.y;
+      }
+
+      const radius = light.radius ?? 96;
+
+      // Get or create sprite
+      let sprite = this._spritesById.get(id);
+      if (!sprite) {
+        sprite = new Sprite(tex);
+        sprite.anchor.set(0.5);
+        sprite.blendMode = "add";
+        this._spritesById.set(id, sprite);
+        this.container.addChild(sprite);
+      }
+
+      sprite.x = x;
+      sprite.y = y;
+      sprite.width = Math.max(1, radius * 2);
+      sprite.height = Math.max(1, radius * 2);
+      sprite.tint = this._parseColor(light.color);
+      sprite.alpha = alpha;
+      sprite.visible = true;
+
+      activeIds.add(id);
     }
-  }
 
-  /**
-   * Creates a halo sprite for a single light and adds it to the container.
-   * @param {object} light
-   */
-  _addHalo(light) {
-    let x = light.x;
-    let y = light.y;
-    if (x == null || y == null) return;
-
-    // Use drag preview position if this light is being dragged
-    if (this._dragPreview?.lightId === light.id) {
-      x = this._dragPreview.x;
-      y = this._dragPreview.y;
+    // Remove sprites for lights that no longer exist
+    for (const [id, sprite] of this._spritesById) {
+      if (!activeIds.has(id)) {
+        this.container.removeChild(sprite);
+        sprite.destroy();
+        this._spritesById.delete(id);
+      }
     }
-
-    const radius = light.radius ?? 96;
-    if (radius <= 0) return;
-
-    const sprite = new Sprite(getRadialTexture());
-    sprite.anchor.set(0.5);
-    sprite.x = x;
-    sprite.y = y;
-    sprite.width = Math.max(1, radius * 2);
-    sprite.height = Math.max(1, radius * 2);
-    sprite.tint = this._parseColor(light.color);
-    sprite.alpha = Math.max(0, Math.min(0.85, (light.intensity ?? 1) * 0.35));
-    sprite.blendMode = "add";
-
-    this.container.addChild(sprite);
-    this._sprites.push(sprite);
   }
 
   /**
@@ -138,18 +164,13 @@ export class LightPreviewOverlay {
     return 0xffffff;
   }
 
-  /** Removes and destroys all halo sprites from the container. */
-  _destroySprites() {
-    for (const sprite of this._sprites) {
-      this.container.removeChild(sprite);
-      sprite.destroy();
-    }
-    this._sprites.length = 0;
-  }
-
   /** Cleans up all resources. */
   destroy() {
-    this._destroySprites();
+    for (const sprite of this._spritesById.values()) {
+      sprite.destroy();
+    }
+    this._spritesById.clear();
+
     this.container.destroy({ children: true });
   }
 }

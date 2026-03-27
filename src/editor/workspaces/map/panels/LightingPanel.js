@@ -1,7 +1,10 @@
+import { LIGHT_PRESETS } from "../../../../shared/data/models/LightPresets.js";
+
 /**
  * Panel for controlling the ambient lighting preview overlay (editor-only),
  * editing the map's persisted ambient settings (doc.lighting),
  * and editing individual authored lights.
+ * Also provides presets, duplicate, copy/paste actions for selected lights.
  */
 export class LightingPanel {
   /**
@@ -21,6 +24,10 @@ export class LightingPanel {
 
   /** Builds the panel DOM once. */
   _render() {
+    const presetOptions = LIGHT_PRESETS.map(
+      (p) => `<option value="${p.key}">${p.label}</option>`
+    ).join("");
+
     this.el.innerHTML = `
       <div class="panel-section">
         <div class="panel-title">Preview</div>
@@ -96,6 +103,23 @@ export class LightingPanel {
               <input type="checkbox" data-light="enabled" />
               <span>Enabled</span>
             </label>
+            <label class="lighting-row">
+              <input type="checkbox" data-light="visibility" />
+              <span>Affects visibility (reveals darkness)</span>
+            </label>
+            <label class="lighting-row">
+              <span>Preset</span>
+              <select data-light="preset">
+                <option value="">— select —</option>
+                ${presetOptions}
+              </select>
+            </label>
+            <button type="button" data-action="applyPreset" class="lighting-btn">Apply Preset</button>
+            <div class="lighting-actions">
+              <button type="button" data-action="duplicateLight" class="lighting-btn">Duplicate</button>
+              <button type="button" data-action="copySettings" class="lighting-btn">Copy Settings</button>
+              <button type="button" data-action="pasteSettings" class="lighting-btn">Paste Settings</button>
+            </div>
             <button type="button" data-action="deleteLight" class="lighting-btn lighting-btn-danger">Delete</button>
           </div>
         </div>
@@ -163,11 +187,13 @@ export class LightingPanel {
       doc.updateLight(lightId, { falloff: parseFloat(target.value) });
     } else if (lightKey === "enabled") {
       doc.updateLight(lightId, { enabled: target.checked });
+    } else if (lightKey === "visibility") {
+      doc.updateLight(lightId, { visibility: target.checked });
     }
   }
 
   /**
-   * Handles button clicks (add test light, delete light).
+   * Handles button clicks (add test light, delete, apply preset, duplicate, copy/paste).
    * @param {Event} e
    */
   _handleClick(e) {
@@ -200,6 +226,36 @@ export class LightingPanel {
         // but clear locally too for immediate UI response.
         this.state.patch({ selectedLightId: null });
       }
+    } else if (action === "applyPreset") {
+      const select = this.el.querySelector('[data-light="preset"]');
+      const key = select?.value;
+      if (!key) return;
+      const preset = LIGHT_PRESETS.find((p) => p.key === key);
+      if (!preset) return;
+      const lightId = this.state.get().selectedLightId;
+      if (!lightId) return;
+      doc.updateLight(lightId, preset.values);
+      select.value = "";
+    } else if (action === "duplicateLight") {
+      const lightId = this.state.get().selectedLightId;
+      if (!lightId) return;
+      const newId = doc.duplicateLight(lightId);
+      if (newId) {
+        this.state.patch({ selectedLightId: newId });
+      }
+    } else if (action === "copySettings") {
+      const lightId = this.state.get().selectedLightId;
+      if (!lightId) return;
+      const light = doc.getLight(lightId);
+      if (!light) return;
+      const { id: _id, x: _x, y: _y, ...settings } = light;
+      this.state.patch({ copiedLightSettings: settings });
+    } else if (action === "pasteSettings") {
+      const copied = this.state.get().copiedLightSettings;
+      if (!copied) return;
+      const lightId = this.state.get().selectedLightId;
+      if (!lightId) return;
+      doc.updateLight(lightId, copied);
     }
   }
 
@@ -257,6 +313,7 @@ export class LightingPanel {
       const lightRadius = this.el.querySelector('[data-light="radius"]');
       const lightFalloff = this.el.querySelector('[data-light="falloff"]');
       const lightEnabled = this.el.querySelector('[data-light="enabled"]');
+      const lightVisibility = this.el.querySelector('[data-light="visibility"]');
 
       if (idDisplay) idDisplay.textContent = light.id;
       if (lightColor) lightColor.value = light.color ?? "#ffffff";
@@ -264,6 +321,15 @@ export class LightingPanel {
       if (lightRadius) lightRadius.value = light.radius ?? 96;
       if (lightFalloff) lightFalloff.value = light.falloff ?? 0.7;
       if (lightEnabled) lightEnabled.checked = light.enabled !== false;
+      if (lightVisibility) lightVisibility.checked = light.visibility === true;
+
+      // --- Preset & action button states ---
+      const presetSelect = this.el.querySelector('[data-light="preset"]');
+      const applyBtn = this.el.querySelector('[data-action="applyPreset"]');
+      const pasteBtn = this.el.querySelector('[data-action="pasteSettings"]');
+
+      if (applyBtn) applyBtn.disabled = !presetSelect?.value;
+      if (pasteBtn) pasteBtn.disabled = !s.copiedLightSettings;
     } else {
       if (noSelEl) noSelEl.style.display = "";
       if (editorEl) editorEl.style.display = "none";

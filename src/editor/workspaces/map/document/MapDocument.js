@@ -244,6 +244,20 @@ export class MapDocument {
   }
 
   /**
+   * Duplicates an existing light with a fresh id and optional position offset.
+   * @param {string} lightId — id of the light to duplicate
+   * @param {number} [offsetX=16] — horizontal offset for the duplicate
+   * @param {number} [offsetY=16] — vertical offset for the duplicate
+   * @returns {string|null} the new light's id, or null if source not found
+   */
+  duplicateLight(lightId, offsetX = 16, offsetY = 16) {
+    const source = this.getLight(lightId);
+    if (!source) return null;
+    const { id: _id, ...rest } = source;
+    return this.createLight({ ...rest, x: source.x + offsetX, y: source.y + offsetY });
+  }
+
+  /**
    * Removes a light by id from lights[].
    * @param {string} lightId
    * @returns {boolean} true if the light was found and removed

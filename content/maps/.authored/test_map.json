@@ -221336,10 +221336,10 @@
     }
   ],
   "lighting": {
-    "ambientMode": "cycle",
+    "ambientMode": "fixed",
     "fixedAmbient": {
-      "color": "#000000",
-      "intensity": 0
+      "color": "#9f0404",
+      "intensity": 0.15
     },
     "lights": [
       {
@@ -221352,6 +221352,7 @@
         "radius": 300,
         "falloff": 0.7,
         "enabled": true,
+        "visibility": false,
         "castShadows": false,
         "flicker": "none"
       },
@@ -221365,6 +221366,7 @@
         "radius": 726,
         "falloff": 0.78,
         "enabled": true,
+        "visibility": false,
         "castShadows": false,
         "flicker": "none"
       },
@@ -221378,6 +221380,7 @@
         "radius": 96,
         "falloff": 0.7,
         "enabled": true,
+        "visibility": false,
         "castShadows": false,
         "flicker": "none"
       },
@@ -221391,45 +221394,49 @@
         "radius": 1024,
         "falloff": 1,
         "enabled": true,
+        "visibility": false,
         "castShadows": false,
         "flicker": "none"
       },
       {
         "id": "light_005",
-        "x": 303,
-        "y": 246,
+        "x": 210,
+        "y": 269,
         "type": "point",
-        "color": "#78d9a2",
-        "intensity": 1.37,
-        "radius": 96,
+        "color": "#df0c0c",
+        "intensity": 0,
+        "radius": 164,
         "falloff": 0.7,
         "enabled": true,
+        "visibility": true,
         "castShadows": false,
         "flicker": "none"
       },
       {
         "id": "light_006",
-        "x": 415,
-        "y": 201,
+        "x": 499,
+        "y": 264,
         "type": "point",
         "color": "#0df270",
-        "intensity": 2.34,
+        "intensity": 0,
         "radius": 19,
         "falloff": 0.7,
         "enabled": true,
+        "visibility": true,
         "castShadows": false,
         "flicker": "none"
       },
       {
         "id": "light_007",
-        "x": 384,
-        "y": 317,
+        "x": 539,
+        "y": 450,
         "type": "point",
         "color": "#ffffff",
-        "intensity": 1,
+        "intensity": 0,
         "radius": 96,
         "falloff": 0.7,
         "enabled": true,
+        "visibility": true,
         "castShadows": false,
         "flicker": "none"
       }

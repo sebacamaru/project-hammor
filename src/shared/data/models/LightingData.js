@@ -25,6 +25,7 @@ export const DEFAULT_LIGHT = Object.freeze({
   radius: 96,
   falloff: 0.7,
   enabled: true,
+  visibility: false,
   castShadows: false,
   flicker: "none",
 });
@@ -69,6 +70,10 @@ export function normalizeLight(input) {
     ? input.enabled
     : DEFAULT_LIGHT.enabled;
 
+  const visibility = typeof input.visibility === "boolean"
+    ? input.visibility
+    : DEFAULT_LIGHT.visibility;
+
   const castShadows = typeof input.castShadows === "boolean"
     ? input.castShadows
     : DEFAULT_LIGHT.castShadows;
@@ -77,7 +82,7 @@ export function normalizeLight(input) {
     ? input.flicker
     : DEFAULT_LIGHT.flicker;
 
-  return { id, x, y, type, color, intensity, radius, falloff, enabled, castShadows, flicker };
+  return { id, x, y, type, color, intensity, radius, falloff, enabled, visibility, castShadows, flicker };
 }
 
 /**
