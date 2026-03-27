@@ -49,7 +49,7 @@ export class RuntimeMapImporter {
       height,
       tileSize: mapJson.tileSize,
       chunkSize: mapJson.chunkSize,
-    }, layers, mapJson.entities ?? []);
+    }, layers, mapJson.entities ?? [], mapJson.lighting);
 
     doc.markClean();
     return doc;

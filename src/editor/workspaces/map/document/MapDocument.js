@@ -1,6 +1,7 @@
 // Internally the editor stores layer data in Uint16Array. Because Uint16Array
 // cannot represent -1, we reserve the max uint16 value as the empty sentinel.
 import { snapWorldToFeet } from "../../../../shared/core/TileMath.js";
+import { normalizeLight, normalizeLighting } from "../../../../shared/data/models/LightingData.js";
 
 const EMPTY_STORED_TILE_ID = 0xffff;
 const DEV = import.meta.env?.DEV ?? false;
@@ -12,8 +13,9 @@ export class MapDocument {
    * @param {object} meta - Map metadata (id, width, height, tileSize, chunkSize, tileset, etc.)
    * @param {Array} layers - Layer definitions with id, kind, visible, data (Uint16Array or plain array)
    * @param {Array} entities - Opaque entity data array (passthrough, not parsed by the editor)
+   * @param {object} [lighting] - Lighting data (ambientMode, fixedAmbient, lights[]). Normalized to defaults if missing.
    */
-  constructor(meta = {}, layers = [], entities = []) {
+  constructor(meta = {}, layers = [], entities = [], lighting) {
     this.meta = { ...meta };
     this.layers = layers.map((layer) => ({
       id: layer.id,
@@ -26,6 +28,9 @@ export class MapDocument {
 
     /** @type {Array<object>} Opaque entity instances — preserved through load/save unchanged. */
     this.entities = Array.isArray(entities) ? [...entities] : [];
+
+    /** @type {object} Normalized lighting data — always a complete, valid lighting block. */
+    this.lighting = normalizeLighting(lighting);
 
     this.listeners = new Set();
     this.layerMap = new Map(this.layers.map((layer) => [layer.id, layer]));
@@ -185,6 +190,93 @@ export class MapDocument {
     this.isDirty = true;
     this.emit({ type: "entitiesChanged", document: this });
     return true;
+  }
+
+  /**
+   * Applies a one-level-deep merge onto the lighting block and re-normalizes.
+   * Nested objects (e.g. fixedAmbient) are shallow-merged, top-level scalars replaced.
+   * Emits lightingChanged after update.
+   * @param {object} patch — partial lighting fields (e.g. { ambientMode: "fixed" } or { fixedAmbient: { color: "#ff0000" } })
+   */
+  updateLighting(patch) {
+    for (const [key, value] of Object.entries(patch)) {
+      if (typeof value === "object" && value !== null && typeof this.lighting[key] === "object") {
+        Object.assign(this.lighting[key], value);
+      } else {
+        this.lighting[key] = value;
+      }
+    }
+    this.lighting = normalizeLighting(this.lighting);
+    this.isDirty = true;
+    this.emit({ type: "lightingChanged", document: this });
+  }
+
+  /**
+   * Creates a new light with a generated unique id, normalizes it, and appends to lights[].
+   * @param {object} [partial={}] — partial light fields (x, y, color, intensity, radius, etc.)
+   * @returns {string} the id of the created light
+   */
+  createLight(partial = {}) {
+    const id = this._generateLightId();
+    const light = normalizeLight({ ...partial, id });
+    this.lighting.lights.push(light);
+    this.lighting = normalizeLighting(this.lighting);
+    this.isDirty = true;
+    this.emit({ type: "lightingChanged", document: this });
+    return id;
+  }
+
+  /**
+   * Updates an existing light by id via spread+normalize (no in-place mutation).
+   * @param {string} lightId
+   * @param {object} [patch={}] — partial light fields to merge
+   * @returns {boolean} true if the light was found and updated
+   */
+  updateLight(lightId, patch = {}) {
+    const idx = this.lighting.lights.findIndex((l) => l.id === lightId);
+    if (idx === -1) return false;
+    const next = normalizeLight({ ...this.lighting.lights[idx], ...patch });
+    this.lighting.lights[idx] = next;
+    this.lighting = normalizeLighting(this.lighting);
+    this.isDirty = true;
+    this.emit({ type: "lightingChanged", document: this });
+    return true;
+  }
+
+  /**
+   * Removes a light by id from lights[].
+   * @param {string} lightId
+   * @returns {boolean} true if the light was found and removed
+   */
+  removeLight(lightId) {
+    const idx = this.lighting.lights.findIndex((l) => l.id === lightId);
+    if (idx === -1) return false;
+    this.lighting.lights.splice(idx, 1);
+    this.lighting = normalizeLighting(this.lighting);
+    this.isDirty = true;
+    this.emit({ type: "lightingChanged", document: this });
+    return true;
+  }
+
+  /**
+   * Returns the light with the given id, or null if not found.
+   * Returns the real object — all writes must go through updateLight().
+   * @param {string} lightId
+   * @returns {object|null}
+   */
+  getLight(lightId) {
+    return this.lighting.lights.find((l) => l.id === lightId) ?? null;
+  }
+
+  /**
+   * Generates a unique light id in the format light_001, light_002, etc.
+   * @returns {string}
+   */
+  _generateLightId() {
+    const existing = new Set(this.lighting.lights.map((l) => l.id));
+    let n = 1;
+    while (existing.has(`light_${String(n).padStart(3, "0")}`)) n++;
+    return `light_${String(n).padStart(3, "0")}`;
   }
 
   markClean() {

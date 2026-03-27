@@ -1,6 +1,7 @@
 import { MapSerializer } from "../../../../src/editor/workspaces/map/document/MapSerializer.js";
 import { RuntimeMapImporter } from "../../../../src/editor/workspaces/map/document/RuntimeMapImporter.js";
 import { RuntimeMapBridge } from "../../../../src/editor/workspaces/map/runtime/RuntimeMapBridge.js";
+import { normalizeLighting } from "../../../../src/shared/data/models/LightingData.js";
 
 // Validates the minimum authored map contract before anything touches disk.
 export function validateAuthoredPayload(payload) {
@@ -60,6 +61,7 @@ export function normalizeAuthoredPayload(mapId, payload) {
       ...payload.meta,
       id: mapId,
     },
+    lighting: normalizeLighting(payload.lighting),
   };
 }
 
@@ -112,6 +114,8 @@ export function authoredToRuntimeJson(authoredJson) {
   if (Array.isArray(authoredJson.entities) && authoredJson.entities.length > 0) {
     result.entities = authoredJson.entities;
   }
+
+  result.lighting = normalizeLighting(authoredJson.lighting);
 
   return result;
 }

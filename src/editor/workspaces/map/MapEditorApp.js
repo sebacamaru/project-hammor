@@ -19,6 +19,7 @@ import { ToolsPanel } from "./panels/ToolsPanel.js";
 import { StatusBarPanel } from "./panels/StatusBarPanel.js";
 import { TilesPanel } from "./panels/TilesPanel.js";
 import { EventsPanel } from "./panels/EventsPanel.js";
+import { LightingPanel } from "./panels/LightingPanel.js";
 
 import { SceneEditor } from "./scenes/SceneEditor.js";
 import { MapEditorViewport } from "./MapEditorViewport.js";
@@ -122,18 +123,26 @@ export class MapEditorApp {
       this.state,
       () => this.document,
     );
+    this.lightingPanel = new LightingPanel(
+      this.layout.lightsPanelEl,
+      this.state,
+      () => this.document,
+    );
 
     // Mode-based panel visibility
     this._terrainEls = [this.layout.leftPanelEl, this.layout.rightPanelEl];
     this._eventsEls = [this.layout.eventsPanelEl];
+    this._lightsEls = [this.layout.lightsPanelEl];
     this.state.subscribe((s) => {
       const terrain = s.mode === "terrain";
       const collisions = s.mode === "collisions";
       const events = s.mode === "events";
+      const lights = s.mode === "lights";
       for (const el of this._terrainEls)
         el.style.display = terrain ? "" : "none";
       this.layout.toolsEl.style.display = terrain || collisions ? "" : "none";
       for (const el of this._eventsEls) el.style.display = events ? "" : "none";
+      for (const el of this._lightsEls) el.style.display = lights ? "" : "none";
     });
 
     // UI visibility toggle (via state subscription, not per-frame)
@@ -157,12 +166,19 @@ export class MapEditorApp {
         onDragClear: () => {
           this.scenes.current?.clearEntityDragPreview?.();
         },
+        onLightDragPreview: (lightId, x, y) => {
+          this.scenes.current?.setLightDragPreview?.(lightId, x, y);
+        },
+        onLightDragClear: () => {
+          this.scenes.current?.clearLightDragPreview?.();
+        },
       },
     );
 
-    // Forward entity selection state to the overlay; reset on mode change
+    // Forward selection state to overlays; reset entity selection on mode change
     this.state.subscribe((s) => {
       this.scenes.current?.setSelectedEntityId?.(s.selectedEntityId);
+      this.scenes.current?.setSelectedLightId?.(s.selectedLightId);
 
       if (s.mode !== "events") {
         if (s.selectedEntityId != null || s.entityPlaceMode) {
@@ -182,8 +198,9 @@ export class MapEditorApp {
     await this.loadMap(initialMapId);
 
     // Escena del editor
-    await this.scenes.goto(new SceneEditor(this.state, this.toolManager));
+    await this.scenes.goto(new SceneEditor(this.state, () => this.document));
     this.scenes.current?.setEntities?.(this.document?.entities);
+    this.scenes.current?.setLights?.(this.document?.lighting?.lights ?? []);
 
     // Loop
     this.loop = new GameLoop(this);
@@ -198,6 +215,7 @@ export class MapEditorApp {
     this.loop?.stop();
     this.modesPanel?.destroy();
     this.eventsPanel?.destroy();
+    this.lightingPanel?.destroy();
     window.removeEventListener("keydown", this.onKeyDown);
     this.viewport?.destroy();
     this.scenes?.current?.destroy();
@@ -259,6 +277,24 @@ export class MapEditorApp {
         if (selectedEntityId && this.document) {
           const removed = this.document.removeEntity(selectedEntityId);
           if (removed) this.state.patch({ selectedEntityId: null });
+        }
+      }
+    }
+
+    // Delete light shortcut (lights mode only)
+    if (this.state.get().mode === "lights" && this.input.pressed("Delete")) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const isEditable = document.activeElement?.isContentEditable;
+      if (
+        tag !== "input" &&
+        tag !== "textarea" &&
+        tag !== "select" &&
+        !isEditable
+      ) {
+        const { selectedLightId } = this.state.get();
+        if (selectedLightId && this.document) {
+          const removed = this.document.removeLight(selectedLightId);
+          if (removed) this.state.patch({ selectedLightId: null });
         }
       }
     }
@@ -399,7 +435,7 @@ export class MapEditorApp {
     this.currentMapId = mapId;
     this.history.clear();
     this.setDocument(doc);
-    this.state.patch({ selectedEntityId: null });
+    this.state.patch({ selectedEntityId: null, selectedLightId: null });
     await this.rebuildFullMap();
 
     this.state.update((s) => {
@@ -429,6 +465,7 @@ export class MapEditorApp {
     if (currentScene?.setMap) {
       currentScene.setMap(runtimeMap);
       currentScene.setEntities?.(this.document.entities);
+      currentScene.setLights?.(this.document?.lighting?.lights ?? []);
       return;
     }
 
@@ -453,6 +490,14 @@ export class MapEditorApp {
       if (event.type === "entitiesChanged") {
         this.syncDirtyState();
         this.scenes.current?.setEntities?.(this.document.entities);
+      }
+      if (event.type === "lightingChanged") {
+        this.syncDirtyState();
+        this.scenes.current?.setLights?.(this.document.lighting.lights);
+        const selId = this.state.get().selectedLightId;
+        if (selId != null && !this.document.getLight(selId)) {
+          this.state.patch({ selectedLightId: null });
+        }
       }
     });
   }

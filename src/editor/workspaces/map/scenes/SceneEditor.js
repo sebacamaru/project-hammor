@@ -8,12 +8,19 @@ import { ChunkDebugOverlay } from "../../../../client/render/ChunkDebugOverlay.j
 import { clampEditorCamera } from "../utils/clampEditorCamera.js";
 import { EntityOverlay } from "../render/EntityOverlay.js";
 import { EntitySpriteLayer } from "../render/EntitySpriteLayer.js";
+import { LightGizmoOverlay } from "../render/LightGizmoOverlay.js";
 
 export class SceneEditor extends Scene {
-  constructor(state) {
+  /**
+   * @param {import('../MapEditorState.js').MapEditorState} state
+   * @param {() => import('../document/MapDocument.js').MapDocument|null} [getDocument]
+   */
+  constructor(state, getDocument) {
     super();
     this.state = state;
+    this.getDocument = getDocument ?? (() => null);
     this.mapVisuals = null;
+    this._ambientCache = null;
   }
 
   async enter(engine) {
@@ -69,6 +76,9 @@ export class SceneEditor extends Scene {
     if (this.entitySpriteLayer) {
       this.entitySpriteLayer.container.visible = eventsMode;
     }
+    if (this.lightGizmoOverlay) {
+      this.lightGizmoOverlay.container.visible = s.mode === "lights";
+    }
 
     this.collisionDebug.enabled = this.engine.debug.visible || s.mode === "collisions";
     this.chunkDebug.enabled = this.engine.debug.visible;
@@ -113,6 +123,7 @@ export class SceneEditor extends Scene {
     this.root.y = Math.floor(-this.camera.y);
 
     this.chunkRenderer.update(this.camera);
+    this._updateAmbientOverlay();
     this.collisionDebug.render(this.camera);
     this.chunkDebug.render(this.camera);
     this.renderGrid();
@@ -206,6 +217,68 @@ export class SceneEditor extends Scene {
   }
 
   /**
+   * Resolves effective ambient color/alpha from preview or document,
+   * then redraws the overlay only when inputs changed.
+   * Active only in lights mode; all other modes force overlay hidden.
+   */
+  _updateAmbientOverlay() {
+    const overlay = this.ambientOverlay;
+    if (!overlay || !this.map) return;
+
+    const s = this.state.get();
+    let color = 0;
+    let alpha = 0;
+
+    if (s.mode === "lights") {
+      const preview = s.lightingPreview;
+
+      if (preview?.enabled) {
+        // Preview overrides persisted values
+        const colorStr =
+          typeof preview.ambientColor === "string" &&
+          preview.ambientColor.startsWith("#")
+            ? preview.ambientColor
+            : "#223344";
+        color = parseInt(colorStr.slice(1), 16);
+        alpha = Math.max(0, Math.min(1, Number(preview.ambientIntensity) || 0));
+      } else {
+        // Use persisted document lighting
+        const lighting = this.getDocument()?.lighting;
+        if (lighting?.ambientMode === "fixed") {
+          const colorStr = lighting.fixedAmbient?.color ?? "#000000";
+          color = parseInt(colorStr.replace("#", ""), 16);
+          alpha = Math.max(0, Math.min(1, Number(lighting.fixedAmbient?.intensity) || 0));
+        }
+        // cycle mode: color=0, alpha=0 (no overlay)
+      }
+    }
+
+    // Cache check — skip redraw if nothing changed
+    const ts = this.map.tileSize;
+    const w = this.map.width * ts;
+    const h = this.map.height * ts;
+    const cache = this._ambientCache;
+
+    if (
+      cache &&
+      cache.color === color &&
+      cache.alpha === alpha &&
+      cache.w === w &&
+      cache.h === h
+    ) {
+      return;
+    }
+
+    this._ambientCache = { color, alpha, w, h };
+
+    overlay.clear();
+    if (alpha <= 0) return;
+
+    overlay.rect(0, 0, w, h);
+    overlay.fill({ color, alpha });
+  }
+
+  /**
    * Updates entity sprites and overlay with the given entity array.
    * @param {Array<object>} entities
    */
@@ -239,6 +312,39 @@ export class SceneEditor extends Scene {
   clearEntityDragPreview() {
     this.entitySpriteLayer?.clearDragPreview();
     this.entityOverlay?.clearDragPreview();
+  }
+
+  /**
+   * Updates the light gizmo overlay with the given lights array.
+   * @param {Array<object>} lights
+   */
+  setLights(lights) {
+    this.lightGizmoOverlay?.setLights(lights);
+  }
+
+  /**
+   * Highlights the light with the given id in the gizmo overlay.
+   * @param {string|null} id
+   */
+  setSelectedLightId(id) {
+    this.lightGizmoOverlay?.setSelectedLightId(id);
+  }
+
+  /**
+   * Sets a temporary drag preview position for a light in the gizmo overlay.
+   * @param {string} lightId
+   * @param {number} x
+   * @param {number} y
+   */
+  setLightDragPreview(lightId, x, y) {
+    this.lightGizmoOverlay?.setDragPreview(lightId, x, y);
+  }
+
+  /**
+   * Clears the light drag preview in the gizmo overlay.
+   */
+  clearLightDragPreview() {
+    this.lightGizmoOverlay?.clearDragPreview();
   }
 
   rebuildChunk(cx, cy) {
@@ -285,6 +391,7 @@ export class SceneEditor extends Scene {
     this.root.addChildAt(nextVisuals.container, 0);
     this.mapVisuals = nextVisuals;
     this.applyMapVisuals(nextVisuals);
+    this._ambientCache = null;
 
     if (prevVisuals) {
       this.root.removeChild(prevVisuals.container);
@@ -322,14 +429,19 @@ export class SceneEditor extends Scene {
 
     const entitySpriteLayer = new EntitySpriteLayer();
     const entityOverlay = new EntityOverlay();
+    const lightGizmoOverlay = new LightGizmoOverlay();
+
+    const ambientOverlay = new Graphics();
 
     container.addChild(groundLayer);
     container.addChild(groundDetailLayer);
     container.addChild(fringeLayer);
     container.addChild(entitySpriteLayer.container); // sprites below overlay
-    container.addChild(entityOverlay.container);     // debug/selection above sprites
+    container.addChild(ambientOverlay);              // tints map content only
+    container.addChild(entityOverlay.container);     // debug/selection above
     container.addChild(collisionDebug.container);
     container.addChild(chunkDebug.container);
+    container.addChild(lightGizmoOverlay.container); // topmost in map container
 
     return {
       map,
@@ -339,7 +451,9 @@ export class SceneEditor extends Scene {
       groundDetailLayer,
       fringeLayer,
       entitySpriteLayer,
+      ambientOverlay,
       entityOverlay,
+      lightGizmoOverlay,
       collisionDebug,
       chunkDebug,
     };
@@ -351,7 +465,9 @@ export class SceneEditor extends Scene {
     this.groundDetailLayer = visuals.groundDetailLayer;
     this.fringeLayer = visuals.fringeLayer;
     this.entitySpriteLayer = visuals.entitySpriteLayer;
+    this.ambientOverlay = visuals.ambientOverlay;
     this.entityOverlay = visuals.entityOverlay;
+    this.lightGizmoOverlay = visuals.lightGizmoOverlay;
     this.collisionDebug = visuals.collisionDebug;
     this.chunkDebug = visuals.chunkDebug;
   }
@@ -361,6 +477,7 @@ export class SceneEditor extends Scene {
 
     visuals.entitySpriteLayer?.destroy();
     visuals.entityOverlay?.destroy();
+    visuals.lightGizmoOverlay?.destroy();
     visuals.collisionDebug?.destroy();
     visuals.chunkDebug?.destroy();
     visuals.chunkRenderer?.destroy();
@@ -372,7 +489,9 @@ export class SceneEditor extends Scene {
       this.groundDetailLayer = null;
       this.fringeLayer = null;
       this.entitySpriteLayer = null;
+      this.ambientOverlay = null;
       this.entityOverlay = null;
+      this.lightGizmoOverlay = null;
       this.collisionDebug = null;
       this.chunkDebug = null;
     }

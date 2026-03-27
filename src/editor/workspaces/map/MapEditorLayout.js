@@ -11,6 +11,7 @@ export class MapEditorLayout {
           <aside class="editor-panel editor-panel-left"></aside>
           <aside class="editor-panel editor-panel-right"></aside>
           <aside class="editor-panel editor-panel-events"></aside>
+          <aside class="editor-panel editor-panel-lights"></aside>
           <div class="editor-tools"></div>
           <footer class="editor-statusbar"></footer>
         </div>
@@ -22,6 +23,8 @@ export class MapEditorLayout {
     this.rightPanelEl = this.root.querySelector(".editor-panel-right");
     this.eventsPanelEl = this.root.querySelector(".editor-panel-events");
     this.eventsPanelEl.style.display = "none";
+    this.lightsPanelEl = this.root.querySelector(".editor-panel-lights");
+    this.lightsPanelEl.style.display = "none";
     this.toolsEl = this.root.querySelector(".editor-tools");
     this.statusBarEl = this.root.querySelector(".editor-statusbar");
   }

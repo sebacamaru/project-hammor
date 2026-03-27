@@ -44,6 +44,13 @@ export class MapEditorState {
 
       selectedEntityId: null,
       entityPlaceMode: false,
+      selectedLightId: null,
+
+      lightingPreview: {
+        enabled: true,
+        ambientColor: "#223344",
+        ambientIntensity: 0.6,
+      },
     };
 
     this.listeners = new Set();

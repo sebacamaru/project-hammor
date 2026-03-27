@@ -14,6 +14,7 @@ export class MapSerializer {
         data: Array.from(layer.data, (storedTileId) => MapDocument.fromStoredTileId(storedTileId)),
       })),
       entities: doc.entities,
+      lighting: doc.lighting,
     };
   }
 
@@ -30,7 +31,7 @@ export class MapSerializer {
           layer.data ?? [],
           (tileId) => MapDocument.toStoredTileId(tileId),
         ),
-      })), obj.entities ?? []);
+      })), obj.entities ?? [], obj.lighting);
 
       doc.markClean();
       return doc;

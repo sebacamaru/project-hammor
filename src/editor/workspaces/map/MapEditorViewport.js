@@ -33,6 +33,9 @@ export class MapEditorViewport {
     /** @type {{ entityId: string, previewX: number, previewY: number }|null} */
     this._drag = null;
 
+    /** @type {{ lightId: string, offsetX: number, offsetY: number, previewX: number, previewY: number }|null} */
+    this._lightDrag = null;
+
     this.onPointerDown = this.onPointerDown.bind(this);
     this.onPointerMove = this.onPointerMove.bind(this);
     this.onPointerUp = this.onPointerUp.bind(this);
@@ -186,6 +189,52 @@ export class MapEditorViewport {
       return;
     }
 
+    // Lights mode: light selection, creation, or drag start
+    if (e.button === 0 && !this.input.held("Space") && s.mode === "lights") {
+      const ctx = this.buildPointerContext(e);
+      this.updateHoverTile(ctx);
+      const doc = this.getDocument?.();
+      if (!doc) return;
+
+      const lights = doc.lighting?.lights ?? [];
+      const hitId = this._hitTestLights(lights, ctx.worldX, ctx.worldY);
+
+      if (hitId && hitId === s.selectedLightId) {
+        // Already selected — start drag with offset
+        const light = doc.getLight(hitId);
+        const px = Math.round(ctx.worldX);
+        const py = Math.round(ctx.worldY);
+        this._lightDrag = {
+          lightId: hitId,
+          offsetX: px - light.x,
+          offsetY: py - light.y,
+          previewX: light.x,
+          previewY: light.y,
+        };
+        this._options.onLightDragPreview?.(hitId, light.x, light.y);
+        this.renderer.canvas.style.cursor = "grabbing";
+      } else if (hitId) {
+        // Different light — select it
+        this.state.patch({ selectedLightId: hitId });
+      } else {
+        // Empty space — create new light at cursor, select it, start drag
+        const px = Math.round(ctx.worldX);
+        const py = Math.round(ctx.worldY);
+        const id = doc.createLight({ x: px, y: py });
+        this.state.patch({ selectedLightId: id });
+        this._lightDrag = {
+          lightId: id,
+          offsetX: 0,
+          offsetY: 0,
+          previewX: px,
+          previewY: py,
+        };
+        this._options.onLightDragPreview?.(id, px, py);
+        this.renderer.canvas.style.cursor = "grabbing";
+      }
+      return;
+    }
+
     const ctx = this.buildPointerContext(e);
     this.updateHoverTile(ctx);
 
@@ -226,6 +275,31 @@ export class MapEditorViewport {
   }
 
   /**
+   * Returns the id of the topmost light whose center is within pick radius of (worldX, worldY).
+   * Pick radius is clamped to [10, 24] so large lights are not giant click targets.
+   * @param {Array<object>} lights
+   * @param {number} worldX
+   * @param {number} worldY
+   * @returns {string|null}
+   */
+  _hitTestLights(lights, worldX, worldY) {
+    if (!Array.isArray(lights)) return null;
+
+    for (let i = lights.length - 1; i >= 0; i--) {
+      const light = lights[i];
+      if (light.x == null || light.y == null) continue;
+      const pickRadius = Math.max(10, Math.min(light.radius ?? 96, 24));
+      const dx = worldX - light.x;
+      const dy = worldY - light.y;
+      if (dx * dx + dy * dy <= pickRadius * pickRadius) {
+        return light.id ?? null;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Generates a unique entity id like "entity_001", skipping ids that already exist.
    * @param {Array<object>} entities
    * @returns {string}
@@ -248,11 +322,21 @@ export class MapEditorViewport {
     this.renderer.canvas.style.cursor = "";
   }
 
+  /**
+   * Cancels an in-progress light drag without committing the position change.
+   */
+  _cancelLightDrag() {
+    if (!this._lightDrag) return;
+    this._options.onLightDragClear?.();
+    this._lightDrag = null;
+    this.renderer.canvas.style.cursor = "";
+  }
+
   onPointerMove(e) {
     const ctx = this.buildPointerContext(e);
     this.updateHoverTile(ctx);
 
-    // Drag active — update preview position, skip tool manager
+    // Entity drag active — update preview position, skip tool manager
     if (this._drag) {
       const tileSize = this.state.get().map?.tileSize ?? 16;
       const { x, y } = snapWorldToFeet(ctx.worldX, ctx.worldY, tileSize);
@@ -264,7 +348,19 @@ export class MapEditorViewport {
       return;
     }
 
-    // Grab cursor when hovering over the currently selected entity
+    // Light drag active — update preview position, skip tool manager
+    if (this._lightDrag) {
+      const px = Math.round(ctx.worldX) - this._lightDrag.offsetX;
+      const py = Math.round(ctx.worldY) - this._lightDrag.offsetY;
+      if (px !== this._lightDrag.previewX || py !== this._lightDrag.previewY) {
+        this._lightDrag.previewX = px;
+        this._lightDrag.previewY = py;
+        this._options.onLightDragPreview?.(this._lightDrag.lightId, px, py);
+      }
+      return;
+    }
+
+    // Hover cursor feedback
     if (this.isEventInsideViewport(e)) {
       const s = this.state.get();
       if (s.mode === "events" && s.selectedEntityId) {
@@ -273,8 +369,12 @@ export class MapEditorViewport {
           const hitId = this._hitTestEntities(doc.entities, ctx.worldX, ctx.worldY);
           this.renderer.canvas.style.cursor = hitId === s.selectedEntityId ? "grab" : "";
         }
-      } else if (s.mode !== "events") {
-        // Don't interfere with terrain cursor
+      } else if (s.mode === "lights" && s.selectedLightId) {
+        const doc = this.getDocument?.();
+        if (doc) {
+          const hitId = this._hitTestLights(doc.lighting?.lights ?? [], ctx.worldX, ctx.worldY);
+          this.renderer.canvas.style.cursor = hitId === s.selectedLightId ? "grab" : "";
+        }
       }
     }
 
@@ -286,7 +386,7 @@ export class MapEditorViewport {
 
     this.isPointerDown = false;
 
-    // Commit drag if active
+    // Commit entity drag if active
     if (this._drag) {
       const doc = this.getDocument?.();
       if (doc) {
@@ -300,6 +400,24 @@ export class MapEditorViewport {
       }
       this._options.onDragClear?.();
       this._drag = null;
+      this.renderer.canvas.style.cursor = "";
+      return;
+    }
+
+    // Commit light drag if active
+    if (this._lightDrag) {
+      const doc = this.getDocument?.();
+      if (doc) {
+        const light = doc.getLight(this._lightDrag.lightId);
+        if (light && (this._lightDrag.previewX !== light.x || this._lightDrag.previewY !== light.y)) {
+          doc.updateLight(this._lightDrag.lightId, {
+            x: this._lightDrag.previewX,
+            y: this._lightDrag.previewY,
+          });
+        }
+      }
+      this._options.onLightDragClear?.();
+      this._lightDrag = null;
       this.renderer.canvas.style.cursor = "";
       return;
     }
