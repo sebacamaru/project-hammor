@@ -285,7 +285,7 @@ MapEditorApp — src/editor/workspaces/map/MapEditorApp.js
 │   └── Temporary pan activation: Space+left drag or middle mouse drag
 ├── ToolManager       — tool registry, temporaryToolId for transient tool switching
 │   ├── PanTool / PencilTool / EraseTool / EyedropperTool
-├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel, TilesPanel
+├── Panels            — ToolbarPanel, ToolsPanel, LayersPanel, StatusBarPanel, TilesPanel, LightingPanel
 │   └── TilesPanel    — group selector + tile picker grid (from tileset.editor.groups)
 ├── SceneEditor       — loads map, Camera (freeMode), MapChunkRenderer, clampEditorCamera
 ├── Renderer / Input / SceneManager / GameLoop / DebugOverlay (shared)
@@ -326,6 +326,21 @@ MapEditorApp — src/editor/workspaces/map/MapEditorApp.js
 - SceneEditor.update() clamps state.camera, then copies to visual Camera with Math.floor
 - PanTool modifies state.camera directly
 - ToolManager.temporaryToolId overrides state.activeTool without changing UI selection
+
+#### Map editor lighting system
+- **Data model** (`shared/data/models/LightingData.js`): `DEFAULT_LIGHTING`, `DEFAULT_LIGHT`, `normalizeLight()`, `normalizeLighting()`. Guarantees invariants and fresh references after every mutation.
+- **MapDocument** stores `this.lighting` (ambient settings + `lights[]` array). CRUD methods: `createLight()`, `updateLight()`, `removeLight()`, `getLight()`, `updateLighting()`. All mutations normalize + set dirty + emit `lightingChanged`.
+- **MapEditorState** holds `lightingPreview` (editor-only ambient override) and `selectedLightId`.
+- **Modes**: lighting features are gated by `mode === "lights"`. Ambient overlay, gizmos, and preview halos are only visible in lights mode.
+- **Panels**: `LightingPanel` — three sections: preview controls (editor state), map ambient controls (doc.updateLighting), selected light editor (doc.updateLight). Constructor pattern: `(el, state, getDocument)`.
+- **Viewport interactions** (`MapEditorViewport`): click-to-create, click-to-select, drag-to-move, Delete-to-remove. `_hitTestLights()` uses circular hit with clamped pick radius (`max(10, min(radius, 24))`). Drag pattern mirrors entity drag (`_lightDrag` object with offset + preview callbacks).
+- **Render overlays** (in `src/editor/workspaces/map/render/`):
+  - `LightGizmoOverlay` — Container + Graphics + cached Text labels. Draws radius circles, selection ring, center markers, labels. Rebuild-on-change.
+  - `LightPreviewOverlay` — Container of Sprites with shared radial gradient texture (128×128 canvas singleton). Additive blend (`blendMode = "add"`), tinted per light color, alpha from `clamp(intensity * 0.35, 0, 0.85)`. Disabled lights skipped.
+  - Ambient overlay — Graphics rect fill with ambient color/alpha (resolved from preview or doc settings).
+- **SceneEditor z-order** (map container children, bottom to top): ground → groundDetail → fringe → entitySpriteLayer → ambientOverlay → **lightPreviewOverlay** → entityOverlay → collisionDebug → chunkDebug → **lightGizmoOverlay**
+- **Data flow**: `MapEditorApp` subscribes to `lightingChanged` events → forwards `setLights()` to SceneEditor → SceneEditor forwards to both gizmo and preview overlays. Drag preview follows same path via `onLightDragPreview`/`onLightDragClear` callbacks.
+- **Serialization**: lighting passes through in `MapSerializer` and `RuntimeMapImporter`. Editor-server `map-codecs.js` preserves lighting in authored↔runtime conversion.
 
 ### World workspace (WorldEditorApp)
 ```

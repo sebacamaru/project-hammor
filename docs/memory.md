@@ -71,7 +71,11 @@
 - `src/editor/workspaces/map/MapEditorState.js` — central map editor state (includes saveStatus)
 - `src/editor/workspaces/map/MapEditorViewport.js` — canvas mouse/keyboard events → ToolManager
 - `src/editor/workspaces/map/MapEditorConfig.js` — EDITOR_SERVER_ORIGIN constant
-- `src/editor/workspaces/map/scenes/SceneEditor.js` — main map editor scene
+- `src/editor/workspaces/map/scenes/SceneEditor.js` — main map editor scene (map visuals, overlays, camera, forwarding)
+- `src/editor/workspaces/map/panels/LightingPanel.js` — lighting controls (preview, ambient, selected light editor)
+- `src/editor/workspaces/map/render/LightGizmoOverlay.js` — light gizmos (radius circles, labels, selection ring)
+- `src/editor/workspaces/map/render/LightPreviewOverlay.js` — radial halo sprites (additive blend, shared gradient texture)
+- `src/shared/data/models/LightingData.js` — lighting data model (DEFAULT_LIGHTING, normalizeLight, normalizeLighting)
 - `src/editor/workspaces/map/tools/ToolManager.js` — tool registry + temporary tool
 - `src/editor/workspaces/map/utils/clampEditorCamera.js` — editor camera clamp (half-viewport margins)
 - `src/editor/workspaces/world/WorldEditorApp.js` — world workspace orchestrator (grid + panels + history)
@@ -144,4 +148,6 @@
 - Server input queue processing: processes each client input individually with CLIENT_SIM_TICK_MS (eliminates prediction mismatch at any tick rate)
 - Configurable AOI: region/radius/region+radius modes (default: region = 3×3 grid)
 - Map transitions: server detects border crossings, updates player.mapId, world-aware movement
+- Editor lighting system: ambient overlay, persistent ambient settings (cycle/fixed), light CRUD on MapDocument, viewport authoring (click-create, select, drag-move, delete), gizmo overlay (radius/label/selection), preview overlay (radial halo sprites with additive blending)
+- Lighting data model in shared/data/models/LightingData.js — normalizeLight/normalizeLighting guarantee invariants
 - JSDoc required on all public methods

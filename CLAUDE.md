@@ -135,6 +135,7 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - `TileCollision` = static AABB vs tile-layer collision check.
 - `MapSerializer` = MapData ↔ JSON conversion.
 - `MapValidator` = validate map integrity.
+- `LightingData` = lighting constants and normalization (`DEFAULT_LIGHTING`, `DEFAULT_LIGHT`, `normalizeLight()`, `normalizeLighting()`). Used by MapDocument for all lighting mutations.
 
 ### Tilemap rendering
 - `MapChunkRenderer` = chunk-based renderer, uses `VisibleChunkTracker` for enter/exit streaming. Lazy tile texture cache from atlas.
@@ -232,7 +233,13 @@ src/
 │       │   │   ├── ToolsPanel.js     Tool selector
 │       │   │   ├── LayersPanel.js    Layer visibility
 │       │   │   ├── TilesPanel.js     Tile group selector + tile picker grid
-│       │   │   └── StatusBarPanel.js Bottom status bar
+│       │   │   ├── StatusBarPanel.js Bottom status bar
+│       │   │   └── LightingPanel.js  Lighting controls (preview, ambient, light editor)
+│       │   ├── render/
+│       │   │   ├── EntityOverlay.js      Entity gizmos (markers, labels, selection)
+│       │   │   ├── EntitySpriteLayer.js  Entity sprite rendering in editor
+│       │   │   ├── LightGizmoOverlay.js  Light gizmos (radius circles, labels, selection ring)
+│       │   │   └── LightPreviewOverlay.js Radial halo sprites (additive blend, shared gradient)
 │       │   ├── utils/
 │       │   │   └── clampEditorCamera.js  Editor camera clamp (half-viewport margins)
 │       │   └── styles/map-editor.css     Map editor layout + panels
@@ -316,7 +323,8 @@ src/
         │   ├── MapData.js         Chunk-based map data
         │   ├── ChunkData.js       Single chunk tile data
         │   ├── LayerData.js       Single tile layer (legacy)
-        │   └── GameMap.js         Static loader facade
+        │   ├── GameMap.js         Static loader facade
+        │   └── LightingData.js    Lighting defaults + normalization (normalizeLight, normalizeLighting)
         ├── loaders/MapLoader.js        Fetch JSON maps + tileset
         ├── loaders/TilesetRegistry.js  Cached tileset metadata loader (shared by editor + client)
         ├── loaders/ProjectSettings.js  Loads /content/project.json (gameStart config)

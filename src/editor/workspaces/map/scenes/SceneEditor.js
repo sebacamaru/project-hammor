@@ -9,6 +9,7 @@ import { clampEditorCamera } from "../utils/clampEditorCamera.js";
 import { EntityOverlay } from "../render/EntityOverlay.js";
 import { EntitySpriteLayer } from "../render/EntitySpriteLayer.js";
 import { LightGizmoOverlay } from "../render/LightGizmoOverlay.js";
+import { LightPreviewOverlay } from "../render/LightPreviewOverlay.js";
 
 export class SceneEditor extends Scene {
   /**
@@ -76,8 +77,12 @@ export class SceneEditor extends Scene {
     if (this.entitySpriteLayer) {
       this.entitySpriteLayer.container.visible = eventsMode;
     }
+    const lightsMode = s.mode === "lights";
     if (this.lightGizmoOverlay) {
-      this.lightGizmoOverlay.container.visible = s.mode === "lights";
+      this.lightGizmoOverlay.container.visible = lightsMode;
+    }
+    if (this.lightPreviewOverlay) {
+      this.lightPreviewOverlay.container.visible = lightsMode;
     }
 
     this.collisionDebug.enabled = this.engine.debug.visible || s.mode === "collisions";
@@ -320,6 +325,7 @@ export class SceneEditor extends Scene {
    */
   setLights(lights) {
     this.lightGizmoOverlay?.setLights(lights);
+    this.lightPreviewOverlay?.setLights(lights);
   }
 
   /**
@@ -338,13 +344,15 @@ export class SceneEditor extends Scene {
    */
   setLightDragPreview(lightId, x, y) {
     this.lightGizmoOverlay?.setDragPreview(lightId, x, y);
+    this.lightPreviewOverlay?.setDragPreview(lightId, x, y);
   }
 
   /**
-   * Clears the light drag preview in the gizmo overlay.
+   * Clears the light drag preview in the gizmo and preview overlays.
    */
   clearLightDragPreview() {
     this.lightGizmoOverlay?.clearDragPreview();
+    this.lightPreviewOverlay?.clearDragPreview();
   }
 
   rebuildChunk(cx, cy) {
@@ -430,6 +438,7 @@ export class SceneEditor extends Scene {
     const entitySpriteLayer = new EntitySpriteLayer();
     const entityOverlay = new EntityOverlay();
     const lightGizmoOverlay = new LightGizmoOverlay();
+    const lightPreviewOverlay = new LightPreviewOverlay();
 
     const ambientOverlay = new Graphics();
 
@@ -438,6 +447,7 @@ export class SceneEditor extends Scene {
     container.addChild(fringeLayer);
     container.addChild(entitySpriteLayer.container); // sprites below overlay
     container.addChild(ambientOverlay);              // tints map content only
+    container.addChild(lightPreviewOverlay.container); // light halos (below entities/gizmos)
     container.addChild(entityOverlay.container);     // debug/selection above
     container.addChild(collisionDebug.container);
     container.addChild(chunkDebug.container);
@@ -452,6 +462,7 @@ export class SceneEditor extends Scene {
       fringeLayer,
       entitySpriteLayer,
       ambientOverlay,
+      lightPreviewOverlay,
       entityOverlay,
       lightGizmoOverlay,
       collisionDebug,
@@ -467,6 +478,7 @@ export class SceneEditor extends Scene {
     this.entitySpriteLayer = visuals.entitySpriteLayer;
     this.ambientOverlay = visuals.ambientOverlay;
     this.entityOverlay = visuals.entityOverlay;
+    this.lightPreviewOverlay = visuals.lightPreviewOverlay;
     this.lightGizmoOverlay = visuals.lightGizmoOverlay;
     this.collisionDebug = visuals.collisionDebug;
     this.chunkDebug = visuals.chunkDebug;
@@ -477,6 +489,7 @@ export class SceneEditor extends Scene {
 
     visuals.entitySpriteLayer?.destroy();
     visuals.entityOverlay?.destroy();
+    visuals.lightPreviewOverlay?.destroy();
     visuals.lightGizmoOverlay?.destroy();
     visuals.collisionDebug?.destroy();
     visuals.chunkDebug?.destroy();
@@ -491,6 +504,7 @@ export class SceneEditor extends Scene {
       this.entitySpriteLayer = null;
       this.ambientOverlay = null;
       this.entityOverlay = null;
+      this.lightPreviewOverlay = null;
       this.lightGizmoOverlay = null;
       this.collisionDebug = null;
       this.chunkDebug = null;
