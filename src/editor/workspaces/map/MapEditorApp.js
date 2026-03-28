@@ -339,6 +339,7 @@ export class MapEditorApp {
   undo() {
     this.history.undo();
     this.state.emit();
+    this._toolbarRefresh?.();
   }
 
   /**
@@ -347,6 +348,7 @@ export class MapEditorApp {
   redo() {
     this.history.redo();
     this.state.emit();
+    this._toolbarRefresh?.();
   }
 
   /**
@@ -356,7 +358,16 @@ export class MapEditorApp {
    * @returns {Function} Unsubscribe function
    */
   subscribeToolbar(listener) {
-    return this.state.subscribe(listener);
+    this._toolbarRefresh = listener;
+    let prevMode = this.state.get().mode;
+    let prevTool = this.state.get().activeTool;
+    return this.state.subscribe((s) => {
+      if (s.mode !== prevMode || s.activeTool !== prevTool) {
+        prevMode = s.mode;
+        prevTool = s.activeTool;
+        listener();
+      }
+    });
   }
 
   /**
