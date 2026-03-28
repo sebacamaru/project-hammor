@@ -1,8 +1,23 @@
+import {
+  getMapLightingPreviewPreferences,
+  setMapLightingPreviewPreferences,
+} from "../../shared/EditorPreferences.js";
+
 /**
  * Holds the current editor state: selected tool, tile, layer, etc.
  */
 export class MapEditorState {
   constructor() {
+    this._lightingPreviewDefaults = {
+      enabled: true,
+      ambientColor: "#223344",
+      ambientIntensity: 0.6,
+    };
+
+    const savedPreview = getMapLightingPreviewPreferences(
+      this._lightingPreviewDefaults
+    );
+
     this.state = {
       mode: "terrain",
 
@@ -47,11 +62,7 @@ export class MapEditorState {
       selectedLightId: null,
       copiedLightSettings: null,
 
-      lightingPreview: {
-        enabled: true,
-        ambientColor: "#223344",
-        ambientIntensity: 0.6,
-      },
+      lightingPreview: savedPreview,
     };
 
     this.listeners = new Set();
@@ -62,12 +73,30 @@ export class MapEditorState {
   }
 
   patch(partial) {
+    const prev = this.state.lightingPreview;
     Object.assign(this.state, partial);
+    const next = this.state.lightingPreview;
+    if (
+      prev.enabled !== next.enabled ||
+      prev.ambientColor !== next.ambientColor ||
+      prev.ambientIntensity !== next.ambientIntensity
+    ) {
+      setMapLightingPreviewPreferences(next, this._lightingPreviewDefaults);
+    }
     this.emit();
   }
 
   update(fn) {
+    const before = { ...this.state.lightingPreview };
     fn(this.state);
+    const after = this.state.lightingPreview;
+    if (
+      before.enabled !== after.enabled ||
+      before.ambientColor !== after.ambientColor ||
+      before.ambientIntensity !== after.ambientIntensity
+    ) {
+      setMapLightingPreviewPreferences(after, this._lightingPreviewDefaults);
+    }
     this.emit();
   }
 

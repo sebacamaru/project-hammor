@@ -1,0 +1,55 @@
+.shell-subtoolbar {
+  position: relative;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.subtoolbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+}
+
+.subtoolbar-btn {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 0 12px;
+  height: 26px;
+  font-size: 12px;
+  font-family: "Google Sans Code", monospace;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.subtoolbar-btn:hover {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.subtoolbar-btn.is-active {
+  color: #4fc3f7;
+  background: rgba(79, 195, 247, 0.1);
+}
+
+.subtoolbar-btn:disabled {
+  color: rgba(255, 255, 255, 0.2);
+  background: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.subtoolbar-separator {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 6px;
+  flex-shrink: 0;
+}

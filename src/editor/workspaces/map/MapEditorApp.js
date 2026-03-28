@@ -15,7 +15,6 @@ import { EyedropperTool } from "./tools/EyedropperTool.js";
 
 import { WorkspaceModesPanel } from "../../shell/WorkspaceModesPanel.js";
 import { LayersPanel } from "./panels/LayersPanel.js";
-import { ToolsPanel } from "./panels/ToolsPanel.js";
 import { StatusBarPanel } from "./panels/StatusBarPanel.js";
 import { TilesPanel } from "./panels/TilesPanel.js";
 import { EventsPanel } from "./panels/EventsPanel.js";
@@ -116,7 +115,6 @@ export class MapEditorApp {
     // Panels
     this.tilesPanel = new TilesPanel(this.layout.leftPanelEl, this.state);
     this.layers = new LayersPanel(this.layout.rightPanelEl, this.state);
-    this.tools = new ToolsPanel(this.layout.toolsEl, this.state);
     this.status = new StatusBarPanel(this.layout.statusBarEl, this.state);
     this.eventsPanel = new EventsPanel(
       this.layout.eventsPanelEl,
@@ -140,7 +138,6 @@ export class MapEditorApp {
       const lights = s.mode === "lights";
       for (const el of this._terrainEls)
         el.style.display = terrain ? "" : "none";
-      this.layout.toolsEl.style.display = terrain || collisions ? "" : "none";
       for (const el of this._eventsEls) el.style.display = events ? "" : "none";
       for (const el of this._lightsEls) el.style.display = lights ? "" : "none";
     });
@@ -324,6 +321,92 @@ export class MapEditorApp {
 
   canSave() {
     return !!this.document;
+  }
+
+  /** @returns {boolean} Whether there is an action to undo. */
+  canUndo() {
+    return this.history.undoStack.length > 0;
+  }
+
+  /** @returns {boolean} Whether there is an action to redo. */
+  canRedo() {
+    return this.history.redoStack.length > 0;
+  }
+
+  /**
+   * Undoes the last action. Single source of truth — called by keyboard shortcut and toolbar button.
+   */
+  undo() {
+    this.history.undo();
+    this.state.emit();
+  }
+
+  /**
+   * Redoes the last undone action. Single source of truth — called by keyboard shortcut and toolbar button.
+   */
+  redo() {
+    this.history.redo();
+    this.state.emit();
+  }
+
+  /**
+   * Subscribes to toolbar-relevant state changes. Delegates to state subscriptions since
+   * mode and activeTool changes are always emitted through state.
+   * @param {Function} listener
+   * @returns {Function} Unsubscribe function
+   */
+  subscribeToolbar(listener) {
+    return this.state.subscribe(listener);
+  }
+
+  /**
+   * Returns the current contextual toolbar actions for the active mode.
+   * @returns {Array<{id: string, label: string, active?: boolean, onClick: Function}>}
+   */
+  getToolbarActions() {
+    const { mode, activeTool } = this.state.get();
+
+    if (mode === "terrain") {
+      return [
+        {
+          id: "pencil",
+          label: "Pencil",
+          active: activeTool === "pencil",
+          onClick: () => this.state.patch({ activeTool: "pencil" }),
+        },
+        {
+          id: "eraser",
+          label: "Erase",
+          active: activeTool === "eraser",
+          onClick: () => this.state.patch({ activeTool: "eraser" }),
+        },
+        {
+          id: "eyedropper",
+          label: "Eyedropper",
+          active: activeTool === "eyedropper",
+          onClick: () => this.state.patch({ activeTool: "eyedropper" }),
+        },
+      ];
+    }
+
+    if (mode === "collisions") {
+      return [
+        {
+          id: "pencil",
+          label: "Pencil",
+          active: activeTool === "pencil",
+          onClick: () => this.state.patch({ activeTool: "pencil" }),
+        },
+        {
+          id: "eraser",
+          label: "Erase",
+          active: activeTool === "eraser",
+          onClick: () => this.state.patch({ activeTool: "eraser" }),
+        },
+      ];
+    }
+
+    return [];
   }
 
   getTitle() {
@@ -641,19 +724,19 @@ export class MapEditorApp {
 
     if (e.code === "KeyZ" && e.shiftKey) {
       e.preventDefault();
-      this.history.redo();
+      this.redo();
       return;
     }
 
     if (e.code === "KeyZ") {
       e.preventDefault();
-      this.history.undo();
+      this.undo();
       return;
     }
 
     if (e.code === "KeyY") {
       e.preventDefault();
-      this.history.redo();
+      this.redo();
       return;
     }
 

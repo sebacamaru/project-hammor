@@ -67,6 +67,6 @@
 .shell-workspace-host {
   position: relative;
   width: 100%;
-  height: calc(100% - 36px);
+  height: calc(100% - 72px);
   overflow: hidden;
 }

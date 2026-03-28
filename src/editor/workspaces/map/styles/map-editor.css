@@ -29,7 +29,6 @@
 }
 
 .editor-panel,
-.editor-tools,
 .editor-statusbar {
     pointer-events: auto;
     border: 1px solid rgba(255, 255, 255, 0.22);
@@ -154,14 +153,6 @@
     padding: 0 4px;
 }
 
-.editor-tools {
-    position: absolute;
-    left: 50%;
-    bottom: 90px;
-    transform: translateX(-50%);
-    padding: 8px 12px;
-}
-
 .editor-statusbar {
     position: absolute;
     bottom: 20px;
@@ -172,8 +163,7 @@
 
 /* Panels and tools */
 
-.toolbar-buttons,
-.tools-buttons {
+.toolbar-buttons {
     display: flex;
     gap: 12px;
     align-items: center;
@@ -182,7 +172,6 @@
 }
 
 .toolbar-buttons button,
-.tools-buttons button,
 .layer-visibility {
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(255, 255, 255, 0.06);
@@ -197,8 +186,7 @@
     font-weight: lighter;
 }
 
-.toolbar-buttons button.is-active,
-.tools-buttons button.is-active {
+.toolbar-buttons button.is-active {
     background: rgba(255, 255, 255, 0.18);
     border-color: rgba(255, 255, 255, 0.35);
 }
