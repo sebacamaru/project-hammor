@@ -394,12 +394,14 @@ export class MapEditorApp {
         {
           id: "pencil",
           label: "Pencil",
+          icon: "pencil",
           active: activeTool === "pencil",
           onClick: () => this.state.patch({ activeTool: "pencil" }),
         },
         {
           id: "eraser",
           label: "Erase",
+          icon: "eraser",
           active: activeTool === "eraser",
           onClick: () => this.state.patch({ activeTool: "eraser" }),
         },

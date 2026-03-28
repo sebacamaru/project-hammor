@@ -105,18 +105,21 @@ export class EditorShell {
       {
         id: "save",
         label: "Save",
+        icon: "save",
         disabled: !workspace?.canSave?.(),
         onClick: () => this._doSave(),
       },
       {
         id: "undo",
         label: "Undo",
+        icon: "undo",
         disabled: !workspace?.canUndo?.(),
         onClick: () => this._doUndo(),
       },
       {
         id: "redo",
         label: "Redo",
+        icon: "redo",
         disabled: !workspace?.canRedo?.(),
         onClick: () => this._doRedo(),
       },
