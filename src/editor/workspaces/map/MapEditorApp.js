@@ -370,11 +370,18 @@ export class MapEditorApp {
     let prevMode = this.state.get().mode;
     let prevTool = this.state.get().activeTool;
     let prevEntityPlaceMode = this.state.get().entityPlaceMode;
+    let prevSelectedEntityId = this.state.get().selectedEntityId;
     return this.state.subscribe((s) => {
-      if (s.mode !== prevMode || s.activeTool !== prevTool || s.entityPlaceMode !== prevEntityPlaceMode) {
+      if (
+        s.mode !== prevMode ||
+        s.activeTool !== prevTool ||
+        s.entityPlaceMode !== prevEntityPlaceMode ||
+        s.selectedEntityId !== prevSelectedEntityId
+      ) {
         prevMode = s.mode;
         prevTool = s.activeTool;
         prevEntityPlaceMode = s.entityPlaceMode;
+        prevSelectedEntityId = s.selectedEntityId;
         listener();
       }
     });
@@ -430,13 +437,24 @@ export class MapEditorApp {
     }
 
     if (mode === "events") {
-      const { entityPlaceMode } = this.state.get();
+      const { entityPlaceMode, selectedEntityId } = this.state.get();
       return [
         {
           id: "add-entity",
           label: "Add Entity",
           active: entityPlaceMode,
           onClick: () => this.state.patch({ entityPlaceMode: !this.state.get().entityPlaceMode }),
+        },
+        {
+          id: "delete-entity",
+          label: "Delete Entity",
+          disabled: !selectedEntityId,
+          onClick: () => {
+            const { selectedEntityId: id } = this.state.get();
+            if (!id || !this.document) return;
+            const removed = this.document.removeEntity(id);
+            if (removed) this.state.patch({ selectedEntityId: null });
+          },
         },
       ];
     }

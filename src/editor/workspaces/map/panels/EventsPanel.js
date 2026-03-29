@@ -88,7 +88,6 @@ export class EventsPanel {
               <input type="number" data-field="visual-pattern" min="0">
             </label>
           </fieldset>
-          <button class="events-delete-btn" data-action="delete-entity">Delete Entity</button>
         </div>
       </div>
     `;
@@ -112,17 +111,6 @@ export class EventsPanel {
       visualDirection: this.el.querySelector('[data-field="visual-direction"]'),
       visualPattern: this.el.querySelector('[data-field="visual-pattern"]'),
     };
-
-    // Delete Entity button
-    this.el.querySelector('[data-action="delete-entity"]').addEventListener("click", () => {
-      const doc = this.getDocument?.();
-      const { selectedEntityId } = this.state.get();
-      if (!doc || !selectedEntityId) return;
-      const removed = doc.removeEntity(selectedEntityId);
-      if (removed) {
-        this.state.patch({ selectedEntityId: null });
-      }
-    });
 
     // Inspector field change handlers (fires on blur/enter, not every keystroke)
     this._inspectorEl.addEventListener("change", (e) => {

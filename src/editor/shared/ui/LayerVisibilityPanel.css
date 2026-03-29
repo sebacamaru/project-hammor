@@ -1,8 +1,8 @@
 .layer-vis-panel {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 10px;
+    gap: 6px;
+    padding: 6px;
     white-space: nowrap;
     pointer-events: auto;
     border: 1px solid rgba(255, 255, 255, 0.22);
@@ -17,6 +17,8 @@
     align-items: center;
     gap: 5px;
     font-size: 12px;
+    padding: 10px;
+    border-radius: 6px;
 }
 
 .layer-vis-item.is-active .layer-vis-name {
@@ -24,21 +26,30 @@
     font-weight: 600;
 }
 
+.layer-vis-item.is-active {
+    outline: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.layer-vis-title {
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.6;
+    user-select: none;
+    margin: 0 4px 0 8px;
+}
+
 .layer-vis-name {
     user-select: none;
 }
 
-.layer-vis-panel[data-mode="terrain"] .layer-vis-name {
+.layer-vis-panel[data-mode="terrain"] .layer-vis-item {
     cursor: pointer;
 }
-
-.layer-vis-panel:not([data-mode="terrain"]) .layer-vis-name {
-    cursor: default;
+.layer-vis-panel[data-mode="terrain"] .layer-vis-item:not(:last-child):hover {
+    outline: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.layer-vis-sep {
-    width: 1px;
-    height: 14px;
-    background: rgba(255, 255, 255, 0.2);
-    margin: 0 6px;
+.layer-vis-panel:not([data-mode="terrain"]) .layer-vis-item {
+    cursor: default;
 }

@@ -15,7 +15,13 @@ export class LayerVisibilityPanel {
    * @param {(visible: boolean) => void} opts.onToggleGrid
    * @param {(listener: Function) => Function} opts.subscribe
    */
-  constructor({ getState, onToggleLayer, onSelectLayer, onToggleGrid, subscribe }) {
+  constructor({
+    getState,
+    onToggleLayer,
+    onSelectLayer,
+    onToggleGrid,
+    subscribe,
+  }) {
     this._getState = getState;
     this._onToggleLayer = onToggleLayer;
     this._onSelectLayer = onSelectLayer;
@@ -34,6 +40,11 @@ export class LayerVisibilityPanel {
     panel.className = "layer-vis-panel";
     this._el = panel;
 
+    const title = document.createElement("span");
+    title.className = "layer-vis-title";
+    title.textContent = "Layers";
+    panel.appendChild(title);
+
     for (const layer of LAYERS) {
       const item = document.createElement("div");
       item.className = "layer-vis-item";
@@ -46,15 +57,17 @@ export class LayerVisibilityPanel {
         this._onToggleLayer(layer.id, checkbox.checked);
       });
 
-      const name = document.createElement("span");
-      name.className = "layer-vis-name";
-      name.textContent = layer.label;
-      name.dataset.layerName = layer.id;
-      name.addEventListener("click", () => {
+      item.addEventListener("click", (e) => {
+        if (e.target === checkbox) return;
         if (this._getState().mode === "terrain") {
           this._onSelectLayer(layer.id);
         }
       });
+
+      const name = document.createElement("span");
+      name.className = "layer-vis-name";
+      name.textContent = layer.label;
+      name.dataset.layerName = layer.id;
 
       item.appendChild(checkbox);
       item.appendChild(name);
@@ -100,7 +113,9 @@ export class LayerVisibilityPanel {
 
     for (const layer of LAYERS) {
       const item = this._el.querySelector(`[data-layer-item="${layer.id}"]`);
-      const checkbox = this._el.querySelector(`[data-layer-checkbox="${layer.id}"]`);
+      const checkbox = this._el.querySelector(
+        `[data-layer-checkbox="${layer.id}"]`,
+      );
       if (!item || !checkbox) continue;
 
       const visible = s.visibleLayers[layer.id] ?? true;
