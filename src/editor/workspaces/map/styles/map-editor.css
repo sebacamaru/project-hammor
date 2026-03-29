@@ -47,17 +47,23 @@
     width: 280px;
 }
 
-.editor-panel-right {
+.layer-vis-panel-host {
     position: absolute;
     top: 20px;
+    right: 20px;
+}
+
+.editor-panel-events {
+    position: absolute;
+    top: 70px;
     right: 20px;
     bottom: 90px;
     width: 240px;
 }
 
-.editor-panel-events {
+.editor-panel-lights {
     position: absolute;
-    top: 20px;
+    top: 70px;
     right: 20px;
     bottom: 90px;
     width: 240px;
@@ -172,8 +178,7 @@
     height: 100%;
 }
 
-.toolbar-buttons button,
-.layer-visibility {
+.toolbar-buttons button {
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(255, 255, 255, 0.06);
     color: white;
@@ -202,33 +207,6 @@
     margin-bottom: 12px;
 }
 
-.layers-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.layer-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.layer-row.is-hidden {
-    opacity: 0.6;
-}
-
-.layer-active {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: white;
-}
-
-.layer-visibility.is-off {
-    opacity: 0.6;
-}
 
 .statusbar-content {
     display: flex;

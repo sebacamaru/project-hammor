@@ -9,7 +9,7 @@ export class MapEditorLayout {
       <div class="editor-shell">
         <div class="wrapper">
           <aside class="editor-panel editor-panel-left"></aside>
-          <aside class="editor-panel editor-panel-right"></aside>
+          <div class="layer-vis-panel-host"></div>
           <aside class="editor-panel editor-panel-events"></aside>
           <aside class="editor-panel editor-panel-lights"></aside>
           <footer class="editor-statusbar"></footer>
@@ -19,7 +19,7 @@ export class MapEditorLayout {
 
     this.viewportEl = this.root.querySelector(".editor-viewport-canvas");
     this.leftPanelEl = this.root.querySelector(".editor-panel-left");
-    this.rightPanelEl = this.root.querySelector(".editor-panel-right");
+    this.layersPanelEl = this.root.querySelector(".layer-vis-panel-host");
     this.eventsPanelEl = this.root.querySelector(".editor-panel-events");
     this.eventsPanelEl.style.display = "none";
     this.lightsPanelEl = this.root.querySelector(".editor-panel-lights");

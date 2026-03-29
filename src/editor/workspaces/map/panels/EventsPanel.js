@@ -26,9 +26,6 @@ export class EventsPanel {
     this.el.innerHTML = `
       <div class="panel-section events-panel">
         <div class="panel-title">Events</div>
-        <div class="events-actions">
-          <button class="events-add-btn" data-action="add-entity">Add Entity</button>
-        </div>
         <div class="events-hint" data-role="hint">Click an entity to select</div>
         <div class="events-selection" data-role="selection">No entity selected</div>
         <div class="events-inspector" data-role="inspector" style="display:none">
@@ -115,11 +112,6 @@ export class EventsPanel {
       visualDirection: this.el.querySelector('[data-field="visual-direction"]'),
       visualPattern: this.el.querySelector('[data-field="visual-pattern"]'),
     };
-
-    // Add Entity button
-    this.el.querySelector('[data-action="add-entity"]').addEventListener("click", () => {
-      this.state.patch({ entityPlaceMode: true });
-    });
 
     // Delete Entity button
     this.el.querySelector('[data-action="delete-entity"]').addEventListener("click", () => {

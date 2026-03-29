@@ -1,0 +1,44 @@
+.layer-vis-panel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    white-space: nowrap;
+    pointer-events: auto;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background-color: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    border-radius: 8px;
+    color: white;
+}
+
+.layer-vis-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+}
+
+.layer-vis-item.is-active .layer-vis-name {
+    color: #4fc3f7;
+    font-weight: 600;
+}
+
+.layer-vis-name {
+    user-select: none;
+}
+
+.layer-vis-panel[data-mode="terrain"] .layer-vis-name {
+    cursor: pointer;
+}
+
+.layer-vis-panel:not([data-mode="terrain"]) .layer-vis-name {
+    cursor: default;
+}
+
+.layer-vis-sep {
+    width: 1px;
+    height: 14px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 6px;
+}

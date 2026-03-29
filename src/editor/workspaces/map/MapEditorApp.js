@@ -14,7 +14,7 @@ import { EraseTool } from "./tools/EraseTool.js";
 import { EyedropperTool } from "./tools/EyedropperTool.js";
 
 import { WorkspaceModesPanel } from "../../shell/WorkspaceModesPanel.js";
-import { LayersPanel } from "./panels/LayersPanel.js";
+import { LayerVisibilityPanel } from "../../shared/ui/LayerVisibilityPanel.js";
 import { StatusBarPanel } from "./panels/StatusBarPanel.js";
 import { TilesPanel } from "./panels/TilesPanel.js";
 import { EventsPanel } from "./panels/EventsPanel.js";
@@ -114,7 +114,14 @@ export class MapEditorApp {
 
     // Panels
     this.tilesPanel = new TilesPanel(this.layout.leftPanelEl, this.state);
-    this.layers = new LayersPanel(this.layout.rightPanelEl, this.state);
+    this.layerVisPanel = new LayerVisibilityPanel({
+      getState: () => this.state.get(),
+      onToggleLayer: (id, v) => this.state.update((s) => { s.visibleLayers[id] = v; }),
+      onSelectLayer: (id) => this.state.update((s) => { s.activeLayer = id; }),
+      onToggleGrid: (v) => this.state.update((s) => { s.showGrid = v; }),
+      subscribe: (cb) => this.state.subscribe(cb),
+    });
+    this.layerVisPanel.mount(this.layout.layersPanelEl);
     this.status = new StatusBarPanel(this.layout.statusBarEl, this.state);
     this.eventsPanel = new EventsPanel(
       this.layout.eventsPanelEl,
@@ -128,7 +135,7 @@ export class MapEditorApp {
     );
 
     // Mode-based panel visibility
-    this._terrainEls = [this.layout.leftPanelEl, this.layout.rightPanelEl];
+    this._terrainEls = [this.layout.leftPanelEl];
     this._eventsEls = [this.layout.eventsPanelEl];
     this._lightsEls = [this.layout.lightsPanelEl];
     this.state.subscribe((s) => {
@@ -211,6 +218,7 @@ export class MapEditorApp {
   unmount() {
     this.loop?.stop();
     this.modesPanel?.destroy();
+    this.layerVisPanel?.destroy();
     this.eventsPanel?.destroy();
     this.lightingPanel?.destroy();
     window.removeEventListener("keydown", this.onKeyDown);
@@ -361,10 +369,12 @@ export class MapEditorApp {
     this._toolbarRefresh = listener;
     let prevMode = this.state.get().mode;
     let prevTool = this.state.get().activeTool;
+    let prevEntityPlaceMode = this.state.get().entityPlaceMode;
     return this.state.subscribe((s) => {
-      if (s.mode !== prevMode || s.activeTool !== prevTool) {
+      if (s.mode !== prevMode || s.activeTool !== prevTool || s.entityPlaceMode !== prevEntityPlaceMode) {
         prevMode = s.mode;
         prevTool = s.activeTool;
+        prevEntityPlaceMode = s.entityPlaceMode;
         listener();
       }
     });
@@ -415,6 +425,18 @@ export class MapEditorApp {
           icon: "eraser",
           active: activeTool === "eraser",
           onClick: () => this.state.patch({ activeTool: "eraser" }),
+        },
+      ];
+    }
+
+    if (mode === "events") {
+      const { entityPlaceMode } = this.state.get();
+      return [
+        {
+          id: "add-entity",
+          label: "Add Entity",
+          active: entityPlaceMode,
+          onClick: () => this.state.patch({ entityPlaceMode: !this.state.get().entityPlaceMode }),
         },
       ];
     }
