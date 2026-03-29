@@ -3,6 +3,7 @@ import { registerMapRoutes } from "./routes/maps.js";
 import { registerTilesetRoutes } from "./routes/tilesets.js";
 import { registerWorldRoutes } from "./routes/worlds.js";
 import { registerProjectRoutes } from "./routes/project.js";
+import { registerDevRoutes } from "./routes/dev.js";
 
 const PORT = 3032;
 
@@ -28,7 +29,7 @@ fastify.addHook("onRequest", async (request, reply) => {
     reply.header("Vary", "Origin");
   }
 
-  reply.header("Access-Control-Allow-Methods", "GET,PUT,DELETE,OPTIONS");
+  reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   reply.header("Access-Control-Allow-Headers", "Content-Type");
 
   if (request.method === "OPTIONS") {
@@ -49,6 +50,7 @@ await registerMapRoutes(fastify);
 await registerTilesetRoutes(fastify);
 await registerWorldRoutes(fastify);
 await registerProjectRoutes(fastify);
+await registerDevRoutes(fastify);
 
 await fastify.listen({
   host: "127.0.0.1",

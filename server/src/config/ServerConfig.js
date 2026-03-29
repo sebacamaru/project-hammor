@@ -13,6 +13,7 @@ export function createServerConfig(overrides = {}) {
     serverName: "MINIMMO",
     host: "127.0.0.1",
     port: 3001,
+    healthPort: 3002,
     startWorldId: "main_world",
     startMapId: "test_map",
     spawnX: 8, // center of tile 0,0

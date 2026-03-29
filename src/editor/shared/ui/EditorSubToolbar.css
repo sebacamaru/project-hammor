@@ -1,7 +1,6 @@
 .shell-subtoolbar {
     position: relative;
     height: 36px;
-    background: rgba(0, 0, 0, 0.7);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 9;
     display: flex;
@@ -10,6 +9,13 @@
 }
 
 .subtoolbar-inner {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 100%;
+}
+
+.subtoolbar-section {
     display: flex;
     align-items: center;
     gap: 2px;
@@ -38,7 +44,8 @@
     white-space: nowrap;
 }
 
-.subtoolbar-icon {
+.subtoolbar-icon,
+.editor-icon {
     width: 16px;
     height: 16px;
     display: inline-block;

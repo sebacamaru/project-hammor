@@ -1,34 +1,12 @@
 import "./EditorSubToolbar.css";
+import { getIconStyle } from "./editorIcons.js";
 
 /**
- * Icon name → column index in editor_icons.webp (16px per slot, single row).
- * Adjust indices to match the actual sprite sheet layout.
- */
-const ICON_MAP = {
-  save:        0,
-  undo:        1,
-  redo:        2,
-  pencil:      3,
-  eraser:      4,
-  eyedropper:  5,
-  // slots 6–19 reserved
-};
-
-/**
- * Returns the CSS background-position style for the named icon,
- * or null if the name is not in ICON_MAP (avoids silently showing wrong icon).
- * @param {string} name
- * @returns {{ backgroundPosition: string } | null}
- */
-function getIconStyle(name) {
-  if (!(name in ICON_MAP)) return null;
-  const col = ICON_MAP[name];
-  return { backgroundPosition: `${-(col * 16)}px 0px` };
-}
-
-/**
- * A pure UI toolbar component that renders a horizontal strip of action buttons.
- * Knows nothing about editor state — receives a declarative `actions` array and renders it.
+ * A pure UI toolbar component that renders a horizontal strip of action buttons
+ * split into left, center, and right sections.
+ *
+ * The center section is always visually centered via CSS grid (1fr auto 1fr).
+ * Knows nothing about editor state — receives a declarative actions object and renders it.
  */
 export class EditorSubToolbar {
   /**
@@ -36,36 +14,83 @@ export class EditorSubToolbar {
    */
   constructor(el) {
     this.el = el;
-    this._actions = [];
+    this._sections = { left: [], center: [], right: [] };
 
     this._inner = document.createElement("div");
     this._inner.className = "subtoolbar-inner";
+
+    this._leftEl   = this._createSection("left");
+    this._centerEl = this._createSection("center");
+    this._rightEl  = this._createSection("right");
+
+    this._inner.appendChild(this._leftEl);
+    this._inner.appendChild(this._centerEl);
+    this._inner.appendChild(this._rightEl);
+
     this.el.appendChild(this._inner);
   }
 
   /**
+   * Creates a named section div.
+   * @param {"left"|"center"|"right"} name
+   * @returns {HTMLElement}
+   */
+  _createSection(name) {
+    const div = document.createElement("div");
+    div.className = `subtoolbar-section subtoolbar-section--${name}`;
+    return div;
+  }
+
+  /**
    * Replaces the current action list and re-renders the toolbar.
-   * @param {Array<{id?: string, label?: string, icon?: string, active?: boolean, disabled?: boolean, onClick?: Function, type?: string}>} actions
+   *
+   * Accepts either:
+   *   - A sections object: `{ left?, center?, right? }` — each is an actions array
+   *   - A flat array (backwards compat) — treated as the left section only
+   *
+   * @param {Array|{left?: Array, center?: Array, right?: Array}} actions
    */
   setActions(actions) {
-    this._actions = actions;
+    if (Array.isArray(actions)) {
+      this._sections = { left: actions, center: [], right: [] };
+    } else {
+      this._sections = {
+        left:   actions.left   ?? [],
+        center: actions.center ?? [],
+        right:  actions.right  ?? [],
+      };
+    }
     this._render();
   }
 
   /**
-   * Renders buttons and separators from the current actions array.
-   * - If action.icon is set and known: renders a sprite icon; label becomes tooltip only.
-   * - If action.icon is set but unknown: falls back to text.
-   * - If no action.icon: renders text button.
+   * Renders all three sections from the current sections state.
    */
   _render() {
-    this._inner.innerHTML = "";
+    this._leftEl.innerHTML   = "";
+    this._centerEl.innerHTML = "";
+    this._rightEl.innerHTML  = "";
 
-    for (const action of this._actions) {
+    this._renderSection(this._sections.left,   this._leftEl);
+    this._renderSection(this._sections.center, this._centerEl);
+    this._renderSection(this._sections.right,  this._rightEl);
+  }
+
+  /**
+   * Renders a list of actions into a container element.
+   * - Separators render as thin vertical dividers.
+   * - Buttons with a known icon render the sprite; label becomes tooltip.
+   * - Buttons with an unknown or missing icon render as text.
+   *
+   * @param {Array<{id?: string, label?: string, icon?: string, active?: boolean, disabled?: boolean, onClick?: Function, type?: string}>} actions
+   * @param {HTMLElement} container
+   */
+  _renderSection(actions, container) {
+    for (const action of actions) {
       if (action.type === "separator") {
         const sep = document.createElement("div");
         sep.className = "subtoolbar-separator";
-        this._inner.appendChild(sep);
+        container.appendChild(sep);
         continue;
       }
 
@@ -81,7 +106,7 @@ export class EditorSubToolbar {
         const style = getIconStyle(action.icon);
         if (style) {
           const icon = document.createElement("span");
-          icon.className = "subtoolbar-icon";
+          icon.className = "editor-icon";
           Object.assign(icon.style, style);
           btn.appendChild(icon);
 
@@ -102,14 +127,16 @@ export class EditorSubToolbar {
         btn.addEventListener("click", action.onClick);
       }
 
-      this._inner.appendChild(btn);
+      container.appendChild(btn);
     }
   }
 
   /**
-   * Clears the toolbar and removes rendered content.
+   * Clears all sections and removes rendered content.
    */
   destroy() {
-    this._inner.innerHTML = "";
+    this._leftEl.innerHTML   = "";
+    this._centerEl.innerHTML = "";
+    this._rightEl.innerHTML  = "";
   }
 }
