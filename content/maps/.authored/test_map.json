@@ -221333,6 +221333,23 @@
           }
         }
       }
+    },
+    {
+      "id": "entity_001",
+      "prefab": "entity",
+      "x": 328,
+      "y": 192,
+      "components": {
+        "collision": {
+          "solid": false,
+          "hitbox": {
+            "offsetX": -8,
+            "offsetY": -16,
+            "width": 16,
+            "height": 16
+          }
+        }
+      }
     }
   ],
   "lighting": {

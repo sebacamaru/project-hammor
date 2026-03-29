@@ -1,6 +1,5 @@
 // Internally the editor stores layer data in Uint16Array. Because Uint16Array
 // cannot represent -1, we reserve the max uint16 value as the empty sentinel.
-import { snapWorldToFeet } from "../../../../shared/core/TileMath.js";
 import { normalizeLight, normalizeLighting } from "../../../../shared/data/models/LightingData.js";
 
 const EMPTY_STORED_TILE_ID = 0xffff;
@@ -151,11 +150,6 @@ export class MapDocument {
    * @param {object} entity
    */
   addEntity(entity) {
-    const tileSize = this.meta.tileSize ?? 16;
-    const { x, y } = snapWorldToFeet(entity.x, entity.y, tileSize);
-    entity.x = x;
-    entity.y = y;
-
     this.entities.push(entity);
     this.isDirty = true;
     this.emit({ type: "entitiesChanged", document: this });

@@ -18,7 +18,7 @@
     gap: 5px;
     font-size: 12px;
     padding: 10px;
-    border-radius: 6px;
+    border-radius: 2px;
 }
 
 .layer-vis-item.is-active .layer-vis-name {
@@ -41,6 +41,13 @@
 
 .layer-vis-name {
     user-select: none;
+}
+
+.layer-vis-sep {
+    width: 1px;
+    height: 14px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 6px;
 }
 
 .layer-vis-panel[data-mode="terrain"] .layer-vis-item {
