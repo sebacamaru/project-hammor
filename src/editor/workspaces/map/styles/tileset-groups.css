@@ -29,6 +29,10 @@
     padding: 4px 10px;
 }
 
+.tileset-groups-save-btn {
+    margin-left: auto;
+}
+
 /* ── Group list ── */
 
 .tileset-groups-list {

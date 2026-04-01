@@ -10,14 +10,17 @@ const ATLAS_CELL_SIZE = 24;
 export class TilesetGroupsView {
   /**
    * @param {object|null} tileset — Full tileset definition (from TilesetRegistry)
+   * @param {object} [opts]
+   * @param {(groups: object[]) => void} [opts.onSave] — Called with the current groups array when Save is clicked
    */
-  constructor(tileset) {
+  constructor(tileset, { onSave } = {}) {
     this._tileset = tileset;
     this._groups = Array.isArray(tileset?.editor?.groups) ? tileset.editor.groups : [];
     this._selectedIndex = -1;
     this._selectedTileSet = new Set();
     this._hoverTileId = -1;
     this._atlasImg = null;
+    this._onSave = onSave ?? null;
 
     this.el = document.createElement("div");
     this.el.className = "tileset-groups-view";
@@ -61,6 +64,16 @@ export class TilesetGroupsView {
     addBtn.textContent = "+ New Group";
     addBtn.addEventListener("click", () => this._createGroup());
     toolbar.appendChild(addBtn);
+
+    if (this._onSave) {
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = "dialog-btn dialog-btn-confirm tileset-groups-save-btn";
+      saveBtn.textContent = "Save";
+      saveBtn.addEventListener("click", () => this._onSave(this._groups));
+      toolbar.appendChild(saveBtn);
+    }
+
     leftCol.appendChild(toolbar);
 
     this._listEl = document.createElement("div");

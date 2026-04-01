@@ -660,11 +660,13 @@ export class MapEditorApp {
   }
 
   /**
-   * Opens the Tileset Groups dialog with a read-only view of the current tileset's groups.
+   * Opens the Tileset Groups dialog with editable groups and atlas tile selector.
    */
   openTilesetEditorDialog() {
     const tileset = this._getCurrentTilesetDefinition();
-    const view = new TilesetGroupsView(tileset);
+    const view = new TilesetGroupsView(tileset, {
+      onSave: (groups) => this._saveTilesetGroups(groups),
+    });
     const modal = new ModalDialog({
       title: "Tileset Groups",
       content: view.el,
@@ -672,6 +674,36 @@ export class MapEditorApp {
       onClose: () => modal.destroy(),
     });
     modal.open();
+  }
+
+  /**
+   * Saves tileset groups to the editor-server and refreshes in-memory state.
+   * @param {object[]} groups
+   */
+  async _saveTilesetGroups(groups) {
+    const tilesetId = this.runtimeMap?.tilesetId;
+    if (!tilesetId) return;
+
+    this.setOperationStatus("saving", "Saving tileset groups...");
+    try {
+      const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/tilesets/${tilesetId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groups: structuredClone(groups) }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      TilesetRegistry.invalidate(tilesetId);
+      const freshTileset = await TilesetRegistry.load(tilesetId);
+      if (this.runtimeMap) {
+        this.runtimeMap.tileset = freshTileset;
+      }
+      this.state.emit();
+      this.setOperationStatus("saved", "Tileset groups saved", { autoReset: true });
+    } catch (error) {
+      console.error("Failed to save tileset groups", error);
+      this.setOperationStatus("error", "Failed to save tileset groups", { autoReset: true });
+    }
   }
 
   /**

@@ -10,7 +10,7 @@ export class TilesetRegistry {
       return this.cache.get(tilesetId);
     }
 
-    const response = await fetch(`/content/tilesets/${tilesetId}_tileset.json`);
+    const response = await fetch(`/content/tilesets/${tilesetId}_tileset.json?t=${Date.now()}`);
     if (!response.ok) {
       throw new Error(`Failed to load tileset "${tilesetId}": ${response.status}`);
     }
@@ -18,6 +18,14 @@ export class TilesetRegistry {
     const tileset = this.normalize(await response.json(), tilesetId);
     this.cache.set(tilesetId, tileset);
     return tileset;
+  }
+
+  /**
+   * Removes a tileset from the cache, forcing the next load() to re-fetch.
+   * @param {string} tilesetId
+   */
+  static invalidate(tilesetId) {
+    this.cache.delete(tilesetId);
   }
 
   static normalize(tileset, requestedId) {

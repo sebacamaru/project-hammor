@@ -47,8 +47,21 @@ export function getRuntimeMapPath(id) {
   return path.join(getMapsDir(), `${validateMapId(id)}.json`);
 }
 
+export function validateTilesetId(id) {
+  if (typeof id !== "string" || !VALID_ID_PATTERN.test(id)) {
+    const error = new Error(`Invalid tileset id "${id}". Expected letters, numbers, "_" or "-".`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return id;
+}
+
 export function getTilesetPath(id) {
-  return path.join(getTilesetsDir(), `${validateMapId(id)}_tileset.json`);
+  return path.join(getTilesetsDir(), `${validateTilesetId(id)}_tileset.json`);
+}
+
+export function getTilesetBackupDir() {
+  return path.join(getTilesetsDir(), ".backup");
 }
 
 export function getWorldsDir() {

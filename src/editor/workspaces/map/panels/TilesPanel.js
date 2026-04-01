@@ -104,8 +104,10 @@ export class TilesPanel {
     const tileset = this.getTileset();
     const nextTilesetId = tileset?.id ?? null;
 
-    if (nextTilesetId !== this.tilesetId) {
+    // Rebuild dropdown when tileset changes OR when tileset reference changes (e.g. after save)
+    if (nextTilesetId !== this.tilesetId || tileset !== this._tilesetRef) {
       this.tilesetId = nextTilesetId;
+      this._tilesetRef = tileset;
       this.rebuildGroupOptions();
     }
 
