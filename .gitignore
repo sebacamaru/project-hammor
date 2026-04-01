@@ -26,3 +26,4 @@ dist-ssr
 #
 /content/maps/.backup
 /content/worlds/.backup
+/content/tilesets/.backup

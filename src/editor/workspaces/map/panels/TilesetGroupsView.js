@@ -21,11 +21,100 @@ export class TilesetGroupsView {
     this._hoverTileId = -1;
     this._atlasImg = null;
     this._onSave = onSave ?? null;
+    this._saveBtn = null;
+    this._isDirty = false;
+    this._initialSnapshot = this._serializeGroups(this._groups);
+
+    this._isDragging = false;
+    this._dragStartTileId = -1;
+    this._dragCurrentTileId = -1;
+    this._dragMode = "replace";
+
+    this._onKeyDown = this._handleKeyDown.bind(this);
+    window.addEventListener("keydown", this._onKeyDown, true);
+
+    this._onMouseUp = this._onAtlasMouseUp.bind(this);
+    window.addEventListener("mouseup", this._onMouseUp);
 
     this.el = document.createElement("div");
     this.el.className = "tileset-groups-view";
 
     this._build();
+  }
+
+  // ── Dirty state ──
+
+  /**
+   * Serialize groups array to a JSON string for snapshot comparison.
+   * @param {object[]} groups
+   * @returns {string}
+   * @private
+   */
+  _serializeGroups(groups) {
+    return JSON.stringify(groups ?? []);
+  }
+
+  /**
+   * Recompute dirty state by comparing current groups to the initial snapshot.
+   * @private
+   */
+  _refreshDirtyState() {
+    this._isDirty = this._serializeGroups(this._groups) !== this._initialSnapshot;
+    this._updateSaveButton();
+  }
+
+  /**
+   * Update the Save button text and disabled state based on dirty flag.
+   * @private
+   */
+  _updateSaveButton() {
+    if (!this._saveBtn) return;
+    this._saveBtn.textContent = this._isDirty ? "Save *" : "Save";
+    this._saveBtn.disabled = !this._isDirty;
+  }
+
+  /**
+   * Reset the initial snapshot to the current state (called after successful save).
+   */
+  markSaved() {
+    this._initialSnapshot = this._serializeGroups(this._groups);
+    this._refreshDirtyState();
+  }
+
+  /**
+   * Handle Save button click — save if dirty, mark clean on success.
+   * @private
+   */
+  async _handleSave() {
+    if (!this._isDirty || !this._onSave) return;
+    try {
+      await this._onSave(this._groups);
+      this.markSaved();
+    } catch (error) {
+      console.error("Failed to save tileset groups", error);
+    }
+  }
+
+  /**
+   * Handle global keydown — Ctrl+S / Cmd+S triggers save.
+   * @param {KeyboardEvent} event
+   * @private
+   */
+  _handleKeyDown(event) {
+    if (event.defaultPrevented) return;
+    const isSave = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s";
+    if (!isSave) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this._handleSave();
+  }
+
+  /**
+   * Clean up global listeners. Must be called when the view is removed.
+   */
+  destroy() {
+    window.removeEventListener("keydown", this._onKeyDown, true);
+    window.removeEventListener("mouseup", this._onMouseUp);
   }
 
   /**
@@ -66,12 +155,12 @@ export class TilesetGroupsView {
     toolbar.appendChild(addBtn);
 
     if (this._onSave) {
-      const saveBtn = document.createElement("button");
-      saveBtn.type = "button";
-      saveBtn.className = "dialog-btn dialog-btn-confirm tileset-groups-save-btn";
-      saveBtn.textContent = "Save";
-      saveBtn.addEventListener("click", () => this._onSave(this._groups));
-      toolbar.appendChild(saveBtn);
+      this._saveBtn = document.createElement("button");
+      this._saveBtn.type = "button";
+      this._saveBtn.className = "dialog-btn dialog-btn-confirm tileset-groups-save-btn";
+      this._saveBtn.addEventListener("click", () => this._handleSave());
+      this._updateSaveButton();
+      toolbar.appendChild(this._saveBtn);
     }
 
     leftCol.appendChild(toolbar);
@@ -136,9 +225,9 @@ export class TilesetGroupsView {
     this.el.appendChild(wrapper);
 
     // Mouse events on overlay canvas
+    this._overlayCanvas.addEventListener("mousedown", (e) => this._onAtlasMouseDown(e));
     this._overlayCanvas.addEventListener("mousemove", (e) => this._onAtlasMouseMove(e));
     this._overlayCanvas.addEventListener("mouseleave", () => this._onAtlasMouseLeave());
-    this._overlayCanvas.addEventListener("click", (e) => this._onAtlasClick(e));
 
     // Load atlas image
     this._atlasImg = new Image();
@@ -195,6 +284,24 @@ export class TilesetGroupsView {
       ctx.lineWidth = 1;
       ctx.strokeRect(col * s + 0.5, row * s + 0.5, s - 1, s - 1);
     }
+
+    // Drag preview rectangle
+    if (this._isDragging && this._dragStartTileId >= 0 && this._dragCurrentTileId >= 0) {
+      const colA = this._dragStartTileId % this._tileset.columns;
+      const rowA = Math.floor(this._dragStartTileId / this._tileset.columns);
+      const colB = this._dragCurrentTileId % this._tileset.columns;
+      const rowB = Math.floor(this._dragCurrentTileId / this._tileset.columns);
+      const x = Math.min(colA, colB) * s;
+      const y = Math.min(rowA, rowB) * s;
+      const w = (Math.abs(colB - colA) + 1) * s;
+      const h = (Math.abs(rowB - rowA) + 1) * s;
+
+      ctx.fillStyle = "rgba(79, 195, 247, 0.18)";
+      ctx.strokeStyle = "rgba(79, 195, 247, 0.7)";
+      ctx.lineWidth = 2;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+    }
   }
 
   /**
@@ -211,9 +318,34 @@ export class TilesetGroupsView {
     return row * columns + col;
   }
 
+  /**
+   * Start a drag selection on the atlas.
+   * @param {MouseEvent} e
+   * @private
+   */
+  _onAtlasMouseDown(e) {
+    const tileId = this._tileIdFromEvent(e);
+    if (tileId < 0 || !this._getSelectedGroup()) return;
+
+    this._isDragging = true;
+    this._dragStartTileId = tileId;
+    this._dragCurrentTileId = tileId;
+    this._dragMode = e.shiftKey ? "remove" : e.altKey ? "replace" : "add";
+    this._renderOverlay();
+  }
+
   /** @private */
   _onAtlasMouseMove(e) {
     const tileId = this._tileIdFromEvent(e);
+
+    if (this._isDragging) {
+      if (tileId >= 0 && tileId !== this._dragCurrentTileId) {
+        this._dragCurrentTileId = tileId;
+        this._renderOverlay();
+      }
+      return;
+    }
+
     if (tileId === this._hoverTileId) return;
     this._hoverTileId = tileId;
     this._renderOverlay();
@@ -221,16 +353,33 @@ export class TilesetGroupsView {
 
   /** @private */
   _onAtlasMouseLeave() {
+    if (this._isDragging) return;
     if (this._hoverTileId < 0) return;
     this._hoverTileId = -1;
     this._renderOverlay();
   }
 
-  /** @private */
-  _onAtlasClick(e) {
-    const tileId = this._tileIdFromEvent(e);
-    if (tileId < 0) return;
-    this._toggleTile(tileId);
+  /**
+   * Finish a drag selection. Bound to window so release outside canvas works.
+   * @private
+   */
+  _onAtlasMouseUp() {
+    if (!this._isDragging) return;
+
+    const startId = this._dragStartTileId;
+    const endId = this._dragCurrentTileId;
+
+    this._isDragging = false;
+    this._dragStartTileId = -1;
+    this._dragCurrentTileId = -1;
+
+    if (startId === endId) {
+      this._toggleTile(startId);
+      return;
+    }
+
+    this._applyDragSelection(startId, endId);
+    this._renderOverlay();
   }
 
   /**
@@ -253,6 +402,61 @@ export class TilesetGroupsView {
     group.tiles = [...this._selectedTileSet];
     this._renderDetail(group);
     this._renderOverlay();
+    this._refreshDirtyState();
+  }
+
+  /**
+   * Return all tile IDs inside the rectangle defined by two corner tiles.
+   * @param {number} startId
+   * @param {number} endId
+   * @returns {number[]}
+   * @private
+   */
+  _getRectTileIds(startId, endId) {
+    const cols = this._tileset.columns;
+    const colA = startId % cols;
+    const rowA = Math.floor(startId / cols);
+    const colB = endId % cols;
+    const rowB = Math.floor(endId / cols);
+
+    const minCol = Math.min(colA, colB);
+    const maxCol = Math.max(colA, colB);
+    const minRow = Math.min(rowA, rowB);
+    const maxRow = Math.max(rowA, rowB);
+
+    const ids = [];
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        ids.push(row * cols + col);
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Apply a completed drag rectangle to the selected group's tile set.
+   * @param {number} startId
+   * @param {number} endId
+   * @private
+   */
+  _applyDragSelection(startId, endId) {
+    const group = this._getSelectedGroup();
+    if (!group) return;
+
+    this._ensureExplicitTiles(group);
+    const rectTiles = this._getRectTileIds(startId, endId);
+
+    if (this._dragMode === "replace") {
+      this._selectedTileSet = new Set(rectTiles);
+    } else if (this._dragMode === "add") {
+      for (const id of rectTiles) this._selectedTileSet.add(id);
+    } else if (this._dragMode === "remove") {
+      for (const id of rectTiles) this._selectedTileSet.delete(id);
+    }
+
+    group.tiles = [...this._selectedTileSet];
+    this._renderDetail(group);
+    this._refreshDirtyState();
   }
 
   /**
@@ -337,6 +541,7 @@ export class TilesetGroupsView {
     this._groups.push(group);
     this._renderList();
     this._selectIndex(this._groups.length - 1);
+    this._refreshDirtyState();
   }
 
   /** @private */
@@ -362,6 +567,8 @@ export class TilesetGroupsView {
     } else {
       this._selectIndex(this._groups.length - 1);
     }
+
+    this._refreshDirtyState();
   }
 
   // ── Detail panel ──
@@ -389,6 +596,7 @@ export class TilesetGroupsView {
       if (!g) return;
       g.name = value;
       this._refreshSelectedListItem();
+      this._refreshDirtyState();
     }));
 
     // ID input
@@ -397,6 +605,7 @@ export class TilesetGroupsView {
       if (!g) return;
       g.id = value;
       this._refreshSelectedListItem();
+      this._refreshDirtyState();
     }));
 
     // Read-only rows

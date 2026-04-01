@@ -671,7 +671,7 @@ export class MapEditorApp {
       title: "Tileset Groups",
       content: view.el,
       className: "modal-wide",
-      onClose: () => modal.destroy(),
+      onClose: () => { view.destroy(); modal.destroy(); },
     });
     modal.open();
   }
