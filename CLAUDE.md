@@ -233,6 +233,7 @@ src/
 │       │   │   ├── ToolsPanel.js     Tool selector
 │       │   │   ├── LayersPanel.js    Layer visibility
 │       │   │   ├── TilesPanel.js     Tile group selector + tile picker grid
+│       │   │   ├── TilesetGroupsView.js Tileset groups CRUD + atlas tile selector (canvas-based)
 │       │   │   ├── StatusBarPanel.js Bottom status bar
 │       │   │   └── LightingPanel.js  Lighting controls (preview, ambient, light editor)
 │       │   ├── render/
@@ -325,6 +326,7 @@ src/
         │   ├── LayerData.js       Single tile layer (legacy)
         │   ├── GameMap.js         Static loader facade
         │   └── LightingData.js    Lighting defaults + normalization (normalizeLight, normalizeLighting)
+        ├── TilesetUtils.js            getGroupTiles() — normalize group to tile ID array
         ├── loaders/MapLoader.js        Fetch JSON maps + tileset
         ├── loaders/TilesetRegistry.js  Cached tileset metadata loader (shared by editor + client)
         ├── loaders/ProjectSettings.js  Loads /content/project.json (gameStart config)

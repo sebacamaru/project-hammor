@@ -75,6 +75,14 @@
 
 /* ── Footer ── */
 
+/* ── Wide variant ── */
+
+.modal-dialog.modal-wide {
+    width: 900px;
+}
+
+/* ── Footer ── */
+
 .modal-footer {
     padding: 12px 20px;
     border-top: 1px solid rgba(255, 255, 255, 0.12);

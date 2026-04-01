@@ -28,6 +28,8 @@ import { RuntimeMapBridge } from "./runtime/RuntimeMapBridge.js";
 import { TilesetRegistry } from "../../../shared/data/loaders/TilesetRegistry.js";
 import { EDITOR_SERVER_ORIGIN } from "./MapEditorConfig.js";
 import { SearchListModal } from "../../shared/ui/SearchListModal.js";
+import { ModalDialog } from "../../shared/ui/ModalDialog.js";
+import { TilesetGroupsView } from "./panels/TilesetGroupsView.js";
 
 import "./styles/map-editor.css";
 
@@ -38,6 +40,7 @@ export class MapEditorApp {
     this.document = null;
     this.runtimeMap = null;
     this.history = new History();
+    this.history.onChange = () => this._toolbarRefresh?.();
     this._runtimeReloadVersion = 0;
     this._statusResetTimeoutId = null;
     this._statusToken = 0;
@@ -348,7 +351,6 @@ export class MapEditorApp {
   undo() {
     this.history.undo();
     this.state.emit();
-    this._toolbarRefresh?.();
   }
 
   /**
@@ -357,7 +359,6 @@ export class MapEditorApp {
   redo() {
     this.history.redo();
     this.state.emit();
-    this._toolbarRefresh?.();
   }
 
   /**
@@ -401,6 +402,11 @@ export class MapEditorApp {
         label: "Load Map",
         icon: "load",
         onClick: () => this.openLoadMapDialog(),
+      },
+      {
+        id: "tileset-editor",
+        label: "Tileset Editor",
+        onClick: () => this.openTilesetEditorDialog(),
       },
       { type: "separator" },
     ];
@@ -651,6 +657,29 @@ export class MapEditorApp {
       },
     });
     modal.open();
+  }
+
+  /**
+   * Opens the Tileset Groups dialog with a read-only view of the current tileset's groups.
+   */
+  openTilesetEditorDialog() {
+    const tileset = this._getCurrentTilesetDefinition();
+    const view = new TilesetGroupsView(tileset);
+    const modal = new ModalDialog({
+      title: "Tileset Groups",
+      content: view.el,
+      className: "modal-wide",
+      onClose: () => modal.destroy(),
+    });
+    modal.open();
+  }
+
+  /**
+   * Returns the full tileset definition for the currently loaded map.
+   * @returns {object|null}
+   */
+  _getCurrentTilesetDefinition() {
+    return this.runtimeMap?.tileset ?? null;
   }
 
   async rebuildFullMap() {

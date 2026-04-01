@@ -1,0 +1,182 @@
+/* ── TilesetGroupsView ── */
+
+.tileset-groups-view {
+    display: flex;
+    gap: 0;
+    min-height: 300px;
+    height: 400px;
+}
+
+/* ── Left column ── */
+
+.tileset-groups-left {
+    display: flex;
+    flex-direction: column;
+    width: 180px;
+    flex-shrink: 0;
+}
+
+/* ── Toolbar ── */
+
+.tileset-groups-toolbar {
+    display: flex;
+    padding: 0 0 6px;
+    flex-shrink: 0;
+}
+
+.tileset-groups-toolbar .dialog-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+}
+
+/* ── Group list ── */
+
+.tileset-groups-list {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+}
+
+.tileset-groups-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tileset-groups-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tileset-groups-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+.tileset-groups-list-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #e0e0e0;
+    border-left: 2px solid transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tileset-groups-list-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.tileset-groups-list-item.is-selected {
+    background: rgba(79, 195, 247, 0.12);
+    border-left-color: rgba(79, 195, 247, 0.6);
+}
+
+.tileset-groups-list-item.is-selected:hover {
+    background: rgba(79, 195, 247, 0.18);
+}
+
+/* ── Detail panel (middle) ── */
+
+.tileset-groups-detail {
+    width: 200px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 16px;
+    overflow-y: auto;
+}
+
+.tileset-groups-detail-row {
+    display: flex;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 13px;
+}
+
+.tileset-groups-detail-label {
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+    min-width: 60px;
+}
+
+.tileset-groups-detail-value {
+    color: #e0e0e0;
+    word-break: break-all;
+}
+
+/* ── Input fields ── */
+
+.tileset-groups-input {
+    flex: 1;
+    min-width: 0;
+    padding: 3px 6px;
+    font-size: 13px;
+    font-family: "Google Sans Code", monospace;
+    color: #e0e0e0;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    outline: none;
+}
+
+.tileset-groups-input:focus {
+    border-color: rgba(79, 195, 247, 0.5);
+}
+
+/* ── Delete area ── */
+
+.tileset-groups-delete-area {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Atlas panel (right) ── */
+
+.tileset-groups-atlas {
+    flex: 1;
+    overflow: auto;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+}
+
+.tileset-groups-atlas-canvases {
+    position: relative;
+    image-rendering: pixelated;
+}
+
+.tileset-groups-atlas-canvases canvas {
+    display: block;
+}
+
+.tileset-groups-atlas-canvases canvas:last-child {
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: crosshair;
+}
+
+.tileset-groups-atlas-hint {
+    position: absolute;
+    top: 8px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+}
+
+/* ── Empty state ── */
+
+.tileset-groups-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 24px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.3);
+    text-align: center;
+}

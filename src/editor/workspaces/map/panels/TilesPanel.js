@@ -1,3 +1,5 @@
+import { getGroupTiles } from "../../../../shared/data/TilesetUtils.js";
+
 const TILE_DISPLAY_SIZE = 48; // 16px tiles rendered at 2x in the panel
 
 export class TilesPanel {
@@ -61,8 +63,8 @@ export class TilesPanel {
     const { image, tileSize, columns } = tileset;
     let html = "";
 
-    for (let i = 0; i < group.count; i++) {
-      const tileId = group.startId + i;
+    const tileIds = getGroupTiles(group);
+    for (const tileId of tileIds) {
       const atlasX = tileId % columns;
       const atlasY = Math.floor(tileId / columns);
       const bgX = -(atlasX * TILE_DISPLAY_SIZE);
