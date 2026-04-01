@@ -26,47 +26,52 @@
     position: relative;
     width: 100%;
     height: 100%;
-    padding: 20px;
+    --shell-padding: 10px;
+    --statusbar-height: 40px;
     --side-panel-width: 15%;
+    padding: var(--shell-padding);
 }
 
-.editor-panel,
+.editor-panel {
+    pointer-events: auto;
+}
+
 .editor-statusbar {
     pointer-events: auto;
     border: 1px solid rgba(255, 255, 255, 0.22);
     background-color: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(6px);
-    border-radius: 8px;
+    border-radius: 5px;
     color: white;
 }
 
 .editor-panel-left {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    bottom: 90px;
+    top: var(--shell-padding);
+    left: var(--shell-padding);
+    bottom: calc(var(--shell-padding) * 2 + var(--statusbar-height));
     width: var(--side-panel-width);
 }
 
 .layer-vis-panel-host {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: var(--shell-padding);
+    right: var(--shell-padding);
 }
 
 .editor-panel-events {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    bottom: 90px;
+    top: var(--shell-padding);
+    left: var(--shell-padding);
+    bottom: calc(var(--shell-padding) * 2 + var(--statusbar-height));
     width: var(--side-panel-width);
 }
 
 .editor-panel-lights {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    bottom: 90px;
+    top: var(--shell-padding);
+    left: var(--shell-padding);
+    bottom: calc(var(--shell-padding) * 2 + var(--statusbar-height));
     width: var(--side-panel-width);
 }
 
@@ -86,7 +91,7 @@
     background: rgba(255, 255, 255, 0.06);
     color: white;
     padding: 8px 14px;
-    border-radius: 8px;
+    border-radius: 5px;
     font-size: 13px;
     cursor: pointer;
     width: 100%;
@@ -101,7 +106,7 @@
     background: rgba(255, 80, 80, 0.1);
     color: #ff6666;
     padding: 6px 14px;
-    border-radius: 8px;
+    border-radius: 5px;
     font-size: 12px;
     cursor: pointer;
     width: 100%;
@@ -163,10 +168,10 @@
 
 .editor-statusbar {
     position: absolute;
-    bottom: 20px;
-    left: 20px;
-    right: 20px;
-    height: 50px;
+    bottom: var(--shell-padding);
+    left: var(--shell-padding);
+    right: var(--shell-padding);
+    height: var(--statusbar-height);
 }
 
 /* Panels and tools */
@@ -198,14 +203,18 @@
     border-color: rgba(255, 255, 255, 0.35);
 }
 
-.panel-section {
-    padding: 12px;
+.lighting-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    margin-top: 10px;
 }
 
-.panel-title {
-    font-size: 16px;
-    font-weight: 700;
-    margin-bottom: 12px;
+.lighting-section-title:first-child {
+    margin-top: 0;
 }
 
 .statusbar-content {
@@ -213,9 +222,10 @@
     gap: 16px;
     align-items: center;
     height: 100%;
-    padding: 0 10px;
+    padding: 0 16px;
     font-size: 12px;
     flex-wrap: wrap;
+    color: #aaa;
 }
 
 .status-item-status {
@@ -223,10 +233,6 @@
 }
 
 /* Tiles panel */
-
-.editor-panel-left {
-    overflow-y: auto;
-}
 
 .tiles-panel {
     display: flex;
@@ -240,7 +246,7 @@
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(255, 255, 255, 0.06);
     color: white;
-    border-radius: 8px;
+    border-radius: 5px;
     font-size: 13px;
     cursor: pointer;
 }

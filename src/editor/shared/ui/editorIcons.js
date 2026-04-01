@@ -11,7 +11,8 @@ export const ICON_MAP = {
   eyedropper:  5,
   play:        4,
   stop:        5,
-  // slots 6–19 reserved
+  load:        6,
+  // slots 7–19 reserved
 };
 
 /**

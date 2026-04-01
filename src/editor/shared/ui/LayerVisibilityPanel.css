@@ -8,7 +8,7 @@
     border: 1px solid rgba(255, 255, 255, 0.22);
     background-color: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(6px);
-    border-radius: 8px;
+    border-radius: 5px;
     color: white;
 }
 
@@ -16,27 +16,32 @@
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 12px;
-    padding: 10px;
+    font-size: 11px;
+    padding: 8px;
     border-radius: 2px;
+    border-bottom: 2px solid transparent;
+    transition:
+        color 0.15s,
+        border-color 0.15s;
 }
 
 .layer-vis-item.is-active .layer-vis-name {
-    color: #4fc3f7;
+    color: #fff;
     font-weight: 600;
 }
 
 .layer-vis-item.is-active {
-    outline: 1px solid rgba(255, 255, 255, 0.2);
-    background-color: rgba(0, 0, 0, 0.3) !important;
+    /*outline: 1px solid rgba(255, 255, 255, 0.2);*/
+    /*background-color: rgba(0, 0, 0, 0.3) !important;*/
+    border-bottom-color: #4fc3f7;
 }
 
 .layer-vis-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     opacity: 0.6;
     user-select: none;
-    margin: 0 4px 0 8px;
+    margin: 0 10px 0 8px;
 }
 
 .layer-vis-name {
@@ -52,9 +57,10 @@
 
 .layer-vis-panel[data-mode="terrain"] .layer-vis-item {
     cursor: pointer;
+    color: rgba(255, 255, 255, 0.5);
 }
 .layer-vis-panel[data-mode="terrain"] .layer-vis-item:not(:last-child):hover {
-    outline: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .layer-vis-panel:not([data-mode="terrain"]) .layer-vis-item {

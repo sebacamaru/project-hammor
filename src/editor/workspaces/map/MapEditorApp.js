@@ -27,6 +27,7 @@ import { History } from "./history/History.js";
 import { RuntimeMapBridge } from "./runtime/RuntimeMapBridge.js";
 import { TilesetRegistry } from "../../../shared/data/loaders/TilesetRegistry.js";
 import { EDITOR_SERVER_ORIGIN } from "./MapEditorConfig.js";
+import { SearchListModal } from "../../shared/ui/SearchListModal.js";
 
 import "./styles/map-editor.css";
 
@@ -394,8 +395,20 @@ export class MapEditorApp {
   getToolbarActions() {
     const { mode, activeTool } = this.state.get();
 
+    const common = [
+      {
+        id: "load-map",
+        label: "Load Map",
+        icon: "load",
+        onClick: () => this.openLoadMapDialog(),
+      },
+      { type: "separator" },
+    ];
+
+    let modeActions = [];
+
     if (mode === "terrain") {
-      return [
+      modeActions = [
         {
           id: "pencil",
           label: "Pencil",
@@ -415,10 +428,8 @@ export class MapEditorApp {
           onClick: () => this.state.patch({ activeTool: "eyedropper" }),
         },
       ];
-    }
-
-    if (mode === "collisions") {
-      return [
+    } else if (mode === "collisions") {
+      modeActions = [
         {
           id: "pencil",
           label: "Pencil",
@@ -434,11 +445,9 @@ export class MapEditorApp {
           onClick: () => this.state.patch({ activeTool: "eraser" }),
         },
       ];
-    }
-
-    if (mode === "events") {
+    } else if (mode === "events") {
       const { entityPlaceMode, selectedEntityId } = this.state.get();
-      return [
+      modeActions = [
         {
           id: "add-entity",
           label: "Add Entity",
@@ -459,7 +468,7 @@ export class MapEditorApp {
       ];
     }
 
-    return [];
+    return [...common, ...modeActions];
   }
 
   getTitle() {
@@ -582,6 +591,66 @@ export class MapEditorApp {
 
     this.syncDirtyState();
     this.setOperationStatus("idle", "Map loaded", { autoReset: true });
+  }
+
+  /**
+   * Opens the Load Map picker dialog.
+   * Checks for unsaved changes first, then fetches the map list from the editor-server.
+   */
+  async openLoadMapDialog() {
+    // Dirty guard — ask before discarding unsaved work
+    if (this.document?.isDirty) {
+      const discard = await this.editor?.confirm?.({
+        title: "Unsaved changes",
+        message: "You have unsaved changes. Discard them and load another map?",
+        confirmLabel: "Discard",
+        danger: true,
+      });
+      if (!discard) return;
+    }
+
+    // Fetch map list
+    let maps;
+    try {
+      const response = await fetch(`${EDITOR_SERVER_ORIGIN}/api/maps`);
+      if (!response.ok) throw new Error(`${response.status}`);
+      maps = await response.json();
+    } catch (error) {
+      console.error("Failed to fetch map list", error);
+      this.setOperationStatus("error", "Failed to load map list", { autoReset: true });
+      return;
+    }
+
+    // Transform into picker items
+    const items = maps.map((m) => {
+      const hasSize = typeof m.width === "number" && typeof m.height === "number";
+      return {
+        id: m.id,
+        title: m.name || m.id,
+        subtitle: `ID: ${m.id}`,
+        meta: hasSize ? `${m.width}\u00d7${m.height}` : "",
+      };
+    });
+
+    // Open picker
+    let modal;
+    modal = new SearchListModal({
+      title: "Load Map",
+      placeholder: "Search maps\u2026",
+      items,
+      confirmText: "Load",
+      cancelText: "Cancel",
+      selectedId: this.currentMapId,
+      onConfirm: (item) => {
+        this.loadMap(item.id).catch((err) => {
+          console.error("Failed to load map", err);
+        });
+      },
+      onClose: () => {
+        modal.destroy();
+      },
+    });
+    modal.open();
   }
 
   async rebuildFullMap() {

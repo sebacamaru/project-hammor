@@ -130,21 +130,14 @@ export class EditorShell {
 
   /**
    * Rebuilds the subtoolbar action list from global actions + workspace contextual actions.
-   * Left section: Save/Undo/Redo + contextual workspace tools.
-   * Center section: Play button (always present, global).
+   * Center section: mode-specific tools from the active workspace.
+   * Right section: Save, Undo, Redo (always present).
    */
   _refreshToolbar() {
     const workspace = this.activeWorkspace;
     const contextualActions = workspace?.getToolbarActions?.() ?? [];
 
     const globalActions = [
-      {
-        id: "save",
-        label: "Save",
-        icon: "save",
-        disabled: !workspace?.canSave?.(),
-        onClick: () => this._doSave(),
-      },
       {
         id: "undo",
         label: "Undo",
@@ -159,15 +152,21 @@ export class EditorShell {
         disabled: !workspace?.canRedo?.(),
         onClick: () => this._doRedo(),
       },
-      ...(contextualActions.length > 0 ? [{ type: "separator" }] : []),
+      {
+        id: "save",
+        label: "Save",
+        icon: "save",
+        disabled: !workspace?.canSave?.(),
+        onClick: () => this._doSave(),
+      },
     ];
 
     this._playBtn.disabled = this._isPlayInFlight || this._isStopInFlight;
     this._updateStopButton();
 
     this.subToolbar.setActions({
-      left:  [...globalActions, ...contextualActions],
-      right: [],
+      center: contextualActions,
+      right:  globalActions,
     });
   }
 

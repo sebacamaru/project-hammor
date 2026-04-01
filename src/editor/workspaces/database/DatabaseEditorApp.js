@@ -28,9 +28,9 @@ export class DatabaseEditorApp {
     const root = document.createElement("div");
     root.className = "database-editor";
     root.innerHTML = `
-      <div class="database-panel">
-        <div class="database-panel-header">Project Settings</div>
-        <div class="database-panel-body">
+      <div class="editor-panel database-panel">
+        <div class="editor-panel-header">Project Settings</div>
+        <div class="editor-panel-body">
           <div class="database-section-title">Game Start</div>
 
           <div class="database-field">

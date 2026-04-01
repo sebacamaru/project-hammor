@@ -14,8 +14,8 @@ export class TilesPanel {
 
   render() {
     this.el.innerHTML = `
-      <div class="panel-section tiles-panel">
-        <div class="panel-title">Tiles</div>
+      <div class="editor-panel-header">Tiles</div>
+      <div class="editor-panel-body tiles-panel">
         <select class="tiles-group-select"></select>
         <div class="tiles-grid"></div>
       </div>

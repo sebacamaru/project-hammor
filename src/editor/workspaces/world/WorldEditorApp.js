@@ -51,17 +51,17 @@ export class WorldEditorApp {
     this.root = document.createElement("div");
     this.root.className = "world-editor";
     this.root.innerHTML = `
-      <aside class="world-panel world-panel-library">
-        <div class="world-panel-header">Library</div>
-        <div class="world-panel-body" data-slot="library"></div>
+      <aside class="editor-panel world-panel-library">
+        <div class="editor-panel-header">Library</div>
+        <div class="editor-panel-body" data-slot="library"></div>
       </aside>
-      <main class="world-panel world-panel-grid">
-        <div class="world-panel-header">World <button class="world-header-btn world-redo-btn" title="Redo (Ctrl+Y)" disabled>↷</button><button class="world-header-btn world-undo-btn" title="Undo (Ctrl+Z)" disabled>↶</button><button class="world-header-btn world-center-btn" title="Center View">⊙</button></div>
-        <div class="world-panel-body" data-slot="grid"></div>
+      <main class="editor-panel world-panel-grid">
+        <div class="editor-panel-header">World <button class="world-header-btn world-redo-btn" title="Redo (Ctrl+Y)" disabled>↷</button><button class="world-header-btn world-undo-btn" title="Undo (Ctrl+Z)" disabled>↶</button><button class="world-header-btn world-center-btn" title="Center View">⊙</button></div>
+        <div class="editor-panel-body" data-slot="grid"></div>
       </main>
-      <aside class="world-panel world-panel-inspector">
-        <div class="world-panel-header">Inspector</div>
-        <div class="world-panel-body" data-slot="inspector"></div>
+      <aside class="editor-panel world-panel-inspector">
+        <div class="editor-panel-header">Inspector</div>
+        <div class="editor-panel-body" data-slot="inspector"></div>
       </aside>
     `;
     this.host.appendChild(this.root);

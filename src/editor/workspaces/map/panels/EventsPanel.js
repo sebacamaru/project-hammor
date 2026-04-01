@@ -24,8 +24,8 @@ export class EventsPanel {
   /** Builds the panel HTML once. Input values are populated by sync(). */
   render() {
     this.el.innerHTML = `
-      <div class="panel-section events-panel">
-        <div class="panel-title">Events</div>
+      <div class="editor-panel-header">Events</div>
+      <div class="editor-panel-body events-panel">
         <div class="events-hint" data-role="hint">Click an entity to select</div>
         <div class="events-selection" data-role="selection">No entity selected</div>
         <div class="events-inspector" data-role="inspector" style="display:none">

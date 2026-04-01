@@ -29,9 +29,10 @@ export class LightingPanel {
     ).join("");
 
     this.el.innerHTML = `
-      <div class="panel-section">
-        <div class="panel-title">Preview</div>
-        <div class="lighting-controls">
+      <div class="editor-panel-header">Lighting</div>
+      <div class="editor-panel-body">
+      <div class="lighting-section-title">Preview</div>
+      <div class="lighting-controls">
           <label class="lighting-row">
             <input type="checkbox" data-preview="enabled" />
             <span>Enable preview</span>
@@ -46,10 +47,8 @@ export class LightingPanel {
               min="0" max="1" step="0.01" />
           </label>
         </div>
-      </div>
-      <div class="panel-section">
-        <div class="panel-title">Map Ambient</div>
-        <div class="lighting-controls">
+      <div class="lighting-section-title">Map Ambient</div>
+      <div class="lighting-controls">
           <label class="lighting-row">
             <span>Ambient mode</span>
             <select data-map="ambientMode">
@@ -67,10 +66,8 @@ export class LightingPanel {
               min="0" max="1" step="0.01" />
           </label>
         </div>
-      </div>
-      <div class="panel-section">
-        <div class="panel-title">Lights</div>
-        <div class="lighting-controls">
+      <div class="lighting-section-title">Lights</div>
+      <div class="lighting-controls">
           <button type="button" data-action="addTestLight" class="lighting-btn">Add Test Light</button>
         </div>
         <div class="lighting-selected-light">
