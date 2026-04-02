@@ -22,6 +22,7 @@ import { LightingPanel } from "./panels/LightingPanel.js";
 
 import { SceneEditor } from "./scenes/SceneEditor.js";
 import { MapEditorViewport } from "./MapEditorViewport.js";
+import { MapDocument } from "./document/MapDocument.js";
 import { MapSerializer } from "./document/MapSerializer.js";
 import { History } from "./history/History.js";
 import { RuntimeMapBridge } from "./runtime/RuntimeMapBridge.js";
@@ -789,31 +790,33 @@ export class MapEditorApp {
         if (maps.some((m) => m.id === mapId)) {
           showError(`A map with ID "${mapId}" already exists.`);
           nameInput.focus();
+          createBtn.disabled = false;
+          createBtn.textContent = "Create";
           return;
         }
       } catch (err) {
         showError("Could not reach editor-server. Is it running?");
+        createBtn.disabled = false;
+        createBtn.textContent = "Create";
         return;
-      } finally {
+      }
+
+      try {
+        const doc = this._createEmptyDoc(mapId, displayName, width, height);
+        this.currentMapId = mapId;
+        this.history.clear();
+        this.setDocument(doc);
+        this.state.patch({ selectedEntityId: null, selectedLightId: null });
+        await this.rebuildFullMap({ resetCamera: true });
+        await this.saveMap();
+        this.setOperationStatus("idle", `Map "${displayName}" created`, { autoReset: true });
+        modal.close();
+      } catch (err) {
+        console.error("Failed to create map", err);
+        showError(`Error: ${err?.message ?? err}`);
         createBtn.disabled = false;
         createBtn.textContent = "Create";
       }
-
-      const doc = this._createEmptyDoc(mapId, displayName, width, height);
-      this.currentMapId = mapId;
-      this.history.clear();
-      this.setDocument(doc);
-      this.state.patch({ selectedEntityId: null, selectedLightId: null });
-      await this.rebuildFullMap();
-
-      try {
-        await this.saveMap();
-      } catch (err) {
-        console.error("Failed to save new map", err);
-        this.setOperationStatus("error", "Failed to save new map");
-      }
-
-      modal.close();
     };
 
     cancelBtn.addEventListener("click", () => modal.requestClose());
@@ -945,7 +948,11 @@ export class MapEditorApp {
     return this.runtimeMap?.tileset ?? null;
   }
 
-  async rebuildFullMap() {
+  /**
+   * Rebuilds the runtime map from the current document and pushes it to the scene.
+   * @param {{ resetCamera?: boolean }} [options]
+   */
+  async rebuildFullMap({ resetCamera = false } = {}) {
     if (!this.document) return;
 
     const reloadVersion = ++this._runtimeReloadVersion;
@@ -960,7 +967,7 @@ export class MapEditorApp {
 
     const currentScene = this.scenes.current;
     if (currentScene?.setMap) {
-      currentScene.setMap(runtimeMap);
+      currentScene.setMap(runtimeMap, { resetCamera });
       currentScene.setEntities?.(this.document.entities);
       currentScene.setLights?.(this.document?.lighting?.lights ?? []);
       return;

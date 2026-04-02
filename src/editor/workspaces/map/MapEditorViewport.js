@@ -74,6 +74,8 @@ export class MapEditorViewport {
 
   onKeyDown(e) {
     if (e.code === "Space" || e.code === "Tab") {
+      const tag = e.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) return;
       e.preventDefault();
     }
   }
