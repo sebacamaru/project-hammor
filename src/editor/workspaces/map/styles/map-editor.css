@@ -288,3 +288,78 @@
 .tile-cell.is-selected {
     border-color: var(--editor-accent);
 }
+
+/* ── Tiles panel header (with action button) ── */
+.tiles-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.tiles-panel-header__action {
+    padding: 2px 6px;
+    font-size: var(--editor-font-md);
+    line-height: 1;
+    opacity: 0.6;
+}
+
+.tiles-panel-header__action:hover {
+    opacity: 1;
+}
+
+/* ── New Map dialog form ── */
+.new-map-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--editor-space-3);
+    min-width: 280px;
+}
+
+.new-map-form__row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--editor-space-1);
+}
+
+.new-map-form__label {
+    font-size: var(--editor-font-sm);
+    color: var(--editor-text-muted);
+}
+
+.new-map-form__row input[type="text"],
+.new-map-form__row input[type="number"] {
+    padding: var(--editor-space-1) 6px;
+    border: 1px solid var(--editor-border-input);
+    background: var(--editor-bg-subtle);
+    color: var(--editor-text);
+    border-radius: var(--editor-radius-md);
+    font-size: var(--editor-font-sm);
+    font-family: inherit;
+    outline: none;
+}
+
+.new-map-form__row input[type="text"]:focus,
+.new-map-form__row input[type="number"]:focus {
+    border-color: var(--editor-border-input-focus);
+}
+
+.new-map-form__dims {
+    display: flex;
+    align-items: center;
+    gap: var(--editor-space-2);
+}
+
+.new-map-form__dims input[type="number"] {
+    width: 80px;
+}
+
+.new-map-form__dims-sep {
+    color: var(--editor-text-muted);
+    flex-shrink: 0;
+}
+
+.new-map-form__error {
+    font-size: var(--editor-font-sm);
+    color: var(--editor-status-danger);
+    min-height: 1em;
+}

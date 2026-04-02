@@ -29,6 +29,7 @@ export class LayerVisibilityPanel {
     this._subscribe = subscribe;
     this._unsubscribe = null;
     this._el = null;
+    this._iconEl = null;
   }
 
   /**
@@ -40,10 +41,10 @@ export class LayerVisibilityPanel {
     panel.className = "layer-vis-panel";
     this._el = panel;
 
-    const title = document.createElement("span");
-    title.className = "layer-vis-title";
-    title.textContent = "Layers";
-    panel.appendChild(title);
+    const icon = document.createElement("div");
+    icon.className = "layer-vis-icon";
+    this._iconEl = icon;
+    panel.appendChild(icon);
 
     for (const layer of LAYERS) {
       const item = document.createElement("div");
@@ -128,6 +129,16 @@ export class LayerVisibilityPanel {
     const gridCheckbox = this._el.querySelector("[data-grid-checkbox]");
     if (gridCheckbox) {
       gridCheckbox.checked = s.showGrid;
+    }
+
+    if (this._iconEl) {
+      let frameX = 0;
+      if (s.mode === "terrain") {
+        if (s.activeLayer === "ground") frameX = -23;
+        else if (s.activeLayer === "ground_detail") frameX = -46;
+        else if (s.activeLayer === "fringe") frameX = -69;
+      }
+      this._iconEl.style.backgroundPositionX = `${frameX}px`;
     }
   }
 

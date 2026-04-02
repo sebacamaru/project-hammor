@@ -26,7 +26,12 @@ import { MapSerializer } from "./document/MapSerializer.js";
 import { History } from "./history/History.js";
 import { RuntimeMapBridge } from "./runtime/RuntimeMapBridge.js";
 import { TilesetRegistry } from "../../../shared/data/loaders/TilesetRegistry.js";
-import { EDITOR_SERVER_ORIGIN } from "./MapEditorConfig.js";
+import {
+  DEFAULT_MAP_HEIGHT,
+  DEFAULT_MAP_LAYERS,
+  DEFAULT_MAP_WIDTH,
+  EDITOR_SERVER_ORIGIN,
+} from "./MapEditorConfig.js";
 import { SearchListModal } from "../../shared/ui/SearchListModal.js";
 import { ModalDialog } from "../../shared/ui/ModalDialog.js";
 import { TilesetGroupsView } from "./panels/TilesetGroupsView.js";
@@ -117,7 +122,9 @@ export class MapEditorApp {
     }
 
     // Panels
-    this.tilesPanel = new TilesPanel(this.layout.leftPanelEl, this.state);
+    this.tilesPanel = new TilesPanel(this.layout.leftPanelEl, this.state, {
+      onTilesetEditor: () => this.openTilesetEditorDialog(),
+    });
     this.layerVisPanel = new LayerVisibilityPanel({
       getState: () => this.state.get(),
       onToggleLayer: (id, v) => this.state.update((s) => { s.visibleLayers[id] = v; }),
@@ -398,15 +405,14 @@ export class MapEditorApp {
 
     const common = [
       {
-        id: "load-map",
-        label: "Load Map",
-        icon: "load",
-        onClick: () => this.openLoadMapDialog(),
+        id: "new-map",
+        label: "New Map",
+        onClick: () => this.openNewMapDialog(),
       },
       {
-        id: "tileset-editor",
-        label: "Tileset Editor",
-        onClick: () => this.openTilesetEditorDialog(),
+        id: "load-map",
+        label: "Load Map",
+        onClick: () => this.openLoadMapDialog(),
       },
       { type: "separator" },
     ];
@@ -657,6 +663,206 @@ export class MapEditorApp {
       },
     });
     modal.open();
+  }
+
+  /**
+   * Opens the New Map dialog.
+   * Prompts for name, width, and height; slugifies the name into an id;
+   * checks for id collisions; then creates, loads, and immediately saves the new map.
+   */
+  async openNewMapDialog() {
+    if (this.document?.isDirty) {
+      const discard = await this.editor?.confirm?.({
+        title: "Unsaved changes",
+        message: "You have unsaved changes. Discard them and create a new map?",
+        confirmLabel: "Discard",
+        danger: true,
+      });
+      if (!discard) return;
+    }
+
+    // ── Build form DOM ──
+    const formEl = document.createElement("div");
+    formEl.className = "new-map-form";
+
+    const nameRow = document.createElement("div");
+    nameRow.className = "new-map-form__row";
+    const nameLabel = document.createElement("label");
+    nameLabel.className = "new-map-form__label";
+    nameLabel.textContent = "Name";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.placeholder = "e.g. Northern Forest";
+    nameInput.autocomplete = "off";
+    nameRow.appendChild(nameLabel);
+    nameRow.appendChild(nameInput);
+
+    const dimsRow = document.createElement("div");
+    dimsRow.className = "new-map-form__row";
+    const dimsLabel = document.createElement("label");
+    dimsLabel.className = "new-map-form__label";
+    dimsLabel.textContent = "Size (tiles)";
+    const dimsInputs = document.createElement("div");
+    dimsInputs.className = "new-map-form__dims";
+    const widthInput = document.createElement("input");
+    widthInput.type = "number";
+    widthInput.min = "1";
+    widthInput.value = String(DEFAULT_MAP_WIDTH);
+    widthInput.placeholder = "Width";
+    const dimsSep = document.createElement("span");
+    dimsSep.className = "new-map-form__dims-sep";
+    dimsSep.textContent = "\u00d7";
+    const heightInput = document.createElement("input");
+    heightInput.type = "number";
+    heightInput.min = "1";
+    heightInput.value = String(DEFAULT_MAP_HEIGHT);
+    heightInput.placeholder = "Height";
+    dimsInputs.appendChild(widthInput);
+    dimsInputs.appendChild(dimsSep);
+    dimsInputs.appendChild(heightInput);
+    dimsRow.appendChild(dimsLabel);
+    dimsRow.appendChild(dimsInputs);
+
+    const errorEl = document.createElement("p");
+    errorEl.className = "new-map-form__error";
+
+    formEl.appendChild(nameRow);
+    formEl.appendChild(dimsRow);
+    formEl.appendChild(errorEl);
+
+    // ── Build footer DOM ──
+    // display: contents makes the buttons direct children of .modal-footer's flex context
+    const footerEl = document.createElement("div");
+    footerEl.style.display = "contents";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "editor-btn editor-btn--ghost";
+    cancelBtn.textContent = "Cancel";
+    const createBtn = document.createElement("button");
+    createBtn.className = "editor-btn editor-btn--primary";
+    createBtn.textContent = "Create";
+    footerEl.appendChild(cancelBtn);
+    footerEl.appendChild(createBtn);
+
+    let modal;
+
+    const showError = (msg) => {
+      errorEl.textContent = msg;
+    };
+
+    const handleCreate = async () => {
+      showError("");
+      const displayName = nameInput.value.trim();
+      const width  = parseInt(widthInput.value, 10);
+      const height = parseInt(heightInput.value, 10);
+
+      if (!displayName) {
+        showError("Name is required.");
+        nameInput.focus();
+        return;
+      }
+
+      const mapId = this._slugifyMapId(displayName);
+      if (!mapId) {
+        showError("Name must contain at least one letter or number.");
+        nameInput.focus();
+        return;
+      }
+
+      if (!Number.isFinite(width) || width < 1) {
+        showError("Width must be a positive integer.");
+        widthInput.focus();
+        return;
+      }
+      if (!Number.isFinite(height) || height < 1) {
+        showError("Height must be a positive integer.");
+        heightInput.focus();
+        return;
+      }
+
+      createBtn.disabled = true;
+      createBtn.textContent = "Creating\u2026";
+
+      try {
+        const res = await fetch(`${EDITOR_SERVER_ORIGIN}/api/maps`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const maps = await res.json();
+        if (maps.some((m) => m.id === mapId)) {
+          showError(`A map with ID "${mapId}" already exists.`);
+          nameInput.focus();
+          return;
+        }
+      } catch (err) {
+        showError("Could not reach editor-server. Is it running?");
+        return;
+      } finally {
+        createBtn.disabled = false;
+        createBtn.textContent = "Create";
+      }
+
+      const doc = this._createEmptyDoc(mapId, displayName, width, height);
+      this.currentMapId = mapId;
+      this.history.clear();
+      this.setDocument(doc);
+      this.state.patch({ selectedEntityId: null, selectedLightId: null });
+      await this.rebuildFullMap();
+
+      try {
+        await this.saveMap();
+      } catch (err) {
+        console.error("Failed to save new map", err);
+        this.setOperationStatus("error", "Failed to save new map");
+      }
+
+      modal.close();
+    };
+
+    cancelBtn.addEventListener("click", () => modal.requestClose());
+    createBtn.addEventListener("click", handleCreate);
+    formEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleCreate();
+    });
+
+    modal = new ModalDialog({
+      title: "New Map",
+      content: formEl,
+      footer: footerEl,
+      onClose: () => {},
+    });
+    modal.open();
+    nameInput.focus();
+  }
+
+  /**
+   * Slugifies a display name into a valid map id.
+   * Lowercases, replaces spaces with underscores, strips non-alphanumeric/underscore chars.
+   * @param {string} name
+   * @returns {string}
+   */
+  _slugifyMapId(name) {
+    return name.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+  }
+
+  /**
+   * Creates a new empty MapDocument with the standard layer stack.
+   * @param {string} id
+   * @param {string} name
+   * @param {number} width
+   * @param {number} height
+   * @returns {MapDocument}
+   */
+  _createEmptyDoc(id, name, width, height) {
+    const size = width * height;
+    return new MapDocument(
+      { version: 1, id, name, tileset: "world", width, height, tileSize: 16, chunkSize: 32 },
+      DEFAULT_MAP_LAYERS.map((layerId) => ({
+        id: layerId,
+        kind: layerId,
+        visible: true,
+        data: new Uint16Array(size).fill(MapDocument.EMPTY_STORED_TILE_ID),
+      })),
+      [],
+      undefined,
+    );
   }
 
   /**

@@ -3,9 +3,15 @@ import { getGroupTiles } from "../../../../shared/data/TilesetUtils.js";
 const TILE_DISPLAY_SIZE = 48; // 16px tiles rendered at 2x in the panel
 
 export class TilesPanel {
-  constructor(el, state) {
+  /**
+   * @param {HTMLElement} el
+   * @param {object} state
+   * @param {{ onTilesetEditor?: () => void }} [opts]
+   */
+  constructor(el, state, opts = {}) {
     this.el = el;
     this.state = state;
+    this._onTilesetEditor = opts.onTilesetEditor ?? null;
     this.currentGroupId = null;
     this.tilesetId = null;
 
@@ -16,12 +22,19 @@ export class TilesPanel {
 
   render() {
     this.el.innerHTML = `
-      <div class="editor-panel-header">Tiles</div>
+      <div class="editor-panel-header tiles-panel-header">
+        <span>Tiles</span>
+        <button class="editor-btn editor-btn--ghost tiles-panel-header__action">Edit Tileset</button>
+      </div>
       <div class="editor-panel-body tiles-panel">
         <select class="tiles-group-select"></select>
         <div class="tiles-grid"></div>
       </div>
     `;
+
+    // Tileset editor button
+    this.el.querySelector(".tiles-panel-header__action")
+      .addEventListener("click", () => this._onTilesetEditor?.());
 
     // Populate group dropdown
     const select = this.el.querySelector(".tiles-group-select");
