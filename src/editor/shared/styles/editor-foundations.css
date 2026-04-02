@@ -1,0 +1,82 @@
+/* ═══════════════════════════════════════════════════════════════
+   EDITOR FOUNDATIONS
+   Raw design values — no semantic meaning, no --editor- prefix.
+   Change here to rebrand the entire editor palette at once.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ── Color palette ── */
+    --cyan-400:    #4fc3f7;
+    --amber-400:   #ffb74d;
+    --green-400:   #81c784;
+    --red-400:     #e57373;
+    --teal-700:    #2a6a7a;
+    --teal-600:    #358a9e;
+    --crimson-800: #7a2a2a;
+    --crimson-700: #9e3535;
+    --dark-900:    #1e1e2e;
+
+    /* White alpha scale */
+    --white-100: rgba(255, 255, 255, 1);
+    --white-80:  rgba(255, 255, 255, 0.8);
+    --white-70:  rgba(255, 255, 255, 0.7);
+    --white-60:  rgba(255, 255, 255, 0.6);
+    --white-55:  rgba(255, 255, 255, 0.55);
+    --white-50:  rgba(255, 255, 255, 0.5);
+    --white-45:  rgba(255, 255, 255, 0.45);
+    --white-40:  rgba(255, 255, 255, 0.4);
+    --white-35:  rgba(255, 255, 255, 0.35);
+    --white-22:  rgba(255, 255, 255, 0.22);
+    --white-20:  rgba(255, 255, 255, 0.2);
+    --white-18:  rgba(255, 255, 255, 0.18);
+    --white-15:  rgba(255, 255, 255, 0.15);
+    --white-12:  rgba(255, 255, 255, 0.12);
+    --white-10:  rgba(255, 255, 255, 0.10);
+    --white-8:   rgba(255, 255, 255, 0.08);
+    --white-6:   rgba(255, 255, 255, 0.06);
+    --white-5:   rgba(255, 255, 255, 0.05);
+
+    /* Black alpha scale */
+    --black-55: rgba(0, 0, 0, 0.55);
+    --black-50: rgba(0, 0, 0, 0.50);
+    --black-35: rgba(0, 0, 0, 0.35);
+    --black-30: rgba(0, 0, 0, 0.30);
+
+    /* Accent alpha scales */
+    --cyan-60: rgba(79, 195, 247, 0.6);
+    --cyan-50: rgba(79, 195, 247, 0.5);
+    --cyan-18: rgba(79, 195, 247, 0.18);
+    --cyan-12: rgba(79, 195, 247, 0.12);
+
+    --amber-10: rgba(255, 183, 77, 0.1);
+    --green-10: rgba(129, 199, 132, 0.1);
+    --red-10:   rgba(229, 115, 115, 0.1);
+
+    /* ── Spacing (4px base scale) ── */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+
+    /* ── Border radius ── */
+    --radius-sm: 3px;
+    --radius-md: 4px;
+    --radius-lg: 5px;
+
+    /* ── Typography ── */
+    --text-xs: 11px;
+    --text-sm: 12px;
+    --text-md: 13px;
+    --text-lg: 15px;
+    --text-xl: 18px;
+
+    /* ── Shadows ── */
+    --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-focus: 0 0 0 2px rgba(79, 195, 247, 0.5);
+
+    /* ── Motion ── */
+    --duration-fast: 0.15s;
+    --duration-base: 0.2s;
+}

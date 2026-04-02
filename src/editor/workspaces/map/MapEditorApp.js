@@ -661,18 +661,43 @@ export class MapEditorApp {
 
   /**
    * Opens the Tileset Groups dialog with editable groups and atlas tile selector.
+   * Confirms before closing if there are unsaved changes.
+   *
+   * Pattern for future modal integrations:
+   *  - Pass confirm: (opts) => this.editor.confirm(opts) to views that need destructive action guards
+   *  - Pass onCancel: () => modal?.requestClose() for user-initiated cancel (triggers onBeforeClose guard)
+   *  - Pass onSaveSuccess: () => modal?.close() for post-save close (bypasses onBeforeClose guard)
+   *  - Pass onBeforeClose to ModalDialog to intercept user-initiated close (X, Escape, backdrop)
    */
   openTilesetEditorDialog() {
     const tileset = this._getCurrentTilesetDefinition();
+    let modal;
+
     const view = new TilesetGroupsView(tileset, {
-      onSave: (groups) => this._saveTilesetGroups(groups),
+      onSave:        (groups) => this._saveTilesetGroups(groups),
+      onCancel:      () => modal?.requestClose(),
+      onSaveSuccess: () => modal?.close(),
+      confirm:       this.editor?.confirm ? (opts) => this.editor.confirm(opts) : null,
     });
-    const modal = new ModalDialog({
+
+    modal = new ModalDialog({
       title: "Tileset Groups",
       content: view.el,
+      footer: view.footerEl,
       className: "modal-wide",
-      onClose: () => { view.destroy(); modal.destroy(); },
+      onBeforeClose: async () => {
+        if (!view.isDirty) return true;
+        if (!this.editor?.confirm) return false;
+        return await this.editor.confirm({
+          title: "Unsaved changes",
+          message: "You have unsaved changes in the tileset groups. Discard them?",
+          confirmLabel: "Discard",
+          tone: "danger",
+        });
+      },
+      onClose: () => { view.destroy(); },
     });
+
     modal.open();
   }
 

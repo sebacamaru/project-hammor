@@ -4,7 +4,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 20px;
+    padding: var(--editor-space-5);
     overflow-y: auto;
 }
 
@@ -13,13 +13,9 @@
     max-width: 480px;
 }
 
+/* database-section-title: editor-section-label handles visuals; margin override here */
 .database-section-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
+    margin-bottom: var(--editor-space-2);
 }
 
 .database-field {
@@ -30,69 +26,34 @@
 }
 
 .database-field label {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.4);
+    font-size: var(--editor-font-xs);
+    color: var(--editor-text-faint);
 }
 
-.database-field input,
-.database-field select {
-    width: 100%;
-    padding: 3px 6px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 12px;
-    font-family: inherit;
-    box-sizing: border-box;
-}
-
-.database-field input:focus,
-.database-field select:focus {
-    border-color: rgba(255, 255, 255, 0.35);
-    outline: none;
+/* database-save-btn: editor-btn--ghost handles visuals; only margin override here */
+.database-save-btn {
+    margin-top: var(--editor-space-1);
 }
 
 .database-world-info {
     display: block;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.35);
+    font-size: var(--editor-font-xs);
+    color: var(--editor-text-dim);
     font-style: italic;
     margin-top: 2px;
 }
 
-.database-save-btn {
-    width: 100%;
-    padding: 6px 10px;
-    margin-top: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 12px;
-    cursor: pointer;
-}
-
-.database-save-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.15);
-}
-
-.database-save-btn:disabled {
-    opacity: 0.3;
-    cursor: default;
-}
-
 .database-status {
     position: relative;
-    margin-top: 8px;
-    padding: 4px 8px;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.8);
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 4px;
+    margin-top: var(--editor-space-2);
+    padding: var(--editor-space-1) var(--editor-space-2);
+    font-size: var(--editor-font-xs);
+    color: var(--editor-text-body);
+    background: var(--black-30);
+    border-radius: var(--editor-radius-md);
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity var(--editor-transition-base);
 }
 
 .database-status.is-visible {

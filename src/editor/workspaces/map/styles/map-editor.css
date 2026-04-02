@@ -1,7 +1,7 @@
 .editor-viewport {
     position: absolute;
     inset: 0;
-    z-index: 1;
+    z-index: var(--editor-z-viewport);
     overflow: hidden;
 }
 
@@ -13,7 +13,7 @@
 .editor-shell {
     position: absolute;
     inset: 0;
-    z-index: 2;
+    z-index: var(--editor-z-shell);
     pointer-events: none;
 }
 
@@ -38,11 +38,11 @@
 
 .editor-statusbar {
     pointer-events: auto;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background-color: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--editor-border);
+    background-color: var(--editor-bg-panel);
     backdrop-filter: blur(6px);
-    border-radius: 5px;
-    color: white;
+    border-radius: var(--editor-radius-lg);
+    color: var(--editor-text);
 }
 
 .editor-panel-left {
@@ -76,29 +76,30 @@
 }
 
 .events-panel .events-hint {
-    padding: 8px 12px;
-    font-size: 12px;
+    padding: var(--editor-space-2) var(--editor-space-3);
+    font-size: var(--editor-font-sm);
     opacity: 0.6;
 }
 
 .events-panel .events-selection {
-    padding: 8px 12px;
-    font-size: 13px;
+    padding: var(--editor-space-2) var(--editor-space-3);
+    font-size: var(--editor-font-md);
 }
 
+/* events-add-btn / events-delete-btn: currently unused — kept for future use */
 .events-add-btn {
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(255, 255, 255, 0.06);
-    color: white;
-    padding: 8px 14px;
-    border-radius: 5px;
-    font-size: 13px;
+    border: 1px solid var(--editor-border-input);
+    background: var(--editor-bg-subtle);
+    color: var(--editor-text);
+    padding: var(--editor-space-2) 14px;
+    border-radius: var(--editor-radius-lg);
+    font-size: var(--editor-font-md);
     cursor: pointer;
     width: 100%;
 }
 
 .events-actions {
-    padding: 4px 12px 0;
+    padding: var(--editor-space-1) var(--editor-space-3) 0;
 }
 
 .events-delete-btn {
@@ -106,26 +107,26 @@
     background: rgba(255, 80, 80, 0.1);
     color: #ff6666;
     padding: 6px 14px;
-    border-radius: 5px;
-    font-size: 12px;
+    border-radius: var(--editor-radius-lg);
+    font-size: var(--editor-font-sm);
     cursor: pointer;
     width: 100%;
-    margin-top: 4px;
+    margin-top: var(--editor-space-1);
 }
 
 .events-inspector {
-    padding: 8px 12px;
+    padding: var(--editor-space-2) var(--editor-space-3);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--editor-space-2);
 }
 
 .inspector-field {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    font-size: 12px;
+    gap: var(--editor-space-2);
+    font-size: var(--editor-font-sm);
 }
 
 .inspector-field span {
@@ -134,16 +135,24 @@
 }
 
 .inspector-field input[type="text"],
-.inspector-field input[type="number"] {
+.inspector-field input[type="number"],
+.inspector-field select {
     flex: 1;
     min-width: 0;
-    padding: 4px 6px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(255, 255, 255, 0.06);
-    color: white;
-    border-radius: 4px;
-    font-size: 12px;
+    padding: var(--editor-space-1) 6px;
+    border: 1px solid var(--editor-border-input);
+    background: var(--editor-bg-subtle);
+    color: var(--editor-text);
+    border-radius: var(--editor-radius-md);
+    font-size: var(--editor-font-sm);
     font-family: monospace;
+    outline: none;
+}
+
+.inspector-field input[type="text"]:focus,
+.inspector-field input[type="number"]:focus,
+.inspector-field select:focus {
+    border-color: var(--editor-border-input-focus);
 }
 
 .inspector-checkbox {
@@ -151,9 +160,9 @@
 }
 
 .inspector-fieldset {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-    padding: 8px;
+    border: 1px solid var(--editor-border-muted);
+    border-radius: var(--editor-radius-lg);
+    padding: var(--editor-space-2);
     margin: 0;
     display: flex;
     flex-direction: column;
@@ -161,9 +170,9 @@
 }
 
 .inspector-fieldset legend {
-    font-size: 11px;
+    font-size: var(--editor-font-xs);
     opacity: 0.6;
-    padding: 0 4px;
+    padding: 0 var(--editor-space-1);
 }
 
 .editor-statusbar {
@@ -174,39 +183,36 @@
     height: var(--statusbar-height);
 }
 
-/* Panels and tools */
+/* ── Panels and tools ── */
 
 .toolbar-buttons {
     display: flex;
-    gap: 12px;
+    gap: var(--editor-space-3);
     align-items: center;
     justify-content: center;
     height: 100%;
 }
 
 .toolbar-buttons button {
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(255, 255, 255, 0.06);
-    color: white;
-    padding: 14px 20px;
-    border-radius: 4px;
+    border: 1px solid var(--editor-border-input);
+    background: var(--editor-bg-subtle);
+    color: var(--editor-text);
+    padding: 14px var(--editor-space-5);
+    border-radius: var(--editor-radius-md);
     cursor: pointer;
-}
-
-.toolbar-buttons button {
-    font-size: 18px;
+    font-size: var(--editor-font-xl);
     font-weight: lighter;
 }
 
 .toolbar-buttons button.is-active {
-    background: rgba(255, 255, 255, 0.18);
-    border-color: rgba(255, 255, 255, 0.35);
+    background: var(--white-18);
+    border-color: var(--editor-border-input-focus);
 }
 
 .lighting-section-title {
-    font-size: 11px;
+    font-size: var(--editor-font-xs);
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--editor-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 6px;
@@ -219,41 +225,46 @@
 
 .statusbar-content {
     display: flex;
-    gap: 16px;
+    gap: var(--editor-space-4);
     align-items: center;
     height: 100%;
-    padding: 0 16px;
-    font-size: 12px;
+    padding: 0 var(--editor-space-4);
+    font-size: var(--editor-font-sm);
     flex-wrap: wrap;
-    color: #aaa;
+    color: var(--editor-text-dim);
 }
 
 .status-item-status {
     margin-left: auto;
 }
 
-/* Tiles panel */
+/* ── Tiles panel ── */
 
 .tiles-panel {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--editor-space-2);
 }
 
 .tiles-group-select {
     width: 100%;
-    padding: 6px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(255, 255, 255, 0.06);
-    color: white;
-    border-radius: 5px;
-    font-size: 13px;
+    padding: 6px var(--editor-space-2);
+    border: 1px solid var(--editor-border-input);
+    background: var(--editor-bg-subtle);
+    color: var(--editor-text);
+    border-radius: var(--editor-radius-lg);
+    font-size: var(--editor-font-md);
     cursor: pointer;
+    outline: none;
+}
+
+.tiles-group-select:focus {
+    border-color: var(--editor-border-input-focus);
 }
 
 .tiles-group-select option {
     background: #1a1a1a;
-    color: white;
+    color: var(--editor-text);
 }
 
 .tiles-grid {
@@ -271,9 +282,9 @@
 }
 
 .tile-cell:hover {
-    border-color: rgba(255, 255, 255, 0.5);
+    border-color: var(--editor-text-muted);
 }
 
 .tile-cell.is-selected {
-    border-color: #4fc3f7;
+    border-color: var(--editor-accent);
 }

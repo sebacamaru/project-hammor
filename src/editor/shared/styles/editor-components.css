@@ -1,0 +1,161 @@
+/* ═══════════════════════════════════════════════════════════════
+   EDITOR COMPONENTS
+   Reusable base classes consuming theme tokens.
+   Use these across all workspaces to avoid duplicating structure.
+
+   Components:
+     .editor-btn            — base button (+ variants + sizes)
+     .editor-input          — base text/number input
+     .editor-modal          — modal card shell
+     .editor-section-label  — uppercase section header (used in panels)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────
+   Button
+   ───────────────────────────────────────── */
+
+.editor-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    border-radius: var(--editor-radius-md);
+    padding: var(--editor-space-1) var(--editor-space-4);
+    font-size: var(--editor-font-md);
+    font-family: "Google Sans Code", monospace;
+    cursor: pointer;
+    outline: none;
+    transition:
+        background var(--editor-transition-fast),
+        color var(--editor-transition-fast),
+        border-color var(--editor-transition-fast);
+}
+
+.editor-btn:focus-visible {
+    box-shadow: var(--editor-shadow-focus);
+}
+
+.editor-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* Variant: ghost (neutral, secondary) */
+.editor-btn--ghost {
+    background: var(--editor-btn-ghost-bg);
+    border-color: var(--editor-btn-ghost-border);
+    color: var(--editor-btn-ghost-color);
+}
+
+.editor-btn--ghost:hover:not(:disabled) {
+    background: var(--editor-btn-ghost-bg-hover);
+    color: var(--editor-text);
+}
+
+/* Variant: primary (confirm, save, accept) */
+.editor-btn--primary {
+    background: var(--editor-btn-primary-bg);
+    color: var(--editor-btn-primary-color);
+}
+
+.editor-btn--primary:hover:not(:disabled) {
+    background: var(--editor-btn-primary-bg-hover);
+}
+
+/* Variant: danger (delete, destructive) */
+.editor-btn--danger {
+    background: var(--editor-btn-danger-bg);
+    color: var(--editor-btn-danger-color);
+}
+
+.editor-btn--danger:hover:not(:disabled) {
+    background: var(--editor-btn-danger-bg-hover);
+}
+
+/* Size: small */
+.editor-btn--sm {
+    padding: 4px var(--editor-space-2);
+    font-size: var(--editor-font-sm);
+}
+
+/* Size: full width */
+.editor-btn--full {
+    width: 100%;
+}
+
+/* ─────────────────────────────────────────
+   Input
+   ───────────────────────────────────────── */
+
+.editor-input {
+    padding: 4px 6px;
+    background: var(--editor-bg-subtle);
+    border: 1px solid var(--editor-border-input);
+    border-radius: var(--editor-radius-md);
+    color: var(--editor-text);
+    font-size: var(--editor-font-sm);
+    font-family: "Google Sans Code", monospace;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.editor-input:focus {
+    border-color: var(--editor-border-input-focus);
+}
+
+.editor-input:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ─────────────────────────────────────────
+   Modal card
+   ───────────────────────────────────────── */
+
+.editor-modal {
+    background: var(--editor-bg-modal);
+    border: 1px solid var(--editor-border-muted);
+    border-radius: var(--editor-radius-lg);
+    box-shadow: var(--editor-shadow-modal);
+    padding: var(--editor-space-5) var(--editor-space-6);
+    max-width: 380px;
+    width: 90%;
+    color: var(--editor-text-body);
+    font-family: "Google Sans Code", monospace;
+    backdrop-filter: blur(6px);
+}
+
+.editor-modal__title {
+    font-size: var(--editor-font-lg);
+    font-weight: 600;
+    color: var(--editor-text);
+    margin-bottom: var(--editor-space-2);
+}
+
+.editor-modal__body {
+    font-size: var(--editor-font-md);
+    line-height: 1.5;
+    color: var(--editor-text-body);
+    margin-bottom: var(--editor-space-5);
+}
+
+.editor-modal__actions {
+    display: flex;
+    gap: var(--editor-space-2);
+    justify-content: flex-end;
+}
+
+/* ─────────────────────────────────────────
+   Section label
+   Shared across all panel/workspace headers.
+   ───────────────────────────────────────── */
+
+.editor-section-label {
+    font-size: var(--editor-font-xs);
+    font-weight: 600;
+    color: var(--editor-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}

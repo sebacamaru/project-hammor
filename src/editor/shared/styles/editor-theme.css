@@ -1,0 +1,103 @@
+/* ═══════════════════════════════════════════════════════════════
+   EDITOR THEME
+   Semantic tokens — map foundations to purpose/meaning.
+   Change here to adjust the editor's design language without
+   touching raw palette values.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ── Backgrounds ── */
+    --editor-bg-panel: var(--black-55); /* glass panel backdrop */
+    --editor-bg-modal: var(--black-55); /* solid dialog/modal card */
+    --editor-bg-subtle: var(--white-6); /* input fields, toolbar buttons */
+    --editor-bg-muted: var(--white-8); /* ghost buttons default */
+    --editor-bg-elevated: var(
+        --white-15
+    ); /* ghost button hover, active state */
+    --editor-bg-overlay: var(--black-55); /* modal backdrop scrim */
+
+    /* ── Borders ── */
+    --editor-border: var(--white-22); /* panel outer border */
+    --editor-border-muted: var(--white-12); /* panel dividers, modal border */
+    --editor-border-subtle: var(--white-8); /* inner dividers, atlas panel */
+    --editor-border-input: var(--white-18); /* input default */
+    --editor-border-input-focus: var(--white-35); /* input focused */
+    --editor-border-ghost-btn: var(--white-20); /* ghost button border */
+
+    /* ── Text ── */
+    --editor-text: var(--white-100); /* headings, active labels */
+    --editor-text-body: var(--white-70); /* body text, button labels */
+    --editor-text-muted: var(--white-50); /* secondary labels, panel body */
+    --editor-text-faint: var(--white-40); /* placeholder labels, disabled */
+    --editor-text-dim: var(--white-35); /* metadata, hints */
+
+    /* ── Accent (primary — cyan) ── */
+    --editor-accent: var(--cyan-400); /* active tab indicator, tile selection */
+    --editor-accent-focus: var(--cyan-50); /* focus ring color */
+    --editor-accent-subtle: var(--cyan-12); /* selected list item background */
+    --editor-accent-border: var(--cyan-60); /* selected list item left border */
+
+    /* ── Mode accent (amber — workspace mode tabs) ── */
+    --editor-mode-accent: var(--amber-400);
+
+    /* ── Status colors ── */
+    --editor-status-warning: var(--amber-400);
+    --editor-status-warning-bg: var(--amber-10);
+    --editor-status-success: var(--green-400);
+    --editor-status-success-bg: var(--green-10);
+    --editor-status-danger: var(--red-400);
+    --editor-status-danger-bg: var(--red-10);
+
+    /* ── Spacing ── */
+    --editor-space-1: var(--space-1); /* 4px */
+    --editor-space-2: var(--space-2); /* 8px */
+    --editor-space-3: var(--space-3); /* 12px */
+    --editor-space-4: var(--space-4); /* 16px */
+    --editor-space-5: var(--space-5); /* 20px */
+    --editor-space-6: var(--space-6); /* 24px */
+
+    /* ── Radius ── */
+    --editor-radius-sm: var(--radius-sm); /* 3px — scrollbar thumb, badges */
+    --editor-radius-md: var(
+        --radius-md
+    ); /* 4px — buttons, inputs, list items */
+    --editor-radius-lg: var(--radius-lg); /* 5px — panels, modals, selects */
+
+    /* ── Typography ── */
+    --editor-font-xs: var(--text-xs); /* 11px — section labels, hints */
+    --editor-font-sm: var(--text-sm); /* 12px — body text, inputs */
+    --editor-font-md: var(--text-md); /* 13px — regular UI text */
+    --editor-font-lg: var(--text-lg); /* 15px — dialog title */
+    --editor-font-xl: var(--text-xl); /* 18px — toolbar icons */
+
+    /* ── Shadows ── */
+    --editor-shadow-modal: var(--shadow-modal);
+    --editor-shadow-focus: var(--shadow-focus);
+
+    /* ── Transitions ── */
+    --editor-transition-fast: var(--duration-fast);
+    --editor-transition-base: var(--duration-base);
+
+    /* ── Z-index layers ── */
+    --editor-z-viewport: 1;
+    --editor-z-shell: 2;
+    --editor-z-topbar: 10;
+    --editor-z-overlay: 1000;   /* modals (ModalDialog) */
+    --editor-z-dialog: 1001;    /* confirm dialogs (DialogHost) — must sit above modals */
+
+    /* ── Buttons: ghost ── */
+    --editor-btn-ghost-bg: var(--editor-bg-muted);
+    --editor-btn-ghost-bg-hover: var(--editor-bg-elevated);
+    --editor-btn-ghost-border: var(--editor-border-ghost-btn);
+    --editor-btn-ghost-color: var(--editor-text-body);
+
+    /* ── Buttons: primary / confirm ── */
+    --editor-btn-primary-bg: var(--teal-700);
+    --editor-btn-primary-bg-hover: var(--teal-600);
+    --editor-btn-primary-color: var(--white-100);
+
+    /* ── Buttons: danger / destructive ── */
+    --editor-btn-danger-bg: var(--crimson-800);
+    --editor-btn-danger-bg-hover: var(--crimson-700);
+    --editor-btn-danger-color: var(--white-100);
+}

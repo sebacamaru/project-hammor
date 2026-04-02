@@ -56,7 +56,7 @@ export class WorldEditorApp {
         <div class="editor-panel-body" data-slot="library"></div>
       </aside>
       <main class="editor-panel world-panel-grid">
-        <div class="editor-panel-header">World <button class="world-header-btn world-redo-btn" title="Redo (Ctrl+Y)" disabled>↷</button><button class="world-header-btn world-undo-btn" title="Undo (Ctrl+Z)" disabled>↶</button><button class="world-header-btn world-center-btn" title="Center View">⊙</button></div>
+        <div class="editor-panel-header">World <button class="world-header-btn editor-btn editor-btn--ghost editor-btn--sm world-redo-btn" title="Redo (Ctrl+Y)" disabled>↷</button><button class="world-header-btn editor-btn editor-btn--ghost editor-btn--sm world-undo-btn" title="Undo (Ctrl+Z)" disabled>↶</button><button class="world-header-btn editor-btn editor-btn--ghost editor-btn--sm world-center-btn" title="Center View">⊙</button></div>
         <div class="editor-panel-body" data-slot="grid"></div>
       </main>
       <aside class="editor-panel world-panel-inspector">

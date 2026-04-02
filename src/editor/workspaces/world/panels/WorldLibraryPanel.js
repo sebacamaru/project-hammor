@@ -113,7 +113,7 @@ export class WorldLibraryPanel {
     actions.className = "world-list-actions";
 
     const createBtn = document.createElement("button");
-    createBtn.className = "world-list-btn";
+    createBtn.className = "world-list-btn editor-btn editor-btn--ghost editor-btn--sm";
     createBtn.textContent = "+ New World";
     createBtn.addEventListener("click", () => this._onCreateWorld?.());
     actions.appendChild(createBtn);

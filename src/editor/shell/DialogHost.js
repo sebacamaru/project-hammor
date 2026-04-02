@@ -26,14 +26,14 @@ export class DialogHost {
       this._resolve = resolve;
 
       const isDanger = tone === "danger";
-      const confirmClass = `dialog-btn dialog-btn-confirm${isDanger ? " is-danger" : ""}`;
+      const confirmClass = isDanger ? "editor-btn editor-btn--danger" : "editor-btn editor-btn--primary";
 
       this._container.innerHTML = `
-        <div class="dialog-card">
+        <div class="dialog-card editor-modal">
           <div class="dialog-title">${this._esc(title)}</div>
           <div class="dialog-message">${this._esc(message)}</div>
           <div class="dialog-actions">
-            <button class="dialog-btn dialog-btn-cancel" data-role="cancel">${this._esc(cancelLabel)}</button>
+            <button class="editor-btn editor-btn--ghost" data-role="cancel">${this._esc(cancelLabel)}</button>
             <button class="${confirmClass}" data-role="confirm">${this._esc(confirmLabel)}</button>
           </div>
         </div>

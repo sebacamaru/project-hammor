@@ -31,11 +31,11 @@ export class DatabaseEditorApp {
       <div class="editor-panel database-panel">
         <div class="editor-panel-header">Project Settings</div>
         <div class="editor-panel-body">
-          <div class="database-section-title">Game Start</div>
+          <div class="database-section-title editor-section-label">Game Start</div>
 
           <div class="database-field">
             <label>Starting Map</label>
-            <select class="js-map-select">
+            <select class="editor-input js-map-select">
               <option value="" disabled selected>Loading…</option>
             </select>
             <span class="database-world-info js-world-info">World: loading…</span>
@@ -43,15 +43,15 @@ export class DatabaseEditorApp {
 
           <div class="database-field">
             <label>Spawn X (tiles)</label>
-            <input type="number" class="js-x-input" value="0" step="1">
+            <input type="number" class="editor-input js-x-input" value="0" step="1">
           </div>
 
           <div class="database-field">
             <label>Spawn Y (tiles)</label>
-            <input type="number" class="js-y-input" value="0" step="1">
+            <input type="number" class="editor-input js-y-input" value="0" step="1">
           </div>
 
-          <button class="database-save-btn js-save-btn">Save</button>
+          <button class="database-save-btn editor-btn editor-btn--ghost editor-btn--full js-save-btn">Save</button>
 
           <div class="database-status js-status"></div>
         </div>

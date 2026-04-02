@@ -18,11 +18,22 @@ export class ModalDialog {
    * @param {string} [opts.className] — Extra class added to the dialog panel
    * @param {HTMLElement} [opts.mountParent] — Where to append the overlay (defaults to document.body)
    */
-  constructor({ title, content, footer, onClose, className, mountParent } = {}) {
+  /**
+   * @param {object} opts
+   * @param {string} opts.title — Dialog title text
+   * @param {HTMLElement} [opts.content] — Element to mount inside the body slot
+   * @param {HTMLElement} [opts.footer] — Element to mount inside the footer slot (omitted if null)
+   * @param {() => void} [opts.onClose] — Called exactly once per open/close cycle
+   * @param {() => Promise<boolean>} [opts.onBeforeClose] — Async guard for user-initiated close. Return false to cancel.
+   * @param {string} [opts.className] — Extra class added to the dialog panel
+   * @param {HTMLElement} [opts.mountParent] — Where to append the overlay (defaults to document.body)
+   */
+  constructor({ title, content, footer, onClose, onBeforeClose, className, mountParent } = {}) {
     this._title = title;
     this._content = content || null;
     this._footer = footer || null;
     this._onClose = onClose || null;
+    this._onBeforeClose = onBeforeClose || null;
     this._className = className || null;
     this._mountParent = mountParent || document.body;
 
@@ -30,6 +41,7 @@ export class ModalDialog {
     this._overlayEl = null;
     this._onKeyDown = null;
     this._titleId = `modal-title-${++_modalIdCounter}`;
+    this._isClosingRequested = false;
   }
 
   /** @returns {boolean} Whether the modal is currently open */
@@ -65,7 +77,7 @@ export class ModalDialog {
     closeBtn.className = "modal-close";
     closeBtn.setAttribute("aria-label", "Close");
     closeBtn.textContent = "\u00d7";
-    closeBtn.addEventListener("click", () => this.close());
+    closeBtn.addEventListener("click", () => this.requestClose());
 
     header.appendChild(titleEl);
     header.appendChild(closeBtn);
@@ -93,7 +105,7 @@ export class ModalDialog {
     // ── Backdrop click: close only when clicking the overlay itself ──
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
-        this.close();
+        this.requestClose();
       }
     });
 
@@ -102,7 +114,7 @@ export class ModalDialog {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        this.close();
+        this.requestClose();
       }
     };
     window.addEventListener("keydown", this._onKeyDown, true);
@@ -115,10 +127,34 @@ export class ModalDialog {
   }
 
   /**
+   * User-initiated close — runs the onBeforeClose guard (if any) and only closes
+   * if the guard returns true. Reentrant calls while the guard is pending are ignored.
+   * @returns {Promise<void>}
+   */
+  async requestClose() {
+    if (this._isClosingRequested) return;
+    this._isClosingRequested = true;
+    try {
+      if (this._onBeforeClose) {
+        const allowed = await this._onBeforeClose();
+        if (!allowed) {
+          this._isClosingRequested = false;
+          return;
+        }
+      }
+      this.close();
+    } finally {
+      this._isClosingRequested = false;
+    }
+  }
+
+  /**
    * Close the modal — removes DOM, cleans listeners, fires onClose once.
    * Safe to call multiple times; onClose only fires on the first call after open().
+   * Bypasses onBeforeClose — use requestClose() for user-initiated closes.
    */
   close() {
+    this._isClosingRequested = false;
     if (!this._open) return;
     this._open = false;
 

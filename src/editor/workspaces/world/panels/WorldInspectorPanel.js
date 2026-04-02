@@ -59,11 +59,11 @@ export class WorldInspectorPanel {
       <div class="inspector-section-title">World Properties</div>
       <div class="info-row"><span class="info-label">ID</span><span class="info-value">${worldDoc.id}</span></div>
       <div class="info-row"><span class="info-label">Name</span></div>
-      <input type="text" class="inspector-input" data-field="name" value="${worldDoc.getName().replace(/"/g, '&quot;')}">
+      <input type="text" class="inspector-input editor-input" data-field="name" value="${worldDoc.getName().replace(/"/g, '&quot;')}">
       <div class="info-row" style="margin-top:6px"><span class="info-label">Map Width</span></div>
-      <input type="number" class="inspector-input" data-field="width" min="1" value="${mapSize.width}" ${disabledAttr}>
+      <input type="number" class="inspector-input editor-input" data-field="width" min="1" value="${mapSize.width}" ${disabledAttr}>
       <div class="info-row" style="margin-top:6px"><span class="info-label">Map Height</span></div>
-      <input type="number" class="inspector-input" data-field="height" min="1" value="${mapSize.height}" ${disabledAttr}>
+      <input type="number" class="inspector-input editor-input" data-field="height" min="1" value="${mapSize.height}" ${disabledAttr}>
       ${sizeLocked ? '<div class="inspector-lock-msg">Map size is locked because this world contains maps.</div>' : ""}
       <div class="info-row" style="margin-top:6px"><span class="info-label">Cells</span><span class="info-value">${cellCount}</span></div>
       <div class="info-row"><span class="info-label">Bounds</span><span class="info-value">${boundsText}</span></div>
@@ -174,8 +174,8 @@ export class WorldInspectorPanel {
       <div class="info-row"><span class="info-label">Map</span><span class="info-value">empty</span></div>
       <div class="info-row"><span class="info-label">Selected Map</span><span class="info-value">${selectedMapId ?? "none"}</span></div>
       ${compatHint}
-      <button class="inspector-action" data-action="assign" ${assignDisabled}>Assign Selected Map</button>
-      <button class="inspector-action" data-action="create" ${createDisabled}>Create Map Here</button>
+      <button class="inspector-action editor-btn editor-btn--ghost editor-btn--full" data-action="assign" ${assignDisabled}>Assign Selected Map</button>
+      <button class="inspector-action editor-btn editor-btn--ghost editor-btn--full" data-action="create" ${createDisabled}>Create Map Here</button>
     `;
 
     this._cellSection.querySelector('[data-action="assign"]')
@@ -199,9 +199,9 @@ export class WorldInspectorPanel {
       <div class="info-row"><span class="info-label">Position</span><span class="info-value">${rx}, ${ry}</span></div>
       <div class="info-row"><span class="info-label">Map</span><span class="info-value">${cell.mapId}</span></div>
       ${compatHint}
-      <button class="inspector-action" data-action="open">Open Map</button>
-      <button class="inspector-action" data-action="remove">Remove from World</button>
-      <button class="inspector-action" data-action="replace" ${replaceDisabled}>Replace with Selected Map</button>
+      <button class="inspector-action editor-btn editor-btn--ghost editor-btn--full" data-action="open">Open Map</button>
+      <button class="inspector-action editor-btn editor-btn--ghost editor-btn--full" data-action="remove">Remove from World</button>
+      <button class="inspector-action editor-btn editor-btn--ghost editor-btn--full" data-action="replace" ${replaceDisabled}>Replace with Selected Map</button>
     `;
 
     this._cellSection.querySelector('[data-action="open"]')

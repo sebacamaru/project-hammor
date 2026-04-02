@@ -1,3 +1,7 @@
+@import './editor-foundations.css';
+@import './editor-theme.css';
+@import './editor-components.css';
+
 @font-face {
     font-family: "Google Sans Code";
     src: url("/fonts/GoogleSansCode-VariableFont_wght.ttf") format("truetype");
@@ -34,28 +38,28 @@ canvas {
 /* ── Shared editor panel ── */
 
 .editor-panel {
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background-color: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--editor-border);
+    background-color: var(--editor-bg-panel);
     backdrop-filter: blur(6px);
-    border-radius: 5px;
-    color: white;
+    border-radius: var(--editor-radius-lg);
+    color: var(--editor-text);
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
 .editor-panel-header {
-    padding: 10px 12px;
-    font-size: 13px;
+    padding: 10px var(--editor-space-3);
+    font-size: var(--editor-font-md);
     font-weight: 700;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: 1px solid var(--editor-border-muted);
     flex-shrink: 0;
 }
 
 .editor-panel-body {
-    padding: 12px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    padding: var(--editor-space-3);
+    font-size: var(--editor-font-sm);
+    color: var(--editor-text-muted);
     overflow-y: auto;
     flex: 1;
 }

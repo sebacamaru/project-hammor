@@ -1,8 +1,8 @@
 .shell-topbar {
     position: relative;
     height: 36px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    z-index: 10;
+    border-bottom: 1px solid var(--editor-border-muted);
+    z-index: var(--editor-z-topbar);
     display: flex;
     align-items: center;
 }
@@ -11,30 +11,30 @@
     display: flex;
     gap: 0;
     height: 100%;
-    padding: 0 8px;
+    padding: 0 var(--editor-space-2);
 }
 
 .shell-tab {
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.5);
-    padding: 0 16px;
-    font-size: 13px;
+    color: var(--editor-text-muted);
+    padding: 0 var(--editor-space-4);
+    font-size: var(--editor-font-md);
     font-family: "Google Sans Code", monospace;
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition:
-        color 0.15s,
-        border-color 0.15s;
+        color var(--editor-transition-fast),
+        border-color var(--editor-transition-fast);
 }
 
 .shell-tab:hover {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--white-80);
 }
 
 .shell-tab.is-active {
-    color: white;
-    border-bottom-color: #4fc3f7;
+    color: var(--editor-text);
+    border-bottom-color: var(--editor-accent);
 }
 
 .shell-topbar-center {
@@ -44,7 +44,7 @@
     height: 100%;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--editor-space-2);
     pointer-events: none;
 }
 
@@ -52,120 +52,107 @@
     pointer-events: all;
 }
 
-.topbar-play-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    border: none;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.55);
-    padding: 0 16px;
-    height: 100%;
-    font-size: 13px;
-    font-family: "Google Sans Code", monospace;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition:
-        color 0.15s,
-        border-color 0.15s;
-}
+/* ── Play / Stop buttons — shared base ── */
 
-.topbar-play-btn:hover {
-    color: rgba(255, 255, 255, 0.9);
-    border-bottom-color: rgba(255, 255, 255, 0.2);
-}
-
-.topbar-play-btn:disabled {
-    opacity: 0.35;
-    cursor: default;
-}
-
+.topbar-play-btn,
 .topbar-stop-btn {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--editor-space-3);
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.55);
-    padding: 0 16px;
+    color: var(--white-55);
+    padding: 0 var(--editor-space-4);
     height: 100%;
-    font-size: 13px;
+    font-size: var(--editor-font-md);
     font-family: "Google Sans Code", monospace;
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition:
-        color 0.15s,
-        border-color 0.15s;
+        color var(--editor-transition-fast),
+        border-color var(--editor-transition-fast);
 }
 
-.topbar-stop-btn:hover {
-    color: #ef9a9a;
-    border-bottom-color: rgba(239, 154, 154, 0.3);
-}
-
+.topbar-play-btn:disabled,
 .topbar-stop-btn:disabled {
     opacity: 0.35;
     cursor: default;
 }
 
+/* Play: neutral hover */
+.topbar-play-btn:hover {
+    color: var(--white-80);
+    border-bottom-color: var(--white-20);
+}
+
+/* Stop: danger tint hover */
+.topbar-stop-btn:hover {
+    color: var(--red-400);
+    border-bottom-color: rgba(239, 154, 154, 0.3);
+}
+
+/* ── Server status badge ── */
+
 .topbar-server-status {
-    font-size: 11px;
+    font-size: var(--editor-font-xs);
     font-family: "Google Sans Code", monospace;
-    padding: 2px 8px;
-    border-radius: 3px;
+    padding: 2px var(--editor-space-2);
+    border-radius: var(--editor-radius-sm);
     white-space: nowrap;
     letter-spacing: 0.02em;
     opacity: 0.85;
 }
 
 .topbar-server-status--neutral {
-    color: rgba(255, 255, 255, 0.45);
-    background: rgba(255, 255, 255, 0.05);
+    color: var(--white-45);
+    background: var(--white-5);
 }
 
 .topbar-server-status--warning {
-    color: #ffb74d;
-    background: rgba(255, 183, 77, 0.1);
+    color: var(--editor-status-warning);
+    background: var(--editor-status-warning-bg);
 }
 
 .topbar-server-status--success {
-    color: #81c784;
-    background: rgba(129, 199, 132, 0.1);
+    color: var(--editor-status-success);
+    background: var(--editor-status-success-bg);
 }
 
 .topbar-server-status--danger {
-    color: #e57373;
-    background: rgba(229, 115, 115, 0.1);
+    color: var(--editor-status-danger);
+    background: var(--editor-status-danger-bg);
 }
+
+/* ── Mode tabs (right side) ── */
 
 .shell-modes {
     display: flex;
     height: 100%;
     margin-left: auto;
-    padding: 0 8px;
+    padding: 0 var(--editor-space-2);
 }
 
 .shell-mode-tab {
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--editor-text-muted);
     padding: 0 14px;
-    font-size: 13px;
+    font-size: var(--editor-font-md);
     font-family: "Google Sans Code", monospace;
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition:
-        color 0.15s,
-        border-color 0.15s;
+        color var(--editor-transition-fast),
+        border-color var(--editor-transition-fast);
 }
 
 .shell-mode-tab:hover {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--white-80);
 }
 
 .shell-mode-tab.is-active {
-    color: white;
-    border-bottom-color: #ffb74d;
+    color: var(--editor-text);
+    border-bottom-color: var(--editor-mode-accent);
 }
 
 .shell-workspace-host {

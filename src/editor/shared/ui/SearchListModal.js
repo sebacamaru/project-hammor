@@ -93,12 +93,12 @@ export class SearchListModal {
     footer.className = "search-list-footer";
 
     const cancelBtn = document.createElement("button");
-    cancelBtn.className = "dialog-btn dialog-btn-cancel";
+    cancelBtn.className = "editor-btn editor-btn--ghost";
     cancelBtn.textContent = cancelText || "Cancel";
     cancelBtn.addEventListener("click", () => this.close());
 
     const confirmBtn = document.createElement("button");
-    confirmBtn.className = "dialog-btn dialog-btn-confirm";
+    confirmBtn.className = "editor-btn editor-btn--primary";
     confirmBtn.textContent = confirmText || "Select";
     confirmBtn.disabled = true;
     confirmBtn.addEventListener("click", () => this._confirm());

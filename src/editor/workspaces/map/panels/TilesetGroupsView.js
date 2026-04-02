@@ -1,4 +1,5 @@
 import { getGroupTiles } from "../../../../shared/data/TilesetUtils.js";
+import { createIconEl } from "../../../shared/ui/editorIcons.js";
 import "../styles/tileset-groups.css";
 
 const ATLAS_CELL_SIZE = 24;
@@ -12,16 +13,26 @@ export class TilesetGroupsView {
    * @param {object|null} tileset — Full tileset definition (from TilesetRegistry)
    * @param {object} [opts]
    * @param {(groups: object[]) => void} [opts.onSave] — Called with the current groups array when Save is clicked
+   * @param {() => void} [opts.onCancel] — Called when the Cancel button is clicked (user-initiated, should trigger requestClose on the host modal)
+   * @param {() => void} [opts.onSaveSuccess] — Called after a successful save (should call close() on the host modal to bypass the onBeforeClose guard)
+   * @param {(opts: {title: string, message: string, confirmLabel?: string, cancelLabel?: string, tone?: string}) => Promise<boolean>} [opts.confirm]
+   *   Custom confirm dialog function. When provided, used instead of window.confirm for destructive actions
+   *   like deleting groups. Pass editor.confirm from the host workspace for a consistent UI.
+   *   Falls back to window.confirm if not provided.
    */
-  constructor(tileset, { onSave } = {}) {
+  constructor(tileset, { onSave, onCancel, onSaveSuccess, confirm } = {}) {
     this._tileset = tileset;
-    this._groups = Array.isArray(tileset?.editor?.groups) ? tileset.editor.groups : [];
+    this._groups = structuredClone(tileset?.editor?.groups ?? []);
     this._selectedIndex = -1;
     this._selectedTileSet = new Set();
     this._hoverTileId = -1;
     this._atlasImg = null;
     this._onSave = onSave ?? null;
+    this._onCancel = onCancel ?? null;
+    this._onSaveSuccess = onSaveSuccess ?? null;
+    this._confirm = confirm ?? null;
     this._saveBtn = null;
+    this._footerEl = null;
     this._isDirty = false;
     this._initialSnapshot = this._serializeGroups(this._groups);
 
@@ -40,6 +51,17 @@ export class TilesetGroupsView {
     this.el.className = "tileset-groups-view";
 
     this._build();
+    this._buildFooter();
+  }
+
+  /** @returns {boolean} Whether the view has unsaved changes. */
+  get isDirty() {
+    return this._isDirty;
+  }
+
+  /** @returns {HTMLElement} Footer element with Cancel + Save buttons for use in a modal footer slot. */
+  get footerEl() {
+    return this._footerEl;
   }
 
   // ── Dirty state ──
@@ -82,7 +104,7 @@ export class TilesetGroupsView {
   }
 
   /**
-   * Handle Save button click — save if dirty, mark clean on success.
+   * Handle Save button click — save if dirty, mark clean and notify on success.
    * @private
    */
   async _handleSave() {
@@ -90,6 +112,7 @@ export class TilesetGroupsView {
     try {
       await this._onSave(this._groups);
       this.markSaved();
+      this._onSaveSuccess?.();
     } catch (error) {
       console.error("Failed to save tileset groups", error);
     }
@@ -149,19 +172,10 @@ export class TilesetGroupsView {
     toolbar.className = "tileset-groups-toolbar";
 
     const addBtn = document.createElement("button");
-    addBtn.className = "dialog-btn dialog-btn-confirm";
+    addBtn.className = "editor-btn editor-btn--primary editor-btn--sm";
     addBtn.textContent = "+ New Group";
     addBtn.addEventListener("click", () => this._createGroup());
     toolbar.appendChild(addBtn);
-
-    if (this._onSave) {
-      this._saveBtn = document.createElement("button");
-      this._saveBtn.type = "button";
-      this._saveBtn.className = "dialog-btn dialog-btn-confirm tileset-groups-save-btn";
-      this._saveBtn.addEventListener("click", () => this._handleSave());
-      this._updateSaveButton();
-      toolbar.appendChild(this._saveBtn);
-    }
 
     leftCol.appendChild(toolbar);
 
@@ -185,6 +199,31 @@ export class TilesetGroupsView {
     } else {
       this._renderEmptyDetail();
     }
+  }
+
+  /**
+   * Build the footer element with Cancel and Save buttons.
+   * Stored as this._footerEl; exposed publicly via the footerEl getter.
+   * @private
+   */
+  _buildFooter() {
+    this._footerEl = document.createElement("div");
+    this._footerEl.className = "tileset-groups-footer";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "editor-btn editor-btn--ghost";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => this._onCancel?.());
+
+    this._saveBtn = document.createElement("button");
+    this._saveBtn.type = "button";
+    this._saveBtn.className = "editor-btn editor-btn--primary";
+    this._saveBtn.addEventListener("click", () => this._handleSave());
+    this._updateSaveButton();
+
+    this._footerEl.appendChild(cancelBtn);
+    this._footerEl.appendChild(this._saveBtn);
   }
 
   // ── Atlas ──
@@ -490,7 +529,24 @@ export class TilesetGroupsView {
       const group = this._groups[i];
       const item = document.createElement("div");
       item.className = "tileset-groups-list-item";
-      item.textContent = this._getGroupLabel(group);
+
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "tileset-groups-item-label";
+      labelSpan.textContent = this._getGroupLabel(group);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "tileset-groups-item-delete";
+      deleteBtn.title = "Delete group";
+      const icon = createIconEl("eraser");
+      if (icon) deleteBtn.appendChild(icon);
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._deleteGroup(i);
+      });
+
+      item.appendChild(labelSpan);
+      item.appendChild(deleteBtn);
       item.addEventListener("click", () => this._selectIndex(i));
       this._listEl.appendChild(item);
     }
@@ -544,28 +600,59 @@ export class TilesetGroupsView {
     this._refreshDirtyState();
   }
 
-  /** @private */
-  _deleteGroup() {
-    const group = this._getSelectedGroup();
+  /**
+   * Delete a group by index. Shows a confirmation before proceeding.
+   * Uses the custom confirm dialog if available (opts.confirm), otherwise falls back to window.confirm.
+   * Adjusts the selected index so selection remains stable for non-selected deletes.
+   * @param {number} index
+   * @private
+   */
+  async _deleteGroup(index) {
+    const group = this._groups[index];
     if (!group) return;
 
     const label = this._getGroupLabel(group);
-    if (!window.confirm(`Delete group "${label}"?`)) return;
+    let confirmed;
+    if (this._confirm) {
+      confirmed = await this._confirm({
+        title: "Delete group",
+        message: `Delete group "${label}"? This cannot be undone.`,
+        confirmLabel: "Delete",
+        tone: "danger",
+      });
+    } else {
+      confirmed = window.confirm(`Delete group "${label}"?`);
+    }
+    if (!confirmed) return;
 
-    const idx = this._selectedIndex;
-    this._groups.splice(idx, 1);
-    this._selectedIndex = -1;
+    const wasSelected = this._selectedIndex === index;
+
+    // Adjust selected index before splicing
+    if (this._selectedIndex > index) {
+      this._selectedIndex--;
+    } else if (wasSelected) {
+      this._selectedIndex = -1;
+    }
+
+    this._groups.splice(index, 1);
     this._renderList();
 
+    // Re-apply selection highlight
+    if (this._selectedIndex >= 0 && this._selectedIndex < this._listEl.children.length) {
+      this._listEl.children[this._selectedIndex].classList.add("is-selected");
+    }
+
     if (this._groups.length === 0) {
+      this._selectedIndex = -1;
       this._selectedTileSet = new Set();
       this._renderEmptyDetail();
       this._syncAtlasHint();
       this._renderOverlay();
-    } else if (idx < this._groups.length) {
-      this._selectIndex(idx);
+    } else if (wasSelected) {
+      this._selectIndex(Math.min(index, this._groups.length - 1));
     } else {
-      this._selectIndex(this._groups.length - 1);
+      // Non-selected group deleted; current selection is still valid, just refresh detail
+      this._renderDetail(this._groups[this._selectedIndex]);
     }
 
     this._refreshDirtyState();
@@ -580,13 +667,6 @@ export class TilesetGroupsView {
    */
   _renderDetail(group) {
     const tileIds = getGroupTiles(group);
-    const format = this._detectFormat(group);
-
-    let preview = "";
-    if (tileIds.length > 0) {
-      const shown = tileIds.slice(0, 8).join(", ");
-      preview = tileIds.length > 8 ? `${shown}, \u2026` : shown;
-    }
 
     this._detailEl.innerHTML = "";
 
@@ -608,43 +688,21 @@ export class TilesetGroupsView {
       this._refreshDirtyState();
     }));
 
-    // Read-only rows
-    const readOnlyRows = [
-      { label: "Tiles", value: String(tileIds.length) },
-      { label: "Format", value: format },
-    ];
-    if (preview) {
-      readOnlyRows.push({ label: "Preview", value: preview });
-    }
+    // Tiles count (read-only)
+    const tilesRow = document.createElement("div");
+    tilesRow.className = "tileset-groups-detail-row";
 
-    for (const { label, value } of readOnlyRows) {
-      const row = document.createElement("div");
-      row.className = "tileset-groups-detail-row";
+    const tilesLabel = document.createElement("span");
+    tilesLabel.className = "tileset-groups-detail-label";
+    tilesLabel.textContent = "Tiles";
 
-      const labelEl = document.createElement("span");
-      labelEl.className = "tileset-groups-detail-label";
-      labelEl.textContent = label;
+    const tilesValue = document.createElement("span");
+    tilesValue.className = "tileset-groups-detail-value";
+    tilesValue.textContent = String(tileIds.length);
 
-      const valueEl = document.createElement("span");
-      valueEl.className = "tileset-groups-detail-value";
-      valueEl.textContent = value;
-
-      row.appendChild(labelEl);
-      row.appendChild(valueEl);
-      this._detailEl.appendChild(row);
-    }
-
-    // Delete button
-    const deleteArea = document.createElement("div");
-    deleteArea.className = "tileset-groups-delete-area";
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "dialog-btn dialog-btn-confirm is-danger";
-    deleteBtn.textContent = "Delete Group";
-    deleteBtn.addEventListener("click", () => this._deleteGroup());
-
-    deleteArea.appendChild(deleteBtn);
-    this._detailEl.appendChild(deleteArea);
+    tilesRow.appendChild(tilesLabel);
+    tilesRow.appendChild(tilesValue);
+    this._detailEl.appendChild(tilesRow);
   }
 
   /**
@@ -682,25 +740,9 @@ export class TilesetGroupsView {
     if (!group) return;
     const item = this._listEl.children[this._selectedIndex];
     if (item) {
-      item.textContent = this._getGroupLabel(group);
+      const label = item.querySelector(".tileset-groups-item-label");
+      if (label) label.textContent = this._getGroupLabel(group);
     }
   }
 
-  /**
-   * Detect the format of a group definition.
-   * @param {object} group
-   * @returns {"explicit"|"range"|"unknown"}
-   * @private
-   */
-  _detectFormat(group) {
-    if (Array.isArray(group?.tiles)) return "explicit";
-    if (
-      Number.isInteger(group?.startId) &&
-      Number.isInteger(group?.count) &&
-      group.count > 0
-    ) {
-      return "range";
-    }
-    return "unknown";
-  }
 }

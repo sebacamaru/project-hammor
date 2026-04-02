@@ -24,13 +24,10 @@
     flex-shrink: 0;
 }
 
-.tileset-groups-toolbar .dialog-btn {
-    font-size: 12px;
+/* Size override for toolbar buttons — editor-btn--sm handles most of it */
+.tileset-groups-toolbar .editor-btn {
+    font-size: var(--editor-font-sm);
     padding: 4px 10px;
-}
-
-.tileset-groups-save-btn {
-    margin-left: auto;
 }
 
 /* ── Group list ── */
@@ -38,8 +35,8 @@
 .tileset-groups-list {
     flex: 1;
     overflow-y: auto;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 4px;
+    border: 1px solid var(--editor-border-subtle);
+    border-radius: var(--editor-radius-md);
 }
 
 .tileset-groups-list::-webkit-scrollbar {
@@ -51,32 +48,65 @@
 }
 
 .tileset-groups-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
+    background: var(--editor-bg-elevated);
+    border-radius: var(--editor-radius-sm);
 }
 
 .tileset-groups-list-item {
+    display: flex;
+    align-items: center;
     padding: 6px 10px;
     cursor: pointer;
-    font-size: 13px;
-    color: #e0e0e0;
+    font-size: var(--editor-font-md);
+    color: var(--editor-text-body);
     border-left: 2px solid transparent;
+}
+
+.tileset-groups-item-label {
+    flex: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
+.tileset-groups-item-delete {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 4px;
+    margin-left: var(--editor-space-1);
+    border: none;
+    background: none;
+    color: var(--editor-text-muted);
+    border-radius: var(--editor-radius-sm);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity var(--editor-transition-fast), color var(--editor-transition-fast), background var(--editor-transition-fast);
+}
+
+.tileset-groups-list-item:hover .tileset-groups-item-delete,
+.tileset-groups-list-item.is-selected .tileset-groups-item-delete {
+    opacity: 1;
+}
+
+.tileset-groups-item-delete:hover {
+    color: var(--editor-btn-danger-color);
+    background: var(--editor-btn-danger-bg);
+}
+
 .tileset-groups-list-item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--white-5);
 }
 
 .tileset-groups-list-item.is-selected {
-    background: rgba(79, 195, 247, 0.12);
-    border-left-color: rgba(79, 195, 247, 0.6);
+    background: var(--editor-accent-subtle);
+    border-left-color: var(--editor-accent-border);
 }
 
 .tileset-groups-list-item.is-selected:hover {
-    background: rgba(79, 195, 247, 0.18);
+    background: var(--cyan-18);
 }
 
 /* ── Detail panel (middle) ── */
@@ -86,25 +116,25 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    padding: 8px 16px;
+    padding: var(--editor-space-2) var(--editor-space-4);
     overflow-y: auto;
 }
 
 .tileset-groups-detail-row {
     display: flex;
-    gap: 8px;
-    padding: 4px 0;
-    font-size: 13px;
+    gap: var(--editor-space-2);
+    padding: var(--editor-space-1) 0;
+    font-size: var(--editor-font-md);
 }
 
 .tileset-groups-detail-label {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--editor-text-muted);
     flex-shrink: 0;
     min-width: 60px;
 }
 
 .tileset-groups-detail-value {
-    color: #e0e0e0;
+    color: var(--editor-text-body);
     word-break: break-all;
 }
 
@@ -114,25 +144,17 @@
     flex: 1;
     min-width: 0;
     padding: 3px 6px;
-    font-size: 13px;
+    font-size: var(--editor-font-md);
     font-family: "Google Sans Code", monospace;
-    color: #e0e0e0;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
+    color: var(--editor-text-body);
+    background: var(--black-35);
+    border: 1px solid var(--editor-border-input);
+    border-radius: var(--editor-radius-sm);
     outline: none;
 }
 
 .tileset-groups-input:focus {
-    border-color: rgba(79, 195, 247, 0.5);
-}
-
-/* ── Delete area ── */
-
-.tileset-groups-delete-area {
-    margin-top: auto;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-color: var(--editor-accent-focus);
 }
 
 /* ── Atlas panel (right) ── */
@@ -140,7 +162,7 @@
 .tileset-groups-atlas {
     flex: 1;
     overflow: auto;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 1px solid var(--editor-border-subtle);
     position: relative;
 }
 
@@ -162,13 +184,21 @@
 
 .tileset-groups-atlas-hint {
     position: absolute;
-    top: 8px;
+    top: var(--editor-space-2);
     left: 0;
     right: 0;
     text-align: center;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.3);
+    font-size: var(--editor-font-xs);
+    color: var(--white-35);
     pointer-events: none;
+}
+
+/* ── Footer (mounted inside modal-footer slot) ── */
+
+.tileset-groups-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--editor-space-2);
 }
 
 /* ── Empty state ── */
@@ -179,8 +209,8 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    padding: 24px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.3);
+    padding: var(--editor-space-6);
+    font-size: var(--editor-font-sm);
+    color: var(--white-35);
     text-align: center;
 }
