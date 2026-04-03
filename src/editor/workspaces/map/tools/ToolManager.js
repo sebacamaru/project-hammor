@@ -3,6 +3,7 @@ export const TOOL_MODES = {
   pencil:     new Set(["terrain", "collisions"]),
   eraser:     new Set(["terrain", "collisions"]),
   eyedropper: new Set(["terrain"]),
+  bucket:     new Set(["terrain"]),
 };
 
 /**

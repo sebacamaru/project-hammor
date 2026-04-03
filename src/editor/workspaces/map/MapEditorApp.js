@@ -12,6 +12,7 @@ import { PanTool } from "./tools/PanTool.js";
 import { PencilTool } from "./tools/PencilTool.js";
 import { EraseTool } from "./tools/EraseTool.js";
 import { EyedropperTool } from "./tools/EyedropperTool.js";
+import { BucketTool } from "./tools/BucketTool.js";
 
 import { WorkspaceModesPanel } from "../../shell/WorkspaceModesPanel.js";
 import { LayerVisibilityPanel } from "../../shared/ui/LayerVisibilityPanel.js";
@@ -110,6 +111,10 @@ export class MapEditorApp {
     this.toolManager.register(
       "eyedropper",
       new EyedropperTool(this.state, () => this.document),
+    );
+    this.toolManager.register(
+      "bucket",
+      new BucketTool(this.state, () => this.document, () => this.history),
     );
 
     // Mode tabs in shell topbar
@@ -439,6 +444,12 @@ export class MapEditorApp {
           label: "Eyedropper",
           active: activeTool === "eyedropper",
           onClick: () => this.state.patch({ activeTool: "eyedropper" }),
+        },
+        {
+          id: "bucket",
+          label: "Bucket",
+          active: activeTool === "bucket",
+          onClick: () => this.state.patch({ activeTool: "bucket" }),
         },
       ];
     } else if (mode === "collisions") {
