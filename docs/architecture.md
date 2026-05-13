@@ -119,7 +119,7 @@ window resize → Renderer.resize()
 - **Player.applyServerState(state)**: applies authoritative position from server snapshot. Updates worldX/worldY, direction, moving flag. Skips micro-updates (epsilon check).
 - **Player.hitbox**: `{ offsetX: -4, offsetY: -4, width: 8, height: 4 }` — AABB relative to **feet**
 - **PlayerView**: owns AnimatedSprite, renders with offset from feet `(x-8, y-16)`, animation map from spritesheet
-- **NetworkManager** (`client/network/`): WebSocket wrapper, sends hello/input, receives welcome/snapshot via callbacks
+- **NetworkManager** (`client/network/`): WebSocket wrapper. Sends `hello`/`input`/`interact`/`event_ack`. Callbacks: `onWelcome`, `onSnapshot`, `onInteractResult` (legacy), `onEventMessage`, `onEventEnd`, `onEventInputLock`.
 
 ### Render layer (shared/render/)
 - **EntityRenderer**: Map<id, Sprite>, creates sprites on first sync, interpolates with Math.round
@@ -392,13 +392,18 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 ├── RuntimeWorldManager — loads world definitions, region lookups, neighbor queries
 ├── PrefabRegistry     — loads entity prefabs from content/prefabs/entities/
 ├── ServerEntityManager — runtime entity registry (runtimeId, mapId, authoredId indexes)
+├── _processScriptedMovement() — per-tick step driver for entities with `scriptedMove` queues
+├── _advancePlayerEvents()     — per-tick driver for PlayerEventState command sequences
 └── Entity lifecycle   — spawnEntitiesForMap() / despawnEntitiesForMap()
 ```
 
 ### Protocol
-- MSG_TYPES: hello, welcome, input, snapshot, interact, interact_result, error
+- MSG_TYPES: hello, welcome, input, snapshot, interact, interact_result, event_message, event_end, event_ack, event_input_lock, error
+- `interact_result` is still declared but **unused** by the current server flow — the server-driven `PlayerEventState` replaces it. The client retains an `onInteractResult` handler used only by legacy/test paths.
 - Input: seq-based dedup (accept only if seq > player.input.lastSeq, starts at -1)
-- Interact: `{ type: "interact", targetId }` → server validates + responds with `interact_result`
+- Interact: `{ type: "interact", targetId }` → server validates, creates a `PlayerEventState`, then drips event messages (see Event command system below). No synchronous `interact_result`.
+- Event sequencing (server→client): `event_message { text, speaker? }` (blocks until client `event_ack`), `event_input_lock { move, interact }` (non-blocking), `event_end`.
+- Event ack (client→server): `event_ack` (no payload).
 - Snapshots: broadcast every `SNAPSHOT_INTERVAL_TICKS` (default 1 = every tick at 20 TPS)
 - Snapshot payload: `{ type: "snapshot", tick, lastProcessedSeq, players: [...], entities: [...] }`
 - Players: `[{ id, x, y, vx, vy, facing, mapId }]` — self always first
@@ -451,7 +456,7 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - **Merge**: prefab + instance → params shallow merge, components shallow per key then shallow within each component
 
 ### Server runtime
-- `GameEntity` (`server/src/game/entities/`) — runtimeId ("e1"), authoredId, mapId, kind, x, y, params, components
+- `GameEntity` (`server/src/game/entities/`) — runtimeId ("e1"), authoredId, mapId, kind, x, y, params, components. Runtime-only field `scriptedMove = { queue, stepTicks, active }` set by `moveEntity` commands and drained by `GameServer._processScriptedMovement()`.
 - `ServerEntityManager` (`server/src/runtime/`) — registry indexed by runtimeId, mapId ("mapId/authoredId")
 - `PrefabRegistry` (`server/src/runtime/`) — loads/caches from filesystem, graceful on missing dir
 - `EntityFactory` (`server/src/runtime/`) — pure functions: resolveEntity, validateInstance, validateResolved
@@ -472,13 +477,32 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - **Strict inequality**: edge contact allowed (`pRight > eLeft`, not `>=`). Non-solid entities remain passable.
 
 ### Interaction system
-- **Authored**: `components.interaction = { trigger: "action", type: "text", text: "..." }`
-- **Protocol**: client sends `{ type: "interact", targetId }`, server responds `{ type: "interact_result", entityId, authoredId, interactionType, text }`
-- **Server validation**: `_resolveInteraction()` checks entity exists, `_isEntityRelevantToPlayer()` (same AOI as snapshots), interaction component, feet-to-feet range ≤ INTERACTION_RANGE
-- **Server resolver**: `switch (interaction.type)` — currently "text" only, extensible
-- **Client**: KeyE → 200ms cooldown → `_findNearestInteractable()` (feet distance) → send → `GameMessageBox.show({ text })` (promise-based, dismiss via E/Enter/Space)
+- **Authored data**: `components.interaction = { trigger: "action", commands: [ ... ] }` (preferred). Legacy `{ trigger, type: "text", text }` still accepted — the resolver auto-wraps it into a single `message` command.
+- **Discovery**: `RemoteEntity.interactable` is true when the server-side entity has an `interaction` component (set in `GameEntity.toSnapshotData()`).
+- **Range / cooldown**: feet-to-feet ≤ `INTERACTION_RANGE` (32 px). Client uses `INTERACTION_RANGE_SQ` and applies a 200 ms cooldown in `SceneMap._tryInteract()`.
+- **Protocol** (client → server): `INTERACT { targetId }`. Server validation in `GameServer._resolveInteraction()`: entity exists, `_isEntityRelevantToPlayer()` (same AOI as snapshots), `interaction.trigger === "action"`, range check.
+- **Result path**: server calls `resolveInteractionResult(interaction)` (`server/src/game/interactions/`) which normalizes both the new `commands[]` shape and the legacy `type: "text"` shape into `{ interactionType: "event", commands: [...] }`, then creates a `PlayerEventState` on the player and drives it from the tick loop (see Event command system). The server **does not emit `INTERACT_RESULT`** in this path.
+- **Client KeyE**: if the message box is open, first press skips typewriter, next dismisses. Otherwise gated by `_serverEventInputLock.interact || eventRunner.isRunning()`, then `_findNearestInteractable()` (feet distance) → sends `INTERACT`.
+- **GameMessageBox** (`src/client/ui/`): DOM-based box (above canvas, bottom-center). `show({ text, speaker })` is promise-based. Typewriter animation (`TYPEWRITER_MS = 30 ms`); dismiss keys `Enter`/`Space` — first press skips animation, second dismisses. 120 ms key guard prevents same-press dismiss.
+
+### Event command system
+- **Trigger**: server-side, when an interaction resolves to commands. Creates a `PlayerEventState` on the player; one active event per player at a time.
+- **State machine** (`server/src/game/events/PlayerEventState.js`): status ∈ `ready` | `waiting_ack` | `waiting_ticks` | `waiting_move`. Holds `commands[]`, `index`, `waitUntilTick`, `moveTargetRuntimeId`, and `inputLock = { move, interact }` (default `{ move: false, interact: true }` — player can walk away, can't double-interact).
+- **Tick driver**: `GameServer._advancePlayerEvents()` runs per tick after movement and scripted movement. Loops through commands until it hits a blocking status.
+- **Commands** (dispatched in `GameServer._advancePlayerEvents()`; world-affecting helpers in `server/src/game/interactions/applyInteractionCommands.js`):
+  - `message { text, speaker? }` — sends `EVENT_MESSAGE`, status → `waiting_ack`. Resumes on client `EVENT_ACK`.
+  - `wait { ms }` — ms → ticks (ceil), sets `waitUntilTick`, status → `waiting_ticks`. Auto-advances when reached.
+  - `inputLock { move?, interact? }` — toggles either flag, sends `EVENT_INPUT_LOCK { move, interact }`. Instant, non-blocking.
+  - `faceEntity { target, dir }` — sets `entity.components.visual.direction` on the target entity (resolved by authoredId). Instant. Reflected in next snapshot.
+  - `moveEntity { target, dir, steps?, speed? }` — enqueues stepped movement on `entity.scriptedMove`. Status → `waiting_move`; clears when `entity.scriptedMove` becomes null. `steps` clamped 1..8; `stepTicks` resolution chain: `cmd.speed → components.movement.speed → DEFAULT_SCRIPTED_STEP_TICKS (3)`, clamped 1..10.
+- **End of sequence**: server sends `EVENT_END`; `player.activeEvent = null`; client clears both `_serverEventInputLock` flags.
+- **Client input gating**: `_serverEventInputLock.move` zeroes directional input before sending; `_serverEventInputLock.interact` blocks new `INTERACT` requests. Both reset by `EVENT_END`.
+- **Scripted movement** (`GameServer._processScriptedMovement()`): per tick, advances each entity's `scriptedMove` queue one tile every `stepTicks` ticks. Updates `components.visual.direction` per step, applies dx/dy in tiles. Clears `scriptedMove` on queue empty or invalid state.
+- **Client `EventRunner`** (`src/client/events/EventRunner.js`): handles `message`/`wait` locally; treats `faceEntity`/`moveEntity` as no-ops (server-authoritative, visible via snapshot). Used only by the legacy `INTERACT_RESULT` path (via `InteractionPresenter`) and by `__engine.testEventRunner` debug helpers. The live server-driven path bypasses `EventRunner` and talks to `GameMessageBox` directly via `onEventMessage`.
+- **InteractionPresenter** (`src/client/interactions/InteractionPresenter.js`): routes a legacy `INTERACT_RESULT` payload to `EventRunner.run(commands)`. Inactive in current server flow.
 
 ## Future systems
-- **Dialogue trees**: branching conversation system
-- **NPC AI/movement**: entity behavior, pathfinding
+- **Dialogue trees**: branching conversation system with choices. Today the event command system can play linear scripted sequences (message/wait/inputLock/faceEntity/moveEntity); prefabs like `npc_villager.json` declare a `dialogue` component but no resolver consumes it yet.
+- **Events panel UI**: the editor's Events mode only exposes `id`/`prefab`/`collision`/`visual` fields — no UI yet for authoring `interaction.commands[]` or `dialogue` data.
+- **NPC AI/movement**: ambient entity behavior, pathfinding (scripted `moveEntity` is the only mover today).
 - **Binary protocol**: replace JSON for bandwidth efficiency

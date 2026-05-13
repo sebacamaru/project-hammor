@@ -85,7 +85,7 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - **Map entities**: `entities[]` array in runtime map JSON. Fields: id, prefabId?, kind?, x, y, params?, components?.
 - **Merge**: prefab + instance → two-level shallow merge (params shallow, components shallow per key, each component shallow).
 - **Server runtime**:
-  - `GameEntity` = in `server/src/game/entities/`. Pure data: runtimeId, authoredId, mapId, kind, x, y, params, components.
+  - `GameEntity` = in `server/src/game/entities/`. Pure data: runtimeId, authoredId, mapId, kind, x, y, params, components. Runtime field `scriptedMove = { queue, stepTicks, active }` is set by `moveEntity` commands and drained by `GameServer._processScriptedMovement()`.
   - `GameEntity.toSnapshotData()` → minimal network payload (id, authoredId, kind, x, y, sprite?, interactable?, solid?, hitbox?, visual?).
   - `GameEntity.toDebugHitboxData()` → debug hitbox data for solid entities (id, x, y, hitbox) or null.
   - `GameEntity.toDebugData()` → full dump for logging.
@@ -105,12 +105,29 @@ Scenes implement: `enter(engine)` → `update(dt)` → `render(alpha)` → `exit
 - **Non-solid entities**: entities without `collision.solid === true` remain fully passable.
 
 ### Interaction system
-- **Authored data**: `components.interaction = { trigger: "action", type: "text", text: "..." }`.
-- **Protocol**: `INTERACT` (client→server: targetId), `INTERACT_RESULT` (server→client: entityId, authoredId, interactionType, text).
-- **Server validation**: entity exists, map/world context relevant (`_isEntityRelevantToPlayer`), interaction component with trigger "action", range check (feet-to-feet ≤ `INTERACTION_RANGE` = 32px).
-- **Server resolver**: switch on `interaction.type` — currently only "text" supported.
-- **Client**: KeyE polls → 200ms cooldown → `_findNearestInteractable()` (feet distance) → send interact → receive result → `GameMessageBox.show({ text })`.
-- **GameMessageBox**: DOM-based message box (above canvas), bottom-center, promise-based (waits for player dismiss via E/Enter/Space), 120ms key guard prevents same-press dismiss.
+- **Authored data**: `components.interaction = { trigger: "action", commands: [ ... ] }` (preferred) or legacy `{ trigger, type: "text", text }` (auto-wrapped into a single `message` command by the resolver).
+- **Discovery**: `RemoteEntity.interactable` is `true` when the server-side entity has an `interaction` component (set in `GameEntity.toSnapshotData()`).
+- **Range / cooldown**: feet-to-feet ≤ `INTERACTION_RANGE` = 32 px (`INTERACTION_RANGE_SQ` reused client-side). `SceneMap._tryInteract()` applies a 200 ms cooldown.
+- **Protocol** (client → server): `INTERACT { targetId }`. Server validates entity existence, map/world relevance (`_isEntityRelevantToPlayer`), `interaction.trigger === "action"`, and range.
+- **Result path**: server calls `resolveInteractionResult(interaction)` (`server/src/game/interactions/`) which normalizes both the new `commands[]` shape and the legacy `type: "text"` shape into `{ interactionType: "event", commands: [...] }`, then creates a `PlayerEventState` on the player and drives it from the tick loop (see "Event command system"). The server **no longer emits `INTERACT_RESULT`** in this path — the MSG type is still defined and the client retains `onInteractResult` plumbing for safety (used only by `EventRunner` test helpers).
+- **Client KeyE**: if the message box is open, first press skips typewriter animation, next dismisses. Otherwise gated by `_serverEventInputLock.interact || eventRunner.isRunning()`, then `_findNearestInteractable()` (feet distance) → sends `INTERACT`.
+- **GameMessageBox**: DOM-based box (above canvas, bottom-center). `show({ text, speaker })` is promise-based. Typewriter animation (`TYPEWRITER_MS = 30 ms`); dismiss keys are `Enter`/`Space` (first press skips animation, second dismisses). 120 ms key guard prevents same-press dismiss.
+
+### Event command system
+- **Trigger**: server-side, when an interaction resolves to commands. Creates a `PlayerEventState` on the player; one active event per player at a time.
+- **State machine** (`server/src/game/events/PlayerEventState.js`): status ∈ `ready` | `waiting_ack` | `waiting_ticks` | `waiting_move`. Holds `commands[]`, `index`, `waitUntilTick`, `moveTargetRuntimeId`, and `inputLock = { move, interact }` (default `{ move: false, interact: true }` — player can walk away, can't double-interact).
+- **Tick driver**: `GameServer._advancePlayerEvents()` runs per tick (after movement and scripted movement). Loops through commands until it hits a blocking status.
+- **Commands** (dispatched in `GameServer._advancePlayerEvents()`; world-affecting helpers in `server/src/game/interactions/applyInteractionCommands.js`):
+  - `message { text, speaker? }` — sends `EVENT_MESSAGE`, status → `waiting_ack`. Resumes on client `EVENT_ACK`.
+  - `wait { ms }` — converts to ticks (ceil), sets `waitUntilTick`, status → `waiting_ticks`. Instant advance once reached.
+  - `inputLock { move?, interact? }` — toggles either flag, sends `EVENT_INPUT_LOCK { move, interact }`. Instant, non-blocking.
+  - `faceEntity { target, dir }` — sets `entity.components.visual.direction` on the target (resolved by authoredId). Instant. Reflected in next snapshot.
+  - `moveEntity { target, dir, steps?, speed? }` — enqueues stepped movement on `entity.scriptedMove` (queue of `{ dir }`). Status → `waiting_move`; clears when `entity.scriptedMove` becomes null. `steps` clamped 1..8; `stepTicks` resolution chain: `cmd.speed → components.movement.speed → DEFAULT_SCRIPTED_STEP_TICKS (3)`, clamped 1..10.
+- **End of sequence**: server sends `EVENT_END`; `player.activeEvent = null`; client clears both `_serverEventInputLock` flags.
+- **Client input gating**: `_serverEventInputLock.move` zeroes directional input before sending; `_serverEventInputLock.interact` blocks new `INTERACT` requests. Both reset by `EVENT_END`.
+- **Scripted movement** (`GameServer._processScriptedMovement()`): per tick, advances each entity's `scriptedMove` queue one tile every `stepTicks` ticks. Updates `components.visual.direction` per step, applies dx/dy in tiles. Clears `scriptedMove` on queue empty or invalid state.
+- **Client `EventRunner`** (`src/client/events/EventRunner.js`): handles `message`/`wait` locally; treats `faceEntity`/`moveEntity` as no-ops (server-authoritative, visible via snapshot). Used only by the legacy `INTERACT_RESULT` path via `InteractionPresenter`, and by `__engine.testEventRunner` debug helpers — the live server-driven path bypasses it and talks to `GameMessageBox` directly via `onEventMessage`.
+- **InteractionPresenter** (`src/client/interactions/InteractionPresenter.js`): routes a legacy `INTERACT_RESULT` payload to `EventRunner.run(commands)`. Inactive in current server flow.
 
 ### Coordinate convention ("feet")
 - **`player.x, player.y` = feet = center-bottom of sprite** (not top-left).
@@ -175,7 +192,7 @@ src/
 │   │   ├── RemoteEntity.js   Non-player entity data from snapshots (id, kind, x, y, interactable, solid, hitbox)
 │   │   └── RemoteEntityView.js  Kind-based colored placeholder sprites
 │   ├── network/
-│   │   └── NetworkManager.js Client WebSocket (hello, input, welcome, snapshot, interact_result)
+│   │   └── NetworkManager.js Client WebSocket (welcome, snapshot, interact_result, event_message, event_end, event_input_lock)
 │   ├── world/
 │   │   ├── WorldData.js      Loads world JSON, indexes maps by region and mapId
 │   │   └── LoadedRegion.js   Wraps MapData + MapChunkRenderer with world offset
@@ -185,11 +202,15 @@ src/
 │   │   └── TileLayerDebugOverlay.js  Collision layer debug highlight
 │   ├── ui/
 │   │   ├── GameUIRoot.js           DOM overlay root (above canvas, pointer-events none)
-│   │   ├── GameMessageBox.js       DOM message box (promise-based, keyboard dismiss)
+│   │   ├── GameMessageBox.js       DOM message box (typewriter, promise-based, Enter/Space dismiss)
 │   │   └── styles/
 │   │       └── game-ui.css         Game UI overlay styles
+│   ├── events/
+│   │   └── EventRunner.js          Client-side sequential command runner (legacy + debug path)
+│   ├── interactions/
+│   │   └── InteractionPresenter.js  Routes legacy interact_result payloads to EventRunner
 │   └── scenes/
-│       └── SceneMap.js       Main gameplay scene (world streaming, multi-region)
+│       └── SceneMap.js       Main gameplay scene (world streaming, multi-region, server event handling)
 ├── editor/
 │   ├── main.js              Editor entry point (registers workspaces, switches to map)
 │   ├── shared/styles/
@@ -266,17 +287,23 @@ src/
 │       ├── config/
 │       │   └── ServerConfig.js   Config factory (tickRate, spawn, speed, snapshotInterval)
 │       ├── game/
-│       │   ├── GameServer.js     Central orchestrator (loop, network, sessions, players, entities, interactions)
+│       │   ├── GameServer.js     Central orchestrator (loop, network, sessions, players, entities, scripted movement, event sequences)
 │       │   ├── ServerLoop.js     Fixed-timestep loop (setInterval)
 │       │   ├── SessionManager.js Session CRUD (dual Map: byId + byConnectionId)
 │       │   ├── entities/
-│       │   │   ├── ServerPlayer.js  Server player (position, velocity, facing, hitbox, input)
-│       │   │   └── GameEntity.js    Server runtime entity (runtimeId, authoredId, kind, x, y, components)
+│       │   │   ├── ServerPlayer.js  Server player (position, velocity, facing, hitbox, input, activeEvent)
+│       │   │   └── GameEntity.js    Server runtime entity (runtimeId, authoredId, kind, x, y, components, scriptedMove)
+│       │   ├── events/
+│       │   │   └── PlayerEventState.js  Per-player event state machine (commands, index, status, inputLock)
+│       │   ├── interactions/
+│       │   │   ├── resolveInteractionResult.js  Normalize legacy/new interaction shape to commands[]
+│       │   │   └── applyInteractionCommands.js  faceEntity / moveEntity helpers + step-speed resolution
 │       │   ├── input/
 │       │   │   └── PlayerInputState.js  Input queue per player (enqueue/drain, seq dedup, last-known fallback)
 │       │   └── systems/
-│       │       ├── MovementSystem.js    Authoritative movement (input queue processing, per-input with CLIENT_SIM_TICK_MS)
-│       │       └── CollisionSystem.js   Hitbox-based collision against map tiles
+│       │       ├── MovementSystem.js       Authoritative movement (input queue processing, per-input with CLIENT_SIM_TICK_MS)
+│       │       ├── CollisionSystem.js      Hitbox-based collision against map tiles
+│       │       └── MapTransitionSystem.js  Detects map border crossings, updates player.mapId
 │       ├── network/
 │       │   ├── NetworkServer.js         WebSocket server (ws library)
 │       │   ├── ClientConnection.js      Individual socket wrapper
@@ -503,11 +530,15 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 ├── RuntimeWorldManager — loads world definitions, region lookups, neighbor queries
 ├── PrefabRegistry     — loads entity prefabs from content/prefabs/entities/
 ├── ServerEntityManager — runtime entity registry (indexed by runtimeId, mapId, authoredId)
+├── _processScriptedMovement() — per-tick step driver for entities with `scriptedMove` queues
+├── _advancePlayerEvents()     — per-tick driver for PlayerEventState command sequences
 └── Entity lifecycle   — spawnEntitiesForMap() / despawnEntitiesForMap()
 ```
 
 ### Protocol (messages.js)
-- `MSG_TYPES`: hello, welcome, input, snapshot, interact, interact_result, error
+- `MSG_TYPES`: hello, welcome, input, snapshot, interact, interact_result, event_message, event_end, event_ack, event_input_lock, error
+- `interact_result` is still declared but unused by the current server flow (server-driven `PlayerEventState` replaces it). Client retains an `onInteractResult` handler used only by the `EventRunner` test path.
+- Event messages: `event_message { text, speaker? }` (server→client, awaits `event_ack`), `event_ack` (client→server), `event_input_lock { move, interact }` (server→client, non-blocking), `event_end` (server→client, ends sequence).
 - `parseMessage(raw)` — JSON parse + type validation
 - `validateInput(msg)` — seq (non-negative int), input (4 boolean flags)
 - `validateInteract(msg)` — targetId (non-empty string)
@@ -553,14 +584,16 @@ GameServer (orchestrator) — server/src/game/GameServer.js
 - Also checks solid entity hitboxes (AABB-vs-AABB) in the same per-axis pass
 
 ### Client networking
-- `NetworkManager` (`src/client/network/`): minimal WebSocket wrapper, callbacks for welcome/snapshot/interact_result
-- `SceneMap` creates NetworkManager, wires callbacks, sends input + interact requests
-- Client predicts locally but server is authoritative — reconciliation corrects any mismatch
-- Non-player entities managed in `remoteEntities` Map (spawn/update/despawn from snapshots)
+- `NetworkManager` (`src/client/network/`): minimal WebSocket wrapper. Callbacks: `onWelcome`, `onSnapshot`, `onInteractResult` (legacy), `onEventMessage`, `onEventEnd`, `onEventInputLock`.
+- `SceneMap` creates NetworkManager, wires callbacks, sends input + `interact` + `event_ack`.
+- Client predicts locally but server is authoritative — reconciliation corrects any mismatch.
+- Non-player entities managed in `remoteEntities` Map (spawn/update/despawn from snapshots).
+- Server-driven events: `onEventMessage` → `GameMessageBox.show()` → on dismiss, sends `event_ack`. `onEventInputLock` updates `_serverEventInputLock { move, interact }`. `onEventEnd` clears both flags.
 
 ## Future systems (not yet implemented)
-- **Dialogue trees**: branching conversation system (currently only simple text interactions).
-- **NPC AI/movement**: entity behavior, pathfinding.
+- **Dialogue trees**: branching conversation system with choices. Today the event command system can play linear scripted sequences (message/wait/inputLock/faceEntity/moveEntity); prefabs like `npc_villager.json` declare a `dialogue` component but no resolver consumes it yet.
+- **Events panel UI**: the editor's Events mode only exposes `id`/`prefab`/`collision`/`visual` fields — no UI yet for authoring `interaction.commands[]` or `dialogue` data.
+- **NPC AI/movement**: ambient entity behavior, pathfinding (scripted `moveEntity` is the only mover today).
 - **Binary protocol**: Replace JSON with binary for bandwidth efficiency.
 
 ## Debug
