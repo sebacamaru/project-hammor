@@ -18,8 +18,37 @@ export class StatusBarPanel {
         <span class="status-item" data-role="zoom"></span>
         <span class="status-item" data-role="dirty"></span>
         <span class="status-item status-item-status" data-role="status"></span>
+        <label class="status-item status-item-focus" title="Toggle browser fullscreen">
+          <input type="checkbox" data-role="focus-mode">
+          <span>Focus Mode</span>
+        </label>
       </div>
     `;
+
+    this._focusCheckbox = this.el.querySelector('[data-role="focus-mode"]');
+    this._focusCheckbox.checked = document.fullscreenElement != null;
+
+    this._onFocusToggle = async () => {
+      try {
+        if (this._focusCheckbox.checked) {
+          await document.documentElement.requestFullscreen?.();
+        } else {
+          await document.exitFullscreen?.();
+        }
+      } catch {
+        // Browser blocked the request (e.g. user denied, permissions policy).
+        // Reflect the real state back so the checkbox doesn't lie.
+        this._focusCheckbox.checked = document.fullscreenElement != null;
+      }
+    };
+    this._focusCheckbox.addEventListener("change", this._onFocusToggle);
+
+    // Keep the checkbox in sync when fullscreen is toggled outside this UI —
+    // F11, Esc, browser menu, etc.
+    this._onFullscreenChange = () => {
+      this._focusCheckbox.checked = document.fullscreenElement != null;
+    };
+    document.addEventListener("fullscreenchange", this._onFullscreenChange);
   }
 
   sync() {
@@ -60,5 +89,14 @@ export class StatusBarPanel {
 
   destroy() {
     this.unsubscribe?.();
+    if (this._onFullscreenChange) {
+      document.removeEventListener("fullscreenchange", this._onFullscreenChange);
+      this._onFullscreenChange = null;
+    }
+    if (this._focusCheckbox && this._onFocusToggle) {
+      this._focusCheckbox.removeEventListener("change", this._onFocusToggle);
+    }
+    this._focusCheckbox = null;
+    this._onFocusToggle = null;
   }
 }
