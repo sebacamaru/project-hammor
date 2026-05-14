@@ -160,7 +160,7 @@ export class MapEditorViewport {
         const snapped = snapWorldToFeet(ctx.worldX, ctx.worldY, tileSize);
         const entity = {
           id,
-          prefab: "entity",
+          kind: "object",
           x: snapped.x,
           y: snapped.y,
           components: {

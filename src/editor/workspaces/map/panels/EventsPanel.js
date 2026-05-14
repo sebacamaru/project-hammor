@@ -1,17 +1,28 @@
 /**
  * Side panel for Events mode.
- * Shows Add Entity button, hint text, and an inspector for the selected entity.
+ * Shows hint text, selection status, and a sectioned inspector for the selected entity.
+ *
+ * Sections: Identity, Collision, Visual, Interaction.
+ *
+ * Interaction is presence-toggled — the "Enabled" checkbox is a synthetic UI state
+ * mapped to the presence of components.interaction.
  */
 export class EventsPanel {
   /**
    * @param {HTMLElement} el - Container element to mount into.
    * @param {import('../MapEditorState.js').MapEditorState} state
    * @param {() => import('../document/MapDocument.js').MapDocument|null} getDocument
+   * @param {object} [opts]
+   * @param {(opts: {title: string, message: string, confirmLabel?: string, cancelLabel?: string, tone?: string}) => Promise<boolean>} [opts.confirm]
+   *   Optional async confirm dialog. Used to guard destructive actions (disabling
+   *   Interaction when commands exist). When omitted, destructive actions proceed
+   *   without confirmation.
    */
-  constructor(el, state, getDocument) {
+  constructor(el, state, getDocument, { confirm } = {}) {
     this.el = el;
     this.state = state;
     this.getDocument = getDocument;
+    this._confirm = confirm ?? null;
 
     /** @type {string|null} Last synced entity id — used to detect selection change. */
     this._lastSyncedId = null;
@@ -29,65 +40,10 @@ export class EventsPanel {
         <div class="events-hint" data-role="hint">Click an entity to select</div>
         <div class="events-selection" data-role="selection">No entity selected</div>
         <div class="events-inspector" data-role="inspector" style="display:none">
-          <label class="inspector-field">
-            <span>ID</span>
-            <input type="text" data-field="id">
-          </label>
-          <label class="inspector-field">
-            <span>Prefab</span>
-            <input type="text" data-field="prefab">
-          </label>
-          <label class="inspector-field inspector-checkbox">
-            <input type="checkbox" data-field="solid">
-            <span>Solid</span>
-          </label>
-          <fieldset class="inspector-fieldset">
-            <legend>Hitbox</legend>
-            <label class="inspector-field">
-              <span>offsetX</span>
-              <input type="number" data-field="hitbox-offsetX">
-            </label>
-            <label class="inspector-field">
-              <span>offsetY</span>
-              <input type="number" data-field="hitbox-offsetY">
-            </label>
-            <label class="inspector-field">
-              <span>width</span>
-              <input type="number" data-field="hitbox-width">
-            </label>
-            <label class="inspector-field">
-              <span>height</span>
-              <input type="number" data-field="hitbox-height">
-            </label>
-          </fieldset>
-          <fieldset class="inspector-fieldset">
-            <legend>Visual</legend>
-            <label class="inspector-field">
-              <span>Sheet</span>
-              <input type="text" data-field="visual-sheet" placeholder="npc_01">
-            </label>
-            <label class="inspector-field">
-              <span>Frame W</span>
-              <input type="number" data-field="visual-frameWidth">
-            </label>
-            <label class="inspector-field">
-              <span>Frame H</span>
-              <input type="number" data-field="visual-frameHeight">
-            </label>
-            <label class="inspector-field">
-              <span>Direction</span>
-              <select data-field="visual-direction">
-                <option value="down">Down</option>
-                <option value="left">Left</option>
-                <option value="right">Right</option>
-                <option value="up">Up</option>
-              </select>
-            </label>
-            <label class="inspector-field">
-              <span>Pattern</span>
-              <input type="number" data-field="visual-pattern" min="0">
-            </label>
-          </fieldset>
+          ${this._renderIdentitySection()}
+          ${this._renderCollisionSection()}
+          ${this._renderVisualSection()}
+          ${this._renderInteractionSection()}
         </div>
       </div>
     `;
@@ -99,7 +55,7 @@ export class EventsPanel {
     // Cache field inputs
     this._fields = {
       id: this.el.querySelector('[data-field="id"]'),
-      prefab: this.el.querySelector('[data-field="prefab"]'),
+      prefabId: this.el.querySelector('[data-field="prefabId"]'),
       solid: this.el.querySelector('[data-field="solid"]'),
       hitboxOffsetX: this.el.querySelector('[data-field="hitbox-offsetX"]'),
       hitboxOffsetY: this.el.querySelector('[data-field="hitbox-offsetY"]'),
@@ -110,12 +66,130 @@ export class EventsPanel {
       visualFrameHeight: this.el.querySelector('[data-field="visual-frameHeight"]'),
       visualDirection: this.el.querySelector('[data-field="visual-direction"]'),
       visualPattern: this.el.querySelector('[data-field="visual-pattern"]'),
+      interactionEnabled: this.el.querySelector('[data-field="interaction-enabled"]'),
+      interactionTrigger: this.el.querySelector('[data-field="interaction-trigger"]'),
     };
 
     // Inspector field change handlers (fires on blur/enter, not every keystroke)
     this._inspectorEl.addEventListener("change", (e) => {
       this._handleFieldChange(e.target);
     });
+  }
+
+  /**
+   * Builds the Identity section HTML.
+   * @returns {string}
+   */
+  _renderIdentitySection() {
+    return `
+      <section class="events-panel-section">
+        <h3 class="events-panel-section-title">Identity</h3>
+        <label class="inspector-field">
+          <span>ID</span>
+          <input type="text" data-field="id">
+        </label>
+        <label class="inspector-field">
+          <span>Prefab</span>
+          <input type="text" data-field="prefabId">
+        </label>
+      </section>
+    `;
+  }
+
+  /**
+   * Builds the Collision section HTML.
+   * @returns {string}
+   */
+  _renderCollisionSection() {
+    return `
+      <section class="events-panel-section">
+        <h3 class="events-panel-section-title">Collision</h3>
+        <label class="inspector-field inspector-checkbox">
+          <input type="checkbox" data-field="solid">
+          <span>Solid</span>
+        </label>
+        <fieldset class="inspector-fieldset">
+          <legend>Hitbox</legend>
+          <label class="inspector-field">
+            <span>offsetX</span>
+            <input type="number" data-field="hitbox-offsetX">
+          </label>
+          <label class="inspector-field">
+            <span>offsetY</span>
+            <input type="number" data-field="hitbox-offsetY">
+          </label>
+          <label class="inspector-field">
+            <span>width</span>
+            <input type="number" data-field="hitbox-width">
+          </label>
+          <label class="inspector-field">
+            <span>height</span>
+            <input type="number" data-field="hitbox-height">
+          </label>
+        </fieldset>
+      </section>
+    `;
+  }
+
+  /**
+   * Builds the Visual section HTML.
+   * @returns {string}
+   */
+  _renderVisualSection() {
+    return `
+      <section class="events-panel-section">
+        <h3 class="events-panel-section-title">Visual</h3>
+        <label class="inspector-field">
+          <span>Sheet</span>
+          <input type="text" data-field="visual-sheet" placeholder="npc_01">
+        </label>
+        <label class="inspector-field">
+          <span>Frame W</span>
+          <input type="number" data-field="visual-frameWidth">
+        </label>
+        <label class="inspector-field">
+          <span>Frame H</span>
+          <input type="number" data-field="visual-frameHeight">
+        </label>
+        <label class="inspector-field">
+          <span>Direction</span>
+          <select data-field="visual-direction">
+            <option value="down">Down</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="up">Up</option>
+          </select>
+        </label>
+        <label class="inspector-field">
+          <span>Pattern</span>
+          <input type="number" data-field="visual-pattern" min="0">
+        </label>
+      </section>
+    `;
+  }
+
+  /**
+   * Builds the Interaction section HTML.
+   * Trigger select is single-option for Phase 1; markup is ready for future
+   * touch/auto options.
+   * @returns {string}
+   */
+  _renderInteractionSection() {
+    return `
+      <section class="events-panel-section">
+        <h3 class="events-panel-section-title">Interaction</h3>
+        <label class="inspector-field inspector-checkbox">
+          <input type="checkbox" data-field="interaction-enabled">
+          <span>Enabled</span>
+        </label>
+        <label class="inspector-field">
+          <span>Trigger</span>
+          <select data-field="interaction-trigger">
+            <option value="action">Action (E key)</option>
+          </select>
+        </label>
+      </section>
+    `;
   }
 
   /**
@@ -152,15 +226,18 @@ export class EventsPanel {
     const selectionChanged = this._lastSyncedId !== selectedEntityId;
     this._lastSyncedId = selectedEntityId;
 
-    const collision = entity.components?.collision ?? {};
-    const hitbox = collision.hitbox ?? {};
-
+    // Identity
     if (focused !== this._fields.id || selectionChanged) {
       this._fields.id.value = entity.id ?? "";
     }
-    if (focused !== this._fields.prefab || selectionChanged) {
-      this._fields.prefab.value = entity.prefab ?? "";
+    if (focused !== this._fields.prefabId || selectionChanged) {
+      this._fields.prefabId.value = entity.prefabId ?? "";
     }
+
+    // Collision
+    const collision = entity.components?.collision ?? {};
+    const hitbox = collision.hitbox ?? {};
+
     if (focused !== this._fields.solid || selectionChanged) {
       this._fields.solid.checked = !!collision.solid;
     }
@@ -177,6 +254,7 @@ export class EventsPanel {
       this._fields.hitboxHeight.value = hitbox.height ?? 0;
     }
 
+    // Visual
     const visual = entity.components?.visual ?? {};
     if (focused !== this._fields.visualSheet || selectionChanged) {
       this._fields.visualSheet.value = visual.sheet ?? "";
@@ -193,12 +271,23 @@ export class EventsPanel {
     if (focused !== this._fields.visualPattern || selectionChanged) {
       this._fields.visualPattern.value = visual.pattern ?? 1;
     }
+
+    // Interaction
+    const interaction = entity.components?.interaction ?? null;
+    const interactionEnabled = interaction != null;
+    if (focused !== this._fields.interactionEnabled || selectionChanged) {
+      this._fields.interactionEnabled.checked = interactionEnabled;
+    }
+    if (focused !== this._fields.interactionTrigger || selectionChanged) {
+      this._fields.interactionTrigger.value = interaction?.trigger ?? "action";
+    }
+    this._fields.interactionTrigger.disabled = !interactionEnabled;
   }
 
   /**
    * Handles a field change event from the inspector.
    * Builds the appropriate patch and calls doc.updateEntity().
-   * @param {HTMLInputElement} input
+   * @param {HTMLInputElement|HTMLSelectElement} input
    */
   _handleFieldChange(input) {
     const field = input.dataset.field;
@@ -228,13 +317,24 @@ export class EventsPanel {
       return;
     }
 
-    if (field === "prefab") {
-      doc.updateEntity(selectedEntityId, { prefab: input.value });
+    if (field === "prefabId") {
+      doc.updateEntity(selectedEntityId, { prefabId: input.value });
       return;
     }
 
     if (field.startsWith("visual-")) {
       this._applyVisualChange(doc, entity, selectedEntityId);
+      return;
+    }
+
+    if (field === "interaction-enabled") {
+      // Fire-and-forget the async path; restoring the checkbox on cancel happens inside.
+      void this._applyInteractionEnabledChange(doc, entity, selectedEntityId);
+      return;
+    }
+
+    if (field === "interaction-trigger") {
+      this._applyInteractionTriggerChange(doc, entity, selectedEntityId);
       return;
     }
 
@@ -297,6 +397,71 @@ export class EventsPanel {
         visual: { type: "character", sheet, frameWidth, frameHeight, direction, pattern },
       },
     });
+  }
+
+  /**
+   * Toggles presence of components.interaction. Disabling while commands are
+   * authored is gated by an async confirm dialog when available.
+   * @param {import('../document/MapDocument.js').MapDocument} doc
+   * @param {object} entity
+   * @param {string} entityId
+   */
+  async _applyInteractionEnabledChange(doc, entity, entityId) {
+    const enabled = this._fields.interactionEnabled.checked;
+    const existing = entity.components?.interaction ?? null;
+
+    if (enabled && existing) {
+      // Already enabled — preserve trigger and commands exactly.
+      this.sync();
+      return;
+    }
+
+    const components = { ...(entity.components ?? {}) };
+
+    if (enabled) {
+      components.interaction = { trigger: "action", commands: [] };
+      doc.updateEntity(entityId, { components });
+      return;
+    }
+
+    const hasCommands = Array.isArray(existing?.commands) && existing.commands.length > 0;
+    if (hasCommands && this._confirm) {
+      const count = existing.commands.length;
+      const ok = await this._confirm({
+        title: "Disable interaction?",
+        message: `This entity has ${count} authored command${count === 1 ? "" : "s"}. Disabling will discard them.`,
+        confirmLabel: "Disable",
+        cancelLabel: "Cancel",
+        tone: "danger",
+      });
+      if (!ok) {
+        this._fields.interactionEnabled.checked = true;
+        return;
+      }
+    }
+
+    delete components.interaction;
+    doc.updateEntity(entityId, { components });
+  }
+
+  /**
+   * Updates components.interaction.trigger without touching the commands array.
+   * Defensive: bails if interaction is somehow absent.
+   * @param {import('../document/MapDocument.js').MapDocument} doc
+   * @param {object} entity
+   * @param {string} entityId
+   */
+  _applyInteractionTriggerChange(doc, entity, entityId) {
+    const existing = entity.components?.interaction;
+    if (!existing) return;
+
+    const components = { ...(entity.components ?? {}) };
+    components.interaction = {
+      ...existing,
+      trigger: this._fields.interactionTrigger.value,
+    };
+
+    doc.updateEntity(entityId, { components });
   }
 
   /**

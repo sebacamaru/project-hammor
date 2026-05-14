@@ -75,6 +75,73 @@
     width: var(--side-panel-width);
 }
 
+.editor-panel-commands {
+    position: absolute;
+    top: var(--shell-padding);
+    left: calc(var(--shell-padding) + var(--side-panel-width) + var(--editor-space-2));
+    bottom: calc(var(--shell-padding) * 2 + var(--statusbar-height));
+    width: min(50vw, 900px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-panel-commands.is-closed {
+    bottom: auto;
+}
+
+.editor-panel-commands.is-closed .editor-panel-body {
+    display: none;
+}
+
+.editor-panel-commands .editor-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.event-interaction-commands-panel__header {
+    cursor: pointer;
+}
+
+.event-interaction-commands-panel__toggle {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--editor-border-muted);
+    color: var(--editor-text);
+    padding: 2px 8px;
+    font-family: monospace;
+    font-size: var(--editor-font-sm);
+    border-radius: var(--editor-radius-md);
+    cursor: pointer;
+    line-height: 1;
+}
+
+.event-interaction-commands-panel__toggle:hover {
+    border-color: var(--editor-border-input-focus);
+}
+
+.event-interaction-commands-panel {
+    padding: var(--editor-space-2) var(--editor-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--editor-space-2);
+}
+
+.event-interaction-commands-panel__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--editor-space-3);
+}
+
+.event-interaction-commands-panel__subtitle {
+    margin: 0;
+    font-size: var(--editor-font-xs);
+    color: var(--editor-text-muted);
+    font-weight: normal;
+}
+
 .events-panel .events-hint {
     padding: var(--editor-space-2) var(--editor-space-3);
     font-size: var(--editor-font-sm);
@@ -119,6 +186,25 @@
     display: flex;
     flex-direction: column;
     gap: var(--editor-space-2);
+}
+
+.events-panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--editor-space-2);
+}
+
+.events-panel-section + .events-panel-section {
+    margin-top: var(--editor-space-2);
+}
+
+.events-panel-section-title {
+    font-size: var(--editor-font-xs);
+    font-weight: 600;
+    color: var(--editor-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0;
 }
 
 .inspector-field {
@@ -173,6 +259,251 @@
     font-size: var(--editor-font-xs);
     opacity: 0.6;
     padding: 0 var(--editor-space-1);
+}
+
+/* ── Event command list editor ── */
+
+.event-command-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--editor-space-2);
+    margin-top: var(--editor-space-2);
+}
+
+.event-command-empty {
+    font-size: var(--editor-font-xs);
+    opacity: 0.6;
+    margin: 0;
+}
+
+.event-command-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.event-command-card {
+    border: 1px solid var(--editor-border-muted);
+    border-left: 3px solid transparent;
+    border-radius: var(--editor-radius-md);
+    background: var(--editor-bg-subtle);
+    padding: var(--editor-space-2);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.event-command-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--editor-space-2);
+    cursor: pointer;
+}
+
+.event-command-title {
+    font-size: var(--editor-font-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--editor-text-muted);
+}
+
+.event-command-actions {
+    display: flex;
+    gap: 2px;
+}
+
+.event-command-actions button {
+    background: transparent;
+    border: 1px solid var(--editor-border-muted);
+    color: var(--editor-text);
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: var(--editor-font-sm);
+    cursor: pointer;
+    border-radius: var(--editor-radius-md);
+    line-height: 1;
+}
+
+.event-command-actions button:hover {
+    border-color: var(--editor-border-input-focus);
+}
+
+.event-command-actions button:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.event-command-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.event-command-fields textarea {
+    width: 100%;
+    min-height: 44px;
+    resize: vertical;
+    font-family: monospace;
+    font-size: var(--editor-font-sm);
+    padding: var(--editor-space-1) 6px;
+    border: 1px solid var(--editor-border-input);
+    background: var(--editor-bg-subtle);
+    color: var(--editor-text);
+    border-radius: var(--editor-radius-md);
+    outline: none;
+}
+
+.event-command-fields textarea:focus {
+    border-color: var(--editor-border-input-focus);
+}
+
+.event-command-add-row {
+    display: flex;
+    gap: var(--editor-space-2);
+    align-items: center;
+}
+
+.event-command-add-row select {
+    flex: 1;
+    min-width: 0;
+    padding: var(--editor-space-1) 6px;
+    border: 1px solid var(--editor-border-input);
+    background: var(--editor-bg-subtle);
+    color: var(--editor-text);
+    border-radius: var(--editor-radius-md);
+    font-size: var(--editor-font-sm);
+    font-family: monospace;
+    outline: none;
+}
+
+.event-command-add-row select:focus {
+    border-color: var(--editor-border-input-focus);
+}
+
+.event-command-add-row button {
+    background: transparent;
+    border: 1px solid var(--editor-border-muted);
+    color: var(--editor-text);
+    padding: var(--editor-space-1) var(--editor-space-2);
+    cursor: pointer;
+    border-radius: var(--editor-radius-md);
+    font-family: monospace;
+    font-size: var(--editor-font-sm);
+}
+
+.event-command-add-row button:hover {
+    border-color: var(--editor-border-input-focus);
+}
+
+/* Native <option> rendering defaults to white in most browsers; force dark to match panel */
+.event-command-fields select option,
+.event-command-add-row select option {
+    background: #1a1a1a;
+    color: var(--editor-text);
+}
+
+.event-command-card.event-command-unsupported {
+    opacity: 0.75;
+    border-style: dashed;
+}
+
+.event-command-unsupported-note {
+    font-size: var(--editor-font-xs);
+    opacity: 0.6;
+    margin: 0;
+}
+
+.event-command-title-cluster {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+
+.event-command-summary {
+    font-size: var(--editor-font-xs);
+    color: var(--editor-text-muted);
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.event-command-toggle,
+.event-command-duplicate {
+    background: transparent;
+    border: 1px solid var(--editor-border-muted);
+    color: var(--editor-text);
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: var(--editor-font-sm);
+    cursor: pointer;
+    border-radius: var(--editor-radius-md);
+    line-height: 1;
+}
+
+.event-command-toggle {
+    border-color: transparent;
+    flex: 0 0 auto;
+}
+
+.event-command-toggle:hover,
+.event-command-duplicate:hover {
+    border-color: var(--editor-border-input-focus);
+}
+
+.event-command-card--collapsed .event-command-fields {
+    display: none;
+}
+
+/* Per-type accent stripes on the left edge. Subtle, dark-theme-friendly. */
+.event-command-card--type-message {
+    border-left-color: var(--editor-accent);
+}
+
+.event-command-card--type-wait {
+    border-left-color: var(--editor-border-muted);
+}
+
+.event-command-card--type-inputLock {
+    border-left-color: #a78bda;
+}
+
+.event-command-card--type-faceEntity {
+    border-left-color: #5eb8b3;
+}
+
+.event-command-card--type-moveEntity {
+    border-left-color: var(--editor-status-success);
+}
+
+.event-command-card--type-unsupported {
+    border-left-color: var(--editor-status-warning);
+    border-left-style: dashed;
+}
+
+/* Warning override wins over the type stripe (placed after type rules so
+ * source order resolves the conflict — no specificity gymnastics). */
+.event-command-card--warning {
+    border-color: var(--editor-status-warning);
+    border-left-color: var(--editor-status-danger);
+    border-left-style: solid;
+}
+
+.event-command-field-warning input,
+.event-command-field-warning select,
+.event-command-field-warning textarea {
+    border-color: var(--editor-status-warning);
+}
+
+.event-command-warning-text {
+    font-size: var(--editor-font-xs);
+    color: var(--editor-status-warning);
+    margin: 2px 0 0;
 }
 
 .editor-statusbar {

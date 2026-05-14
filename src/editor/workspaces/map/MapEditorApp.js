@@ -19,6 +19,7 @@ import { LayerVisibilityPanel } from "../../shared/ui/LayerVisibilityPanel.js";
 import { StatusBarPanel } from "./panels/StatusBarPanel.js";
 import { TilesPanel } from "./panels/TilesPanel.js";
 import { EventsPanel } from "./panels/EventsPanel.js";
+import { EventInteractionCommandsPanel } from "./panels/events/EventInteractionCommandsPanel.js";
 import { LightingPanel } from "./panels/LightingPanel.js";
 
 import { SceneEditor } from "./scenes/SceneEditor.js";
@@ -144,6 +145,17 @@ export class MapEditorApp {
       this.layout.eventsPanelEl,
       this.state,
       () => this.document,
+      {
+        confirm: this.editor?.confirm ? (opts) => this.editor.confirm(opts) : null,
+      },
+    );
+    this.commandsPanel = new EventInteractionCommandsPanel(
+      this.layout.commandsPanelEl,
+      this.state,
+      () => this.document,
+      {
+        confirm: this.editor?.confirm ? (opts) => this.editor.confirm(opts) : null,
+      },
     );
     this.lightingPanel = new LightingPanel(
       this.layout.lightsPanelEl,
@@ -237,6 +249,7 @@ export class MapEditorApp {
     this.modesPanel?.destroy();
     this.layerVisPanel?.destroy();
     this.eventsPanel?.destroy();
+    this.commandsPanel?.destroy();
     this.lightingPanel?.destroy();
     window.removeEventListener("keydown", this.onKeyDown);
     this.viewport?.destroy();
