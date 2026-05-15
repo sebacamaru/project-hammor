@@ -78,7 +78,9 @@
 .editor-panel-commands {
     position: absolute;
     top: var(--shell-padding);
-    left: calc(var(--shell-padding) + var(--side-panel-width) + var(--editor-space-2));
+    left: calc(
+        var(--shell-padding) + var(--side-panel-width) + var(--editor-space-2)
+    );
     bottom: calc(var(--shell-padding) * 2 + var(--statusbar-height));
     width: min(50vw, 900px);
     overflow: hidden;
@@ -127,7 +129,6 @@
 }
 
 .event-interaction-commands-panel {
-    padding: var(--editor-space-2) var(--editor-space-3);
     display: flex;
     flex-direction: column;
     gap: var(--editor-space-2);
@@ -147,13 +148,15 @@
     font-weight: normal;
 }
 
-.events-panel .events-hint {
+.events-panel .events-hint,
+.lighting-panel .events-hint {
     padding: var(--editor-space-2) var(--editor-space-3);
     font-size: var(--editor-font-sm);
     opacity: 0.6;
 }
 
-.events-panel .events-selection {
+.events-panel .events-selection,
+.lighting-panel .events-selection {
     padding: var(--editor-space-2) var(--editor-space-3);
     font-size: var(--editor-font-md);
 }
@@ -206,7 +209,7 @@
 .events-panel-section-title {
     font-size: var(--editor-font-xs);
     font-weight: 600;
-    color: var(--editor-text-muted);
+    color: var(--editor-text);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin: 0;
@@ -222,7 +225,6 @@
 
 .inspector-field span {
     flex-shrink: 0;
-    opacity: 0.7;
 }
 
 .inspector-field input[type="text"],
@@ -246,8 +248,24 @@
     border-color: var(--editor-border-input-focus);
 }
 
+/* Native option lists inherit OS colors — force the editor palette. */
+.inspector-field select option {
+    background-color: var(--editor-bg-panel);
+    color: var(--editor-text);
+}
+
 .inspector-checkbox {
     justify-content: flex-start;
+}
+
+.inspector-readonly {
+    flex: 1;
+    min-width: 0;
+    padding: var(--editor-space-1) 6px;
+    color: var(--editor-text-muted);
+    font-family: monospace;
+    font-size: var(--editor-font-sm);
+    text-align: right;
 }
 
 .inspector-fieldset {
@@ -264,6 +282,36 @@
     font-size: var(--editor-font-xs);
     opacity: 0.6;
     padding: 0 var(--editor-space-1);
+}
+
+.lighting-btn {
+    border: 1px solid var(--editor-border-input);
+    background: var(--editor-bg-subtle);
+    color: var(--editor-text);
+    padding: 6px var(--editor-space-3);
+    border-radius: var(--editor-radius-md);
+    cursor: pointer;
+    font-size: var(--editor-font-sm);
+    font-family: inherit;
+}
+
+.lighting-btn:hover:not(:disabled) {
+    border-color: var(--editor-border-input-focus);
+}
+
+.lighting-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.lighting-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--editor-space-2);
+}
+
+.lighting-actions .lighting-btn {
+    flex: 1 1 auto;
 }
 
 /* ── Event command list editor ── */
@@ -311,7 +359,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--editor-text-muted);
+    color: var(--editor-text);
 }
 
 .event-command-actions {
@@ -321,7 +369,7 @@
 
 .event-command-actions button {
     background: transparent;
-    border: 1px solid var(--editor-border-muted);
+    border: none;
     color: var(--editor-text);
     padding: 2px 6px;
     font-family: monospace;
@@ -368,12 +416,13 @@
     display: flex;
     gap: var(--editor-space-2);
     align-items: center;
+    padding-top: var(--editor-space-3);
 }
 
 .event-command-add-row select {
     flex: 1;
     min-width: 0;
-    padding: var(--editor-space-1) 6px;
+    padding: 6px var(--editor-space-3);
     border: 1px solid var(--editor-border-input);
     background: var(--editor-bg-subtle);
     color: var(--editor-text);
@@ -387,25 +436,10 @@
     border-color: var(--editor-border-input-focus);
 }
 
-.event-command-add-row button {
-    background: transparent;
-    border: 1px solid var(--editor-border-muted);
-    color: var(--editor-text);
-    padding: var(--editor-space-1) var(--editor-space-2);
-    cursor: pointer;
-    border-radius: var(--editor-radius-md);
-    font-family: monospace;
-    font-size: var(--editor-font-sm);
-}
-
-.event-command-add-row button:hover {
-    border-color: var(--editor-border-input-focus);
-}
-
 /* Native <option> rendering defaults to white in most browsers; force dark to match panel */
 .event-command-fields select option,
 .event-command-add-row select option {
-    background: #1a1a1a;
+    background-color: var(--editor-bg-panel);
     color: var(--editor-text);
 }
 
@@ -426,6 +460,7 @@
     gap: 6px;
     min-width: 0;
     flex: 1;
+    padding: 0 var(--editor-space-1);
 }
 
 .event-command-summary {
@@ -491,12 +526,54 @@
     border-left-style: dashed;
 }
 
+/* Hover and expanded: extend the type accent to all four borders for
+ * stronger feedback. Expanded cards keep the colored border permanently so
+ * the user can scan which card is open at a glance.
+ * `wait` uses --editor-border-input-focus (a slightly lighter neutral) so
+ * the effect is perceptible even though wait's resting stripe is muted by
+ * design. */
+.event-command-card--type-message:hover,
+.event-command-card--type-message.event-command-card--expanded {
+    border-color: var(--editor-accent);
+}
+
+.event-command-card--type-wait:hover,
+.event-command-card--type-wait.event-command-card--expanded {
+    border-color: var(--editor-border-input-focus);
+}
+
+.event-command-card--type-inputLock:hover,
+.event-command-card--type-inputLock.event-command-card--expanded {
+    border-color: #a78bda;
+}
+
+.event-command-card--type-faceEntity:hover,
+.event-command-card--type-faceEntity.event-command-card--expanded {
+    border-color: #5eb8b3;
+}
+
+.event-command-card--type-moveEntity:hover,
+.event-command-card--type-moveEntity.event-command-card--expanded {
+    border-color: var(--editor-status-success);
+}
+
+.event-command-card--type-unsupported:hover,
+.event-command-card--type-unsupported.event-command-card--expanded {
+    border-color: var(--editor-status-warning);
+}
+
 /* Warning override wins over the type stripe (placed after type rules so
  * source order resolves the conflict — no specificity gymnastics). */
 .event-command-card--warning {
     border-color: var(--editor-status-warning);
     border-left-color: var(--editor-status-danger);
     border-left-style: solid;
+}
+
+.event-command-card--warning:hover,
+.event-command-card--warning.event-command-card--expanded {
+    border-color: var(--editor-status-warning);
+    border-left-color: var(--editor-status-danger);
 }
 
 .event-command-field-warning input,
@@ -543,20 +620,6 @@
 .toolbar-buttons button.is-active {
     background: var(--white-18);
     border-color: var(--editor-border-input-focus);
-}
-
-.lighting-section-title {
-    font-size: var(--editor-font-xs);
-    font-weight: 600;
-    color: var(--editor-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
-    margin-top: 10px;
-}
-
-.lighting-section-title:first-child {
-    margin-top: 0;
 }
 
 .statusbar-content {

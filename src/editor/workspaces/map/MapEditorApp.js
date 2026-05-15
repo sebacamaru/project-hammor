@@ -223,6 +223,10 @@ export class MapEditorApp {
           );
         }
       }
+
+      if (s.mode !== "lights" && s.lightPlaceMode) {
+        queueMicrotask(() => this.state.patch({ lightPlaceMode: false }));
+      }
     });
 
     window.addEventListener("keydown", this.onKeyDown);
@@ -399,17 +403,23 @@ export class MapEditorApp {
     let prevTool = this.state.get().activeTool;
     let prevEntityPlaceMode = this.state.get().entityPlaceMode;
     let prevSelectedEntityId = this.state.get().selectedEntityId;
+    let prevLightPlaceMode = this.state.get().lightPlaceMode;
+    let prevSelectedLightId = this.state.get().selectedLightId;
     return this.state.subscribe((s) => {
       if (
         s.mode !== prevMode ||
         s.activeTool !== prevTool ||
         s.entityPlaceMode !== prevEntityPlaceMode ||
-        s.selectedEntityId !== prevSelectedEntityId
+        s.selectedEntityId !== prevSelectedEntityId ||
+        s.lightPlaceMode !== prevLightPlaceMode ||
+        s.selectedLightId !== prevSelectedLightId
       ) {
         prevMode = s.mode;
         prevTool = s.activeTool;
         prevEntityPlaceMode = s.entityPlaceMode;
         prevSelectedEntityId = s.selectedEntityId;
+        prevLightPlaceMode = s.lightPlaceMode;
+        prevSelectedLightId = s.selectedLightId;
         listener();
       }
     });
@@ -498,6 +508,27 @@ export class MapEditorApp {
             if (!id || !this.document) return;
             const removed = this.document.removeEntity(id);
             if (removed) this.state.patch({ selectedEntityId: null });
+          },
+        },
+      ];
+    } else if (mode === "lights") {
+      const { lightPlaceMode, selectedLightId } = this.state.get();
+      modeActions = [
+        {
+          id: "add-light",
+          label: "Add Light",
+          active: lightPlaceMode,
+          onClick: () => this.state.patch({ lightPlaceMode: !this.state.get().lightPlaceMode }),
+        },
+        {
+          id: "delete-light",
+          label: "Delete Light",
+          disabled: !selectedLightId,
+          onClick: () => {
+            const { selectedLightId: id } = this.state.get();
+            if (!id || !this.document) return;
+            this.document.removeLight(id);
+            this.state.patch({ selectedLightId: null });
           },
         },
       ];

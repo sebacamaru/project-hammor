@@ -191,12 +191,21 @@ export class MapEditorViewport {
       return;
     }
 
-    // Lights mode: light selection, creation, or drag start
+    // Lights mode: light placement, selection, or drag start
     if (e.button === 0 && !this.input.held("Space") && s.mode === "lights") {
       const ctx = this.buildPointerContext(e);
       this.updateHoverTile(ctx);
       const doc = this.getDocument?.();
       if (!doc) return;
+
+      // Place mode: create light at cursor and exit place mode
+      if (s.lightPlaceMode) {
+        const px = Math.round(ctx.worldX);
+        const py = Math.round(ctx.worldY);
+        const id = doc.createLight({ x: px, y: py });
+        this.state.patch({ selectedLightId: id, lightPlaceMode: false });
+        return;
+      }
 
       const lights = doc.lighting?.lights ?? [];
       const hitId = this._hitTestLights(lights, ctx.worldX, ctx.worldY);
@@ -215,24 +224,9 @@ export class MapEditorViewport {
         };
         this._options.onLightDragPreview?.(hitId, light.x, light.y);
         this.renderer.canvas.style.cursor = "grabbing";
-      } else if (hitId) {
-        // Different light — select it
-        this.state.patch({ selectedLightId: hitId });
       } else {
-        // Empty space — create new light at cursor, select it, start drag
-        const px = Math.round(ctx.worldX);
-        const py = Math.round(ctx.worldY);
-        const id = doc.createLight({ x: px, y: py });
-        this.state.patch({ selectedLightId: id });
-        this._lightDrag = {
-          lightId: id,
-          offsetX: 0,
-          offsetY: 0,
-          previewX: px,
-          previewY: py,
-        };
-        this._options.onLightDragPreview?.(id, px, py);
-        this.renderer.canvas.style.cursor = "grabbing";
+        // Different light or empty space — change selection (or deselect)
+        this.state.patch({ selectedLightId: hitId });
       }
       return;
     }

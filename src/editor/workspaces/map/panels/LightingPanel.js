@@ -1,10 +1,13 @@
 import { LIGHT_PRESETS } from "../../../../shared/data/models/LightPresets.js";
 
 /**
- * Panel for controlling the ambient lighting preview overlay (editor-only),
- * editing the map's persisted ambient settings (doc.lighting),
- * and editing individual authored lights.
- * Also provides presets, duplicate, copy/paste actions for selected lights.
+ * Panel for the Lights mode.
+ *
+ * Top of panel: global Preview (editor-only) + Map Ambient (persisted) sections.
+ * Below: hint + selection text, then a sectioned inspector for the selected light
+ * (Identity, Properties, Preset, Actions).
+ *
+ * Add / Delete actions live in the top toolbar (see MapEditorApp.getToolbarActions).
  */
 export class LightingPanel {
   /**
@@ -30,81 +33,88 @@ export class LightingPanel {
 
     this.el.innerHTML = `
       <div class="editor-panel-header">Lighting</div>
-      <div class="editor-panel-body">
-      <div class="lighting-section-title">Preview</div>
-      <div class="lighting-controls">
-          <label class="lighting-row">
-            <input type="checkbox" data-preview="enabled" />
-            <span>Enable preview</span>
-          </label>
-          <label class="lighting-row">
-            <span>Color</span>
-            <input type="color" data-preview="color" />
-          </label>
-          <label class="lighting-row">
-            <span>Intensity</span>
-            <input type="range" data-preview="intensity"
-              min="0" max="1" step="0.01" />
-          </label>
-        </div>
-      <div class="lighting-section-title">Map Ambient</div>
-      <div class="lighting-controls">
-          <label class="lighting-row">
-            <span>Ambient mode</span>
-            <select data-map="ambientMode">
-              <option value="cycle">Cycle</option>
-              <option value="fixed">Fixed</option>
-            </select>
-          </label>
-          <label class="lighting-row">
-            <span>Fixed color</span>
-            <input type="color" data-map="fixedColor" />
-          </label>
-          <label class="lighting-row">
-            <span>Fixed intensity</span>
-            <input type="range" data-map="fixedIntensity"
-              min="0" max="1" step="0.01" />
-          </label>
-        </div>
-      <div class="lighting-section-title">Lights</div>
-      <div class="lighting-controls">
-          <button type="button" data-action="addTestLight" class="lighting-btn">Add Test Light</button>
-        </div>
-        <div class="lighting-selected-light">
-          <div class="lighting-no-selection">No light selected</div>
-          <div class="lighting-light-editor" style="display:none">
-            <label class="lighting-row">
-              <span>ID</span>
-              <span data-light="idDisplay" class="lighting-readonly"></span>
+      <div class="editor-panel-body lighting-panel">
+
+        <div class="events-inspector">
+          <section class="events-panel-section">
+            <h3 class="events-panel-section-title">Preview</h3>
+            <label class="inspector-field inspector-checkbox">
+              <input type="checkbox" data-preview="enabled">
+              <span>Enable preview</span>
             </label>
-            <label class="lighting-row">
+            <label class="inspector-field">
               <span>Color</span>
-              <input type="color" data-light="color" />
+              <input type="color" data-preview="color">
             </label>
-            <label class="lighting-row">
+            <label class="inspector-field">
               <span>Intensity</span>
-              <input type="range" data-light="intensity"
-                min="0" max="5" step="0.01" />
+              <input type="range" data-preview="intensity" min="0" max="1" step="0.01">
             </label>
-            <label class="lighting-row">
+          </section>
+
+          <section class="events-panel-section">
+            <h3 class="events-panel-section-title">Map Ambient</h3>
+            <label class="inspector-field">
+              <span>Ambient mode</span>
+              <select data-map="ambientMode">
+                <option value="cycle">Cycle</option>
+                <option value="fixed">Fixed</option>
+              </select>
+            </label>
+            <label class="inspector-field">
+              <span>Fixed color</span>
+              <input type="color" data-map="fixedColor">
+            </label>
+            <label class="inspector-field">
+              <span>Fixed intensity</span>
+              <input type="range" data-map="fixedIntensity" min="0" max="1" step="0.01">
+            </label>
+          </section>
+        </div>
+
+        <div class="events-hint" data-role="hint">Click a light to select</div>
+        <div class="events-selection" data-role="selection">No light selected</div>
+
+        <div class="events-inspector" data-role="inspector" style="display:none">
+          <section class="events-panel-section">
+            <h3 class="events-panel-section-title">Identity</h3>
+            <label class="inspector-field">
+              <span>ID</span>
+              <span data-light="idDisplay" class="inspector-readonly"></span>
+            </label>
+          </section>
+
+          <section class="events-panel-section">
+            <h3 class="events-panel-section-title">Properties</h3>
+            <label class="inspector-field">
+              <span>Color</span>
+              <input type="color" data-light="color">
+            </label>
+            <label class="inspector-field">
+              <span>Intensity</span>
+              <input type="range" data-light="intensity" min="0" max="5" step="0.01">
+            </label>
+            <label class="inspector-field">
               <span>Radius</span>
-              <input type="range" data-light="radius"
-                min="0" max="1024" step="1" />
+              <input type="range" data-light="radius" min="0" max="1024" step="1">
             </label>
-            <label class="lighting-row">
+            <label class="inspector-field">
               <span>Falloff</span>
-              <input type="range" data-light="falloff"
-                min="0" max="1" step="0.01" />
+              <input type="range" data-light="falloff" min="0" max="1" step="0.01">
             </label>
-            <label class="lighting-row">
-              <input type="checkbox" data-light="enabled" />
+            <label class="inspector-field inspector-checkbox">
+              <input type="checkbox" data-light="enabled">
               <span>Enabled</span>
             </label>
-            <label class="lighting-row">
-              <input type="checkbox" data-light="visibility" />
-              <span>Affects visibility (reveals darkness)</span>
+            <label class="inspector-field inspector-checkbox">
+              <input type="checkbox" data-light="visibility">
+              <span>Affects visibility</span>
             </label>
-            <label class="lighting-row">
+          </section>
+
+          <section class="events-panel-section">
+            <h3 class="events-panel-section-title">Preset</h3>
+            <label class="inspector-field">
               <span>Preset</span>
               <select data-light="preset">
                 <option value="">— select —</option>
@@ -112,16 +122,23 @@ export class LightingPanel {
               </select>
             </label>
             <button type="button" data-action="applyPreset" class="lighting-btn">Apply Preset</button>
+          </section>
+
+          <section class="events-panel-section">
+            <h3 class="events-panel-section-title">Actions</h3>
             <div class="lighting-actions">
               <button type="button" data-action="duplicateLight" class="lighting-btn">Duplicate</button>
               <button type="button" data-action="copySettings" class="lighting-btn">Copy Settings</button>
               <button type="button" data-action="pasteSettings" class="lighting-btn">Paste Settings</button>
             </div>
-            <button type="button" data-action="deleteLight" class="lighting-btn lighting-btn-danger">Delete</button>
-          </div>
+          </section>
         </div>
       </div>
     `;
+
+    this._hintEl = this.el.querySelector('[data-role="hint"]');
+    this._selectionEl = this.el.querySelector('[data-role="selection"]');
+    this._inspectorEl = this.el.querySelector('[data-role="inspector"]');
 
     this.el.addEventListener("change", (e) => this._handleChange(e));
     this.el.addEventListener("input", (e) => this._handleChange(e));
@@ -190,7 +207,8 @@ export class LightingPanel {
   }
 
   /**
-   * Handles button clicks (add test light, delete, apply preset, duplicate, copy/paste).
+   * Handles button clicks (apply preset, duplicate, copy/paste settings).
+   * Add Light / Delete Light live in the toolbar.
    * @param {Event} e
    */
   _handleClick(e) {
@@ -200,30 +218,7 @@ export class LightingPanel {
     const doc = this.getDocument();
     if (!doc) return;
 
-    if (action === "addTestLight") {
-      const map = this.state.get().map;
-      const ts = map?.tileSize ?? 16;
-      const cx = ((map?.width ?? 20) * ts) / 2;
-      const cy = ((map?.height ?? 15) * ts) / 2;
-      const id = doc.createLight({
-        x: cx,
-        y: cy,
-        color: "#ffcc88",
-        intensity: 1,
-        radius: 96,
-        falloff: 0.7,
-        enabled: true,
-      });
-      this.state.patch({ selectedLightId: id });
-    } else if (action === "deleteLight") {
-      const lightId = this.state.get().selectedLightId;
-      if (lightId) {
-        doc.removeLight(lightId);
-        // Cleanup handled by MapEditorApp lightingChanged handler,
-        // but clear locally too for immediate UI response.
-        this.state.patch({ selectedLightId: null });
-      }
-    } else if (action === "applyPreset") {
+    if (action === "applyPreset") {
       const select = this.el.querySelector('[data-light="preset"]');
       const key = select?.value;
       if (!key) return;
@@ -294,16 +289,29 @@ export class LightingPanel {
       fixedIntensity.disabled = !hasDoc || isCycle;
     }
 
-    // --- Selected light controls ---
-    const noSelEl = this.el.querySelector(".lighting-no-selection");
-    const editorEl = this.el.querySelector(".lighting-light-editor");
+    // --- Hint + selection text ---
     const selectedId = s.selectedLightId;
     const light = selectedId ? doc?.getLight(selectedId) : null;
+    const hasSelection = !!light;
 
-    if (light) {
-      if (noSelEl) noSelEl.style.display = "none";
-      if (editorEl) editorEl.style.display = "";
+    if (this._hintEl) {
+      this._hintEl.textContent = s.lightPlaceMode
+        ? "Click on the map to place a new light"
+        : "Click a light to select";
+      this._hintEl.style.display = hasSelection ? "none" : "";
+    }
+    if (this._selectionEl) {
+      this._selectionEl.textContent = hasSelection
+        ? `Selected: ${light.id}`
+        : "No light selected";
+      this._selectionEl.style.display = hasSelection ? "none" : "";
+    }
+    if (this._inspectorEl) {
+      this._inspectorEl.style.display = hasSelection ? "" : "none";
+    }
 
+    // --- Selected light controls ---
+    if (hasSelection) {
       const idDisplay = this.el.querySelector('[data-light="idDisplay"]');
       const lightColor = this.el.querySelector('[data-light="color"]');
       const lightIntensity = this.el.querySelector('[data-light="intensity"]');
@@ -327,9 +335,6 @@ export class LightingPanel {
 
       if (applyBtn) applyBtn.disabled = !presetSelect?.value;
       if (pasteBtn) pasteBtn.disabled = !s.copiedLightSettings;
-    } else {
-      if (noSelEl) noSelEl.style.display = "";
-      if (editorEl) editorEl.style.display = "none";
     }
   }
 

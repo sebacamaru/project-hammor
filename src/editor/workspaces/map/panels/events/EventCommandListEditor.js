@@ -367,7 +367,7 @@ export class EventCommandListEditor {
     return `
       <div class="event-command-add-row">
         <select data-role="event-command-add-type">${options}</select>
-        <button data-action="add">+ Add</button>
+        <button data-action="add" class="lighting-btn">+ Add</button>
       </div>
     `;
   }

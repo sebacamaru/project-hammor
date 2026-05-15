@@ -60,6 +60,7 @@ export class MapEditorState {
       selectedEntityId: null,
       entityPlaceMode: false,
       selectedLightId: null,
+      lightPlaceMode: false,
       copiedLightSettings: null,
 
       lightingPreview: savedPreview,
