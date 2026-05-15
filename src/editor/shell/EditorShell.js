@@ -34,6 +34,7 @@ export class EditorShell {
     this._toolbarUnsub = null;
     this._isPlayInFlight = false;
     this._isStopInFlight = false;
+    this._isRestartInFlight = false;
     this._devServerStatus = "stopped";
     this._devServerError = "";
 
@@ -170,12 +171,53 @@ export class EditorShell {
     });
   }
 
-  /** @private */
-  _doSave() {
-    if (this.activeWorkspace?.canSave?.()) {
-      void this.activeWorkspace.save().catch((error) => {
-        console.error("Save failed", error);
-      });
+  /**
+   * Saves the active workspace, then triggers a background server restart if
+   * the game server is currently running. Restart is fire-and-forget so the
+   * Save UX is not blocked.
+   * @private
+   */
+  async _doSave() {
+    if (!this.activeWorkspace?.canSave?.()) return;
+
+    try {
+      await this.activeWorkspace.save();
+    } catch (error) {
+      console.error("Save failed", error);
+      return;
+    }
+
+    if (this._devServerStatus === "running" && !this._isRestartInFlight) {
+      void this._restartServerInBackground();
+    }
+  }
+
+  /**
+   * Restarts the game server in the background via POST /api/dev/play so a
+   * subsequent Play (or reload of an open game tab) sees the freshly saved
+   * content. Guarded by _isRestartInFlight to coalesce rapid saves.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _restartServerInBackground() {
+    this._isRestartInFlight = true;
+    this._devServerStatus = "restarting";
+    this._updateStatusBadge();
+    this.activeWorkspace?.setOperationStatus?.("saving", "Reloading server...");
+
+    try {
+      const res = await fetch("http://localhost:3032/api/dev/play", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (data.ok) {
+        this.activeWorkspace?.setOperationStatus?.("saved", "Server reloaded", { autoReset: true });
+      } else {
+        this.activeWorkspace?.setOperationStatus?.("error", data.error ?? "Server reload failed");
+      }
+    } catch (err) {
+      this.activeWorkspace?.setOperationStatus?.("error", err.message ?? "Server reload failed");
+    } finally {
+      this._isRestartInFlight = false;
+      void this._loadDevServerStatus();
     }
   }
 
@@ -372,11 +414,7 @@ export class EditorShell {
 
     if (e.code === "KeyS") {
       e.preventDefault();
-      if (this.activeWorkspace?.canSave?.()) {
-        void this.activeWorkspace.save().catch((error) => {
-          console.error("Save failed", error);
-        });
-      }
+      void this._doSave();
     }
   }
 

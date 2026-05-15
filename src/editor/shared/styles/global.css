@@ -1,6 +1,6 @@
-@import './editor-foundations.css';
-@import './editor-theme.css';
-@import './editor-components.css';
+@import "./editor-foundations.css";
+@import "./editor-theme.css";
+@import "./editor-components.css";
 
 @font-face {
     font-family: "Google Sans Code";

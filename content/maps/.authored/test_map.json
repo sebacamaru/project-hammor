@@ -995,6 +995,7 @@
         0,
         0,
         0,
+        4,
         0,
         0,
         0,
@@ -1002,9 +1003,8 @@
         0,
         0,
         0,
-        0,
-        0,
-        0,
+        4,
+        4,
         0,
         0,
         0,
@@ -1194,7 +1194,7 @@
         0,
         0,
         0,
-        0,
+        4,
         0,
         0,
         0,
@@ -221366,7 +221366,7 @@
     "ambientMode": "fixed",
     "fixedAmbient": {
       "color": "#9f0404",
-      "intensity": 0.15
+      "intensity": 0.28
     },
     "lights": [
       {
@@ -221375,9 +221375,9 @@
         "y": 269,
         "type": "point",
         "color": "#df0c0c",
-        "intensity": 0,
-        "radius": 164,
-        "falloff": 0.7,
+        "intensity": 0.57,
+        "radius": 135,
+        "falloff": 0.4,
         "enabled": true,
         "visibility": true,
         "castShadows": false,
